@@ -26,12 +26,14 @@ const router = Router();
 router.post("/webhooks/postmark", async (req: Request, res: Response) => {
   const payload = req.body;
 
-  // Verify webhook signature if configured
+  // Verify webhook secret via custom header (configured in Postmark webhook settings)
   const webhookSecret = process.env.POSTMARK_WEBHOOK_SECRET;
   if (webhookSecret) {
-    // Postmark doesn't use HMAC signatures by default, but you can configure IP allowlisting
-    // For now, we'll proceed without signature verification
-    // In production, consider using IP allowlisting or a custom header
+    const providedSecret = req.headers["x-postmark-webhook-secret"];
+    if (providedSecret !== webhookSecret) {
+      console.error("Invalid or missing webhook secret");
+      return res.status(401).json({ error: "Unauthorized" });
+    }
   }
 
   const recordType = payload.RecordType;
