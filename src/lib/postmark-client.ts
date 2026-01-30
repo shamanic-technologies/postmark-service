@@ -1,16 +1,36 @@
 import { ServerClient, Models } from "postmark";
 
-let client: ServerClient | null = null;
+// Cache clients per token for multi-project support
+const clients: Map<string, ServerClient> = new Map();
 
-function getClient(): ServerClient {
-  if (!client) {
-    const token = process.env.POSTMARK_SERVER_TOKEN;
-    if (!token) {
-      throw new Error("POSTMARK_SERVER_TOKEN is not configured");
-    }
-    client = new ServerClient(token);
+/**
+ * Get a Postmark client for a specific project
+ * Defaults to POSTMARK_MCPFACTORY_SERVER_TOKEN if no project specified
+ */
+function getClient(project?: "mcpfactory" | "pressbeat"): ServerClient {
+  // Determine which token to use
+  let token: string | undefined;
+  let cacheKey: string;
+
+  if (project === "pressbeat") {
+    token = process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN;
+    cacheKey = "pressbeat";
+  } else {
+    // Default to mcpfactory or generic token
+    token = process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN || process.env.POSTMARK_SERVER_TOKEN;
+    cacheKey = "mcpfactory";
   }
-  return client;
+
+  if (!token) {
+    throw new Error(`Postmark server token not configured for project: ${project || "default"}`);
+  }
+
+  // Return cached client or create new one
+  if (!clients.has(cacheKey)) {
+    clients.set(cacheKey, new ServerClient(token));
+  }
+  
+  return clients.get(cacheKey)!;
 }
 
 export interface SendEmailParams {
@@ -26,6 +46,7 @@ export interface SendEmailParams {
   metadata?: Record<string, string>;
   trackOpens?: boolean;
   trackLinks?: "None" | "HtmlAndText" | "HtmlOnly" | "TextOnly";
+  project?: "mcpfactory" | "pressbeat"; // Which Postmark account to use
 }
 
 export interface SendEmailResult {
@@ -40,7 +61,7 @@ export interface SendEmailResult {
  * Send an email via Postmark
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const postmarkClient = getClient();
+  const postmarkClient = getClient(params.project);
 
   const message: Models.Message = {
     From: params.from,

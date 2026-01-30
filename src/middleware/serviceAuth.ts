@@ -16,10 +16,10 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   const serviceSecret = req.headers["x-service-secret"];
-  const validSecret = process.env.SERVICE_SECRET_KEY;
+  const validSecret = process.env.POSTMARK_SERVICE_API_KEY || process.env.SERVICE_SECRET_KEY;
 
   if (!validSecret) {
-    console.error("SERVICE_SECRET_KEY not configured in environment variables");
+    console.error("POSTMARK_SERVICE_API_KEY not configured in environment variables");
     return res.status(500).json({
       error: "Server configuration error",
     });
