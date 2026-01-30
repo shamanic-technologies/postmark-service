@@ -28,9 +28,9 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
         env:
-          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
-          SERVICE_SECRET_KEY: test-secret-key
-          POSTMARK_SERVER_TOKEN: test-token
+          POSTMARK_SERVICE_DATABASE_URL: ${{ secrets.POSTMARK_SERVICE_DATABASE_URL }}
+          POSTMARK_SERVICE_API_KEY: test-secret-key
+          POSTMARK_MCPFACTORY_SERVER_TOKEN: test-token
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
