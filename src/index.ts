@@ -1,0 +1,58 @@
+import express from "express";
+import cors from "cors";
+import * as dotenv from "dotenv";
+import { serviceAuth } from "./middleware/serviceAuth";
+import healthRoutes from "./routes/health";
+import sendRoutes from "./routes/send";
+import statusRoutes from "./routes/status";
+import webhooksRoutes from "./routes/webhooks";
+
+dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 3010;
+
+// CORS configuration
+const allowedOrigins = [
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "http://localhost:3003",
+  "https://app.pressbeat.io",
+  "https://admin.pressbeat.io",
+  "https://dashboard.mcpfactory.org",
+  "https://mcpfactory.org",
+  process.env.ALLOWED_ORIGIN,
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (service-to-service calls)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Service-Secret"],
+  })
+);
+
+app.use(express.json());
+
+// Service-to-service authentication (skips webhooks)
+app.use(serviceAuth);
+
+// Mount routes
+app.use("/", healthRoutes);
+app.use("/", sendRoutes);
+app.use("/", statusRoutes);
+app.use("/", webhooksRoutes);
+
+app.listen(port, () => {
+  console.log(`Postmark Service is running on http://localhost:${port}`);
+});
