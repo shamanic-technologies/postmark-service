@@ -1,13 +1,14 @@
+// Load environment variables BEFORE any other imports
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
-import * as dotenv from "dotenv";
 import { serviceAuth } from "./middleware/serviceAuth";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
 import webhooksRoutes from "./routes/webhooks";
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3010;

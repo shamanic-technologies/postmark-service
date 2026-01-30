@@ -7,7 +7,8 @@ import {
   boolean,
   jsonb,
   bigint,
-  uniqueIndex
+  uniqueIndex,
+  index
 } from "drizzle-orm/pg-core";
 
 /**
@@ -35,7 +36,8 @@ export const postmarkSendings = pgTable(
   },
   (table) => [
     uniqueIndex("idx_sendings_message_id").on(table.messageId),
-    uniqueIndex("idx_sendings_org").on(table.orgId),
+    index("idx_sendings_org").on(table.orgId),
+    index("idx_sendings_campaign_run").on(table.campaignRunId),
   ]
 );
 
@@ -120,7 +122,7 @@ export const postmarkOpenings = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("idx_openings_message_id").on(table.messageId),
+    index("idx_openings_message_id").on(table.messageId), // Not unique - same email can be opened multiple times
   ]
 );
 
@@ -148,7 +150,7 @@ export const postmarkLinkClicks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("idx_link_clicks_message_id").on(table.messageId),
+    index("idx_link_clicks_message_id").on(table.messageId), // Not unique - same email can have multiple clicks
   ]
 );
 

@@ -1,4 +1,4 @@
-import { ServerClient, Message, MessageSendingResponse } from "postmark";
+import { ServerClient, Models } from "postmark";
 
 let client: ServerClient | null = null;
 
@@ -42,7 +42,7 @@ export interface SendEmailResult {
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const postmarkClient = getClient();
 
-  const message: Message = {
+  const message: Models.Message = {
     From: params.from,
     To: params.to,
     Subject: params.subject,
@@ -54,11 +54,11 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     Headers: params.headers?.map(h => ({ Name: h.name, Value: h.value })),
     Metadata: params.metadata,
     TrackOpens: params.trackOpens ?? true,
-    TrackLinks: params.trackLinks ?? "HtmlAndText",
+    TrackLinks: params.trackLinks as Models.LinkTrackingOptions ?? Models.LinkTrackingOptions.HtmlAndText,
   };
 
   try {
-    const response: MessageSendingResponse = await postmarkClient.sendEmail(message);
+    const response = await postmarkClient.sendEmail(message);
     
     return {
       success: response.ErrorCode === 0,
