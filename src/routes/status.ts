@@ -7,7 +7,7 @@ import {
   postmarkOpenings,
   postmarkLinkClicks,
 } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -209,6 +209,98 @@ router.get("/status/by-campaign/:campaignRunId", async (req: Request, res: Respo
     console.error("Error getting campaign emails:", error);
     res.status(500).json({
       error: "Failed to get campaign emails",
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * POST /stats
+ * Get aggregated email stats for multiple campaign run IDs
+ * Body: { campaignRunIds: string[] }
+ */
+router.post("/stats", async (req: Request, res: Response) => {
+  const { campaignRunIds } = req.body;
+
+  if (!campaignRunIds || !Array.isArray(campaignRunIds)) {
+    return res.status(400).json({ error: "campaignRunIds array required" });
+  }
+
+  if (campaignRunIds.length === 0) {
+    return res.json({
+      stats: {
+        emailsSent: 0,
+        emailsOpened: 0,
+        emailsClicked: 0,
+        emailsReplied: 0,
+        emailsBounced: 0,
+        repliesWillingToMeet: 0,
+        repliesInterested: 0,
+        repliesNotInterested: 0,
+        repliesOutOfOffice: 0,
+        repliesUnsubscribe: 0,
+      },
+    });
+  }
+
+  try {
+    // Count successful sends
+    const sendings = await db
+      .select({ id: postmarkSendings.id, messageId: postmarkSendings.messageId })
+      .from(postmarkSendings)
+      .where(inArray(postmarkSendings.campaignRunId, campaignRunIds));
+
+    const messageIds = sendings
+      .map((s) => s.messageId)
+      .filter((id): id is string => id !== null);
+
+    let emailsOpened = 0;
+    let emailsClicked = 0;
+    let emailsBounced = 0;
+
+    if (messageIds.length > 0) {
+      // Count unique opens (first open per message)
+      const openings = await db
+        .select({ messageId: postmarkOpenings.messageId })
+        .from(postmarkOpenings)
+        .where(inArray(postmarkOpenings.messageId, messageIds));
+      emailsOpened = new Set(openings.map((o) => o.messageId)).size;
+
+      // Count unique clicks
+      const clicks = await db
+        .select({ messageId: postmarkLinkClicks.messageId })
+        .from(postmarkLinkClicks)
+        .where(inArray(postmarkLinkClicks.messageId, messageIds));
+      emailsClicked = new Set(clicks.map((c) => c.messageId)).size;
+
+      // Count bounces
+      const bounces = await db
+        .select({ messageId: postmarkBounces.messageId })
+        .from(postmarkBounces)
+        .where(inArray(postmarkBounces.messageId, messageIds));
+      emailsBounced = bounces.length;
+    }
+
+    // Reply tracking is not in postmark-service yet
+    // These will come from reply-qualification-service in the future
+    res.json({
+      stats: {
+        emailsSent: sendings.length,
+        emailsOpened,
+        emailsClicked,
+        emailsReplied: 0, // TODO: integrate with reply tracking
+        emailsBounced,
+        repliesWillingToMeet: 0,
+        repliesInterested: 0,
+        repliesNotInterested: 0,
+        repliesOutOfOffice: 0,
+        repliesUnsubscribe: 0,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error getting stats:", error);
+    res.status(500).json({
+      error: "Failed to get stats",
       details: error.message,
     });
   }
