@@ -10,6 +10,7 @@ if (!connectionString) {
 
 const pool = new Pool({
   connectionString,
+  ssl: { rejectUnauthorized: true }, // Explicit SSL config to suppress pg warning
 });
 
 export const db = drizzle(pool, { schema });
