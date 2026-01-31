@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 
 /**
  * Service-to-service authentication middleware
- * Validates X-Service-Secret header
+ * Validates X-API-Key header (standard convention)
  */
 export function serviceAuth(req: Request, res: Response, next: NextFunction) {
   // Skip auth for health check
@@ -15,7 +15,7 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
     return next();
   }
 
-  const serviceSecret = req.headers["x-service-secret"];
+  const apiKey = req.headers["x-api-key"];
   const validSecret = process.env.POSTMARK_SERVICE_API_KEY || process.env.SERVICE_SECRET_KEY;
 
   if (!validSecret) {
@@ -25,16 +25,16 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
     });
   }
 
-  if (!serviceSecret) {
+  if (!apiKey) {
     return res.status(401).json({
-      error: "Missing service secret",
-      message: "Please provide X-Service-Secret header",
+      error: "Missing API key",
+      message: "Please provide X-API-Key header",
     });
   }
 
-  if (serviceSecret !== validSecret) {
+  if (apiKey !== validSecret) {
     return res.status(403).json({
-      error: "Invalid service secret",
+      error: "Invalid API key",
     });
   }
 

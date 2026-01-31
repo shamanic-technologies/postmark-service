@@ -41,7 +41,7 @@ echo ""
 # Test 3: Auth check (with key)
 echo "3. Auth check (with key)..."
 AUTH_OK=$(curl -s -o /dev/null -w "%{http_code}" \
-  -H "X-Service-Secret: $API_KEY" \
+  -H "X-API-Key: $API_KEY" \
   "$BASE_URL/status/00000000-0000-0000-0000-000000000000")
 if [ "$AUTH_OK" = "404" ]; then
   echo "   ✅ Auth passed (404 = message not found, expected)"
