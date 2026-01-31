@@ -1,5 +1,5 @@
 ---
-description: Standards pour postmark-service
+description: Development standards for postmark-service
 alwaysApply: true
 ---
 
@@ -7,12 +7,12 @@ alwaysApply: true
 
 ## Database
 
-JAMAIS exécuter de SQL direct via Neon MCP. Utiliser `npm run db:push`.
+NEVER run SQL directly via Neon MCP. Use `npm run db:push`.
 
-Après modification de schema:
-1. Mettre à jour `tests/helpers/test-db.ts`
-2. Mettre à jour `tests/integration/db.test.ts`
-3. `npm test` localement
+After schema modification:
+1. Update `tests/helpers/test-db.ts`
+2. Update `tests/integration/db.test.ts`
+3. `npm test` locally
 4. `npm run db:push`
 5. Commit + push
 
@@ -22,27 +22,27 @@ Après modification de schema:
 // ✅ Performance
 index("idx_sendings_org").on(table.orgId)
 
-// ✅ Contrainte unique
+// ✅ Unique constraint
 uniqueIndex("idx_unique_field").on(table.uniqueField)
 
-// ❌ Erreur
-uniqueIndex sur un champ non-unique
+// ❌ Mistake
+uniqueIndex on a non-unique field
 ```
 
 ## Tests
 
 ```typescript
-// vitest.config.ts obligatoire
+// vitest.config.ts required
 fileParallelism: false,
 maxWorkers: 1,
 ```
 
 ## Workflow
 
-1. Lire schema + tests existants
-2. Modifier schema.ts
-3. Modifier tests
+1. Read existing schema + tests
+2. Modify schema.ts
+3. Modify tests
 4. `npm test`
 5. `npm run db:push`
 6. Commit + push
-7. Demander redeploy
+7. Ask for redeploy
