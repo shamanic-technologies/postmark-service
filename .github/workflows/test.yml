@@ -28,7 +28,7 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
         env:
-          POSTMARK_SERVICE_DATABASE_URL: ${{ secrets.POSTMARK_SERVICE_DATABASE_URL }}
+          POSTMARK_SERVICE_DATABASE_URL: ${{ secrets.POSTMARK_SERVICE_DATABASE_URL_DEV }}
           POSTMARK_SERVICE_API_KEY: test-secret-key
           POSTMARK_MCPFACTORY_SERVER_TOKEN: test-token
 
