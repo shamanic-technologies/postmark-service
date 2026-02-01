@@ -10,6 +10,8 @@ interface SendEmailRequest {
   campaignRunId?: string;
   from: string;
   to: string;
+  cc?: string;
+  bcc?: string;
   subject: string;
   htmlBody?: string;
   textBody?: string;
@@ -48,6 +50,8 @@ router.post("/send", async (req: Request, res: Response) => {
     const sendParams: SendEmailParams = {
       from: body.from,
       to: body.to,
+      cc: body.cc,
+      bcc: body.bcc,
       subject: body.subject,
       htmlBody: body.htmlBody,
       textBody: body.textBody,
@@ -131,6 +135,8 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       const sendParams: SendEmailParams = {
         from: email.from,
         to: email.to,
+        cc: email.cc,
+        bcc: email.bcc,
         subject: email.subject,
         htmlBody: email.htmlBody,
         textBody: email.textBody,

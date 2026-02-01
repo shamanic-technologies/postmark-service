@@ -36,6 +36,8 @@ function getClient(project?: "mcpfactory" | "pressbeat"): ServerClient {
 export interface SendEmailParams {
   from: string;
   to: string;
+  cc?: string;
+  bcc?: string;
   subject: string;
   htmlBody?: string;
   textBody?: string;
@@ -66,6 +68,8 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   const message: Models.Message = {
     From: params.from,
     To: params.to,
+    Cc: params.cc,
+    Bcc: params.bcc,
     Subject: params.subject,
     HtmlBody: params.htmlBody,
     TextBody: params.textBody,
