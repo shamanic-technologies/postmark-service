@@ -27,7 +27,7 @@ export function createTestApp() {
  */
 export function getAuthHeaders() {
   return {
-    "X-Service-Secret": process.env.SERVICE_SECRET_KEY || "test-secret-key",
+    "X-API-Key": process.env.POSTMARK_SERVICE_API_KEY || "test-secret-key",
     "Content-Type": "application/json",
   };
 }

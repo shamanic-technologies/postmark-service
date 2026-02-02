@@ -6,7 +6,7 @@ describe("Authentication", () => {
   const app = createTestApp();
 
   describe("Protected endpoints", () => {
-    it("should reject requests without X-Service-Secret header", async () => {
+    it("should reject requests without X-API-Key header", async () => {
       const response = await request(app)
         .post("/send")
         .send({
@@ -17,13 +17,13 @@ describe("Authentication", () => {
         });
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Missing service secret");
+      expect(response.body.error).toBe("Missing API key");
     });
 
-    it("should reject requests with invalid X-Service-Secret", async () => {
+    it("should reject requests with invalid X-API-Key", async () => {
       const response = await request(app)
         .post("/send")
-        .set("X-Service-Secret", "wrong-secret")
+        .set("X-API-Key", "wrong-secret")
         .send({
           from: "test@example.com",
           to: "recipient@example.com",
@@ -32,10 +32,10 @@ describe("Authentication", () => {
         });
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Invalid service secret");
+      expect(response.body.error).toBe("Invalid API key");
     });
 
-    it("should accept requests with valid X-Service-Secret", async () => {
+    it("should accept requests with valid X-API-Key", async () => {
       const response = await request(app)
         .get("/status/by-org/test-org")
         .set(getAuthHeaders());

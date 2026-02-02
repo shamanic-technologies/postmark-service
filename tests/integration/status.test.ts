@@ -135,18 +135,18 @@ describe("Status Endpoints Integration", () => {
     });
   });
 
-  describe("GET /status/by-campaign/:campaignRunId", () => {
-    it("should return emails for campaign run", async () => {
-      const campaignRunId = "campaign-run-123";
-      await insertTestSending({ messageId: randomUUID(), campaignRunId });
-      await insertTestSending({ messageId: randomUUID(), campaignRunId });
+  describe("GET /status/by-run/:runId", () => {
+    it("should return emails for run", async () => {
+      const runId = "run-123";
+      await insertTestSending({ messageId: randomUUID(), runId });
+      await insertTestSending({ messageId: randomUUID(), runId });
 
       const response = await request(app)
-        .get(`/status/by-campaign/${campaignRunId}`)
+        .get(`/status/by-run/${runId}`)
         .set(getAuthHeaders());
 
       expect(response.status).toBe(200);
-      expect(response.body.campaignRunId).toBe(campaignRunId);
+      expect(response.body.runId).toBe(runId);
       expect(response.body.total).toBe(2);
     });
   });
