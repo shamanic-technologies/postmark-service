@@ -2,12 +2,18 @@ import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
+import {
+  ensureOrganization,
+  createRun,
+  updateRun,
+  addCosts,
+} from "../lib/runs-client";
 
 const router = Router();
 
 interface SendEmailRequest {
-  orgId?: string;
-  campaignRunId?: string;
+  orgId: string;
+  runId: string;
   from: string;
   to: string;
   cc?: string;
@@ -32,10 +38,10 @@ router.post("/send", async (req: Request, res: Response) => {
   const body = req.body as SendEmailRequest;
 
   // Validate required fields
-  if (!body.from || !body.to || !body.subject) {
+  if (!body.orgId || !body.runId || !body.from || !body.to || !body.subject) {
     return res.status(400).json({
       error: "Missing required fields",
-      required: ["from", "to", "subject"],
+      required: ["orgId", "runId", "from", "to", "subject"],
     });
   }
 
@@ -80,10 +86,29 @@ router.post("/send", async (req: Request, res: Response) => {
         message: result.message,
         submittedAt: result.submittedAt,
         orgId: body.orgId,
-        campaignRunId: body.campaignRunId,
+        runId: body.runId,
         metadata: body.metadata,
       })
       .returning();
+
+    // Track run in runs-service
+    if (result.success) {
+      try {
+        const runsOrgId = await ensureOrganization(body.orgId);
+        const sendRun = await createRun({
+          organizationId: runsOrgId,
+          serviceName: "postmark-service",
+          taskName: "email-send",
+          parentRunId: body.runId,
+        });
+        await addCosts(sendRun.id, [
+          { costName: "postmark-email-send", quantity: 1 },
+        ]);
+        await updateRun(sendRun.id, "completed");
+      } catch (runsError) {
+        console.error("Failed to track run in runs-service:", runsError);
+      }
+    }
 
     if (result.success) {
       res.status(200).json({
@@ -165,10 +190,29 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           message: result.message,
           submittedAt: result.submittedAt,
           orgId: email.orgId,
-          campaignRunId: email.campaignRunId,
+          runId: email.runId,
           metadata: email.metadata,
         })
         .returning();
+
+      // Track run in runs-service
+      if (result.success) {
+        try {
+          const runsOrgId = await ensureOrganization(email.orgId);
+          const sendRun = await createRun({
+            organizationId: runsOrgId,
+            serviceName: "postmark-service",
+            taskName: "email-send",
+            parentRunId: email.runId,
+          });
+          await addCosts(sendRun.id, [
+            { costName: "postmark-email-send", quantity: 1 },
+          ]);
+          await updateRun(sendRun.id, "completed");
+        } catch (runsError) {
+          console.error("Failed to track run in runs-service:", runsError);
+        }
+      }
 
       results.push({
         to: email.to,
