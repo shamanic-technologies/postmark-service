@@ -84,7 +84,7 @@ router.get("/status/:messageId", async (req: Request, res: Response) => {
         subject: sending.subject,
         submittedAt: sending.submittedAt,
         orgId: sending.orgId,
-        campaignRunId: sending.campaignRunId,
+        runId: sending.runId,
       },
       delivery: delivery
         ? {
@@ -154,7 +154,7 @@ router.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
         to: s.toEmail,
         subject: s.subject,
         submittedAt: s.submittedAt,
-        campaignRunId: s.campaignRunId,
+        runId: s.runId,
         errorCode: s.errorCode,
       })),
     });
@@ -168,21 +168,21 @@ router.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /status/by-campaign/:campaignRunId
- * Get emails for a specific campaign run
+ * GET /status/by-run/:runId
+ * Get emails for a specific run
  */
-router.get("/status/by-campaign/:campaignRunId", async (req: Request, res: Response) => {
-  const { campaignRunId } = req.params;
+router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
+  const { runId } = req.params;
 
-  if (!campaignRunId) {
-    return res.status(400).json({ error: "campaignRunId is required" });
+  if (!runId) {
+    return res.status(400).json({ error: "runId is required" });
   }
 
   try {
     const sendings = await db
       .select()
       .from(postmarkSendings)
-      .where(eq(postmarkSendings.campaignRunId, campaignRunId))
+      .where(eq(postmarkSendings.runId, runId))
       .orderBy(postmarkSendings.createdAt);
 
     // Get stats
@@ -194,7 +194,7 @@ router.get("/status/by-campaign/:campaignRunId", async (req: Request, res: Respo
     // or use a more efficient query
 
     res.json({
-      campaignRunId,
+      runId,
       total: sendings.length,
       emails: sendings.map((s) => ({
         id: s.id,
@@ -216,17 +216,17 @@ router.get("/status/by-campaign/:campaignRunId", async (req: Request, res: Respo
 
 /**
  * POST /stats
- * Get aggregated email stats for multiple campaign run IDs
- * Body: { campaignRunIds: string[] }
+ * Get aggregated email stats for multiple run IDs
+ * Body: { runIds: string[] }
  */
 router.post("/stats", async (req: Request, res: Response) => {
-  const { campaignRunIds } = req.body;
+  const { runIds } = req.body;
 
-  if (!campaignRunIds || !Array.isArray(campaignRunIds)) {
-    return res.status(400).json({ error: "campaignRunIds array required" });
+  if (!runIds || !Array.isArray(runIds)) {
+    return res.status(400).json({ error: "runIds array required" });
   }
 
-  if (campaignRunIds.length === 0) {
+  if (runIds.length === 0) {
     return res.json({
       stats: {
         emailsSent: 0,
@@ -248,7 +248,7 @@ router.post("/stats", async (req: Request, res: Response) => {
     const sendings = await db
       .select({ id: postmarkSendings.id, messageId: postmarkSendings.messageId })
       .from(postmarkSendings)
-      .where(inArray(postmarkSendings.campaignRunId, campaignRunIds));
+      .where(inArray(postmarkSendings.runId, runIds));
 
     const messageIds = sendings
       .map((s) => s.messageId)
