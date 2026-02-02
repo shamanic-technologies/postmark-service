@@ -1,0 +1,42 @@
+name: README freshness check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if README was updated when source changed
+        run: |
+          BASE_SHA=$(git merge-base origin/main HEAD)
+
+          # Files that should trigger a README update
+          SRC_CHANGED=$(git diff --name-only "$BASE_SHA" HEAD -- \
+            'src/**' \
+            'package.json' \
+            'drizzle/**' \
+            '.env.example' \
+            'Dockerfile' \
+            'railway.json' \
+          )
+
+          README_CHANGED=$(git diff --name-only "$BASE_SHA" HEAD -- 'README.md')
+
+          if [ -n "$SRC_CHANGED" ] && [ -z "$README_CHANGED" ]; then
+            echo "::warning::Source files changed but README.md was not updated."
+            echo ""
+            echo "Changed source files:"
+            echo "$SRC_CHANGED"
+            echo ""
+            echo "Please review if README.md needs updating (endpoints, schema, env vars, scripts, project structure)."
+            # Warn but don't block - sometimes README truly doesn't need updating
+            exit 0
+          fi
+
+          echo "README check passed."
