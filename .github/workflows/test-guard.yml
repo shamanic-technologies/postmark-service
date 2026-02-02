@@ -1,0 +1,51 @@
+name: Test Guard
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-tests-exist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check new/changed source files have tests
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          # Get changed/added .ts files under src/ (exclude index.ts barrel files)
+          CHANGED=$(git diff --name-only --diff-filter=ACM "$BASE" "$HEAD" -- 'src/**/*.ts' \
+            | grep -v 'index.ts$' || true)
+
+          if [ -z "$CHANGED" ]; then
+            echo "No source files changed, skipping."
+            exit 0
+          fi
+
+          MISSING=""
+          for FILE in $CHANGED; do
+            # Extract module name: src/routes/send.ts -> send
+            MODULE=$(basename "$FILE" .ts)
+            # Check if any test file references this module
+            if ! find tests -name "*.test.ts" | xargs grep -l "$MODULE" > /dev/null 2>&1; then
+              # Also check for a directly named test file
+              if ! find tests -name "*${MODULE}*.test.ts" | head -1 | grep -q .; then
+                MISSING="$MISSING\n  - $FILE (no test file found for '$MODULE')"
+              fi
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "ERROR: The following changed source files have no corresponding tests:"
+            echo -e "$MISSING"
+            echo ""
+            echo "Every changed source file must have a test file in tests/unit/ or tests/integration/."
+            echo "See CLAUDE.md 'Test Requirement Rule' for details."
+            exit 1
+          fi
+
+          echo "All changed source files have corresponding tests."
