@@ -4,14 +4,16 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { serviceAuth } from "./middleware/serviceAuth";
+import { db } from "./db";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
 import webhooksRoutes from "./routes/webhooks";
 
 const app = express();
-const port = process.env.PORT || 3010;
+const PORT = process.env.PORT || 3010;
 
 // CORS configuration
 const allowedOrigins = [
@@ -54,6 +56,19 @@ app.use("/", sendRoutes);
 app.use("/", statusRoutes);
 app.use("/", webhooksRoutes);
 
-app.listen(port, () => {
-  console.log(`Postmark Service is running on http://localhost:${port}`);
-});
+// Only start server if not in test environment
+if (process.env.NODE_ENV !== "test") {
+  migrate(db, { migrationsFolder: "./drizzle" })
+    .then(() => {
+      console.log("Migrations complete");
+      app.listen(Number(PORT), "::", () => {
+        console.log(`Service running on port ${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Migration failed:", err);
+      process.exit(1);
+    });
+}
+
+export default app;
