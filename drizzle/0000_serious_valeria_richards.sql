@@ -1,4 +1,4 @@
-CREATE TABLE "orgs" (
+CREATE TABLE IF NOT EXISTS "orgs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"clerk_org_id" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -6,7 +6,7 @@ CREATE TABLE "orgs" (
 	CONSTRAINT "orgs_clerk_org_id_unique" UNIQUE("clerk_org_id")
 );
 --> statement-breakpoint
-CREATE TABLE "postmark_bounces" (
+CREATE TABLE IF NOT EXISTS "postmark_bounces" (
 	"id" bigint PRIMARY KEY NOT NULL,
 	"record_type" text,
 	"type" text,
@@ -30,7 +30,7 @@ CREATE TABLE "postmark_bounces" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "postmark_deliveries" (
+CREATE TABLE IF NOT EXISTS "postmark_deliveries" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"message_id" uuid,
 	"record_type" text,
@@ -46,7 +46,7 @@ CREATE TABLE "postmark_deliveries" (
 	CONSTRAINT "postmark_deliveries_message_id_unique" UNIQUE("message_id")
 );
 --> statement-breakpoint
-CREATE TABLE "postmark_link_clicks" (
+CREATE TABLE IF NOT EXISTS "postmark_link_clicks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"record_type" text,
 	"message_stream" text,
@@ -65,7 +65,7 @@ CREATE TABLE "postmark_link_clicks" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "postmark_openings" (
+CREATE TABLE IF NOT EXISTS "postmark_openings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"record_type" text,
 	"message_stream" text,
@@ -84,7 +84,7 @@ CREATE TABLE "postmark_openings" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "postmark_sendings" (
+CREATE TABLE IF NOT EXISTS "postmark_sendings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"message_id" uuid,
 	"to_email" text NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE "postmark_sendings" (
 	CONSTRAINT "postmark_sendings_message_id_unique" UNIQUE("message_id")
 );
 --> statement-breakpoint
-CREATE TABLE "postmark_spam_complaints" (
+CREATE TABLE IF NOT EXISTS "postmark_spam_complaints" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"record_type" text,
 	"message_stream" text,
@@ -117,7 +117,7 @@ CREATE TABLE "postmark_spam_complaints" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "postmark_subscription_changes" (
+CREATE TABLE IF NOT EXISTS "postmark_subscription_changes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"record_type" text,
 	"message_stream" text,
@@ -132,7 +132,7 @@ CREATE TABLE "postmark_subscription_changes" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "tasks" (
+CREATE TABLE IF NOT EXISTS "tasks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -140,7 +140,7 @@ CREATE TABLE "tasks" (
 	CONSTRAINT "tasks_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
-CREATE TABLE "tasks_runs" (
+CREATE TABLE IF NOT EXISTS "tasks_runs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"task_id" uuid NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -152,7 +152,7 @@ CREATE TABLE "tasks_runs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "tasks_runs_costs" (
+CREATE TABLE IF NOT EXISTS "tasks_runs_costs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"task_run_id" uuid NOT NULL,
 	"cost_name" text NOT NULL,
@@ -162,7 +162,7 @@ CREATE TABLE "tasks_runs_costs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"clerk_user_id" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -170,23 +170,35 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_clerk_user_id_unique" UNIQUE("clerk_user_id")
 );
 --> statement-breakpoint
-ALTER TABLE "tasks_runs" ADD CONSTRAINT "tasks_runs_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tasks_runs" ADD CONSTRAINT "tasks_runs_org_id_orgs_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tasks_runs" ADD CONSTRAINT "tasks_runs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tasks_runs_costs" ADD CONSTRAINT "tasks_runs_costs_task_run_id_tasks_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."tasks_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_orgs_clerk_id" ON "orgs" USING btree ("clerk_org_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_bounces_message_id" ON "postmark_bounces" USING btree ("message_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_deliveries_message_id" ON "postmark_deliveries" USING btree ("message_id");--> statement-breakpoint
-CREATE INDEX "idx_link_clicks_message_id" ON "postmark_link_clicks" USING btree ("message_id");--> statement-breakpoint
-CREATE INDEX "idx_openings_message_id" ON "postmark_openings" USING btree ("message_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_sendings_message_id" ON "postmark_sendings" USING btree ("message_id");--> statement-breakpoint
-CREATE INDEX "idx_sendings_org" ON "postmark_sendings" USING btree ("org_id");--> statement-breakpoint
-CREATE INDEX "idx_sendings_campaign_run" ON "postmark_sendings" USING btree ("campaign_run_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_spam_complaints_message_id" ON "postmark_spam_complaints" USING btree ("message_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_subscription_changes_message_id" ON "postmark_subscription_changes" USING btree ("message_id");--> statement-breakpoint
-CREATE INDEX "idx_tasks_runs_task" ON "tasks_runs" USING btree ("task_id");--> statement-breakpoint
-CREATE INDEX "idx_tasks_runs_org" ON "tasks_runs" USING btree ("org_id");--> statement-breakpoint
-CREATE INDEX "idx_tasks_runs_status" ON "tasks_runs" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "idx_tasks_runs_costs_run" ON "tasks_runs_costs" USING btree ("task_run_id");--> statement-breakpoint
-CREATE INDEX "idx_tasks_runs_costs_name" ON "tasks_runs_costs" USING btree ("cost_name");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_users_clerk_id" ON "users" USING btree ("clerk_user_id");
+DO $$ BEGIN
+  ALTER TABLE "tasks_runs" ADD CONSTRAINT "tasks_runs_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "tasks_runs" ADD CONSTRAINT "tasks_runs_org_id_orgs_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "tasks_runs" ADD CONSTRAINT "tasks_runs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "tasks_runs_costs" ADD CONSTRAINT "tasks_runs_costs_task_run_id_tasks_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."tasks_runs"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_orgs_clerk_id" ON "orgs" USING btree ("clerk_org_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_bounces_message_id" ON "postmark_bounces" USING btree ("message_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_deliveries_message_id" ON "postmark_deliveries" USING btree ("message_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_link_clicks_message_id" ON "postmark_link_clicks" USING btree ("message_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_openings_message_id" ON "postmark_openings" USING btree ("message_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_sendings_message_id" ON "postmark_sendings" USING btree ("message_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_sendings_org" ON "postmark_sendings" USING btree ("org_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_sendings_campaign_run" ON "postmark_sendings" USING btree ("campaign_run_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_spam_complaints_message_id" ON "postmark_spam_complaints" USING btree ("message_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_subscription_changes_message_id" ON "postmark_subscription_changes" USING btree ("message_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_tasks_runs_task" ON "tasks_runs" USING btree ("task_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_tasks_runs_org" ON "tasks_runs" USING btree ("org_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_tasks_runs_status" ON "tasks_runs" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_tasks_runs_costs_run" ON "tasks_runs_costs" USING btree ("task_run_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_tasks_runs_costs_name" ON "tasks_runs_costs" USING btree ("cost_name");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_users_clerk_id" ON "users" USING btree ("clerk_user_id");
