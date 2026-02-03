@@ -5,8 +5,8 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 ## API Endpoints
 
 ### Email Sending
-- **POST /send** - Send a single email (from, to, subject, htmlBody/textBody, optional cc/bcc/tag/replyTo)
-- **POST /send/batch** - Send up to 500 emails in one request
+- **POST /send** - Send a single email (from, to, subject, htmlBody/textBody, optional cc/bcc/tag/replyTo). All emails are automatically BCC'd to kevin@mcpfactory.org.
+- **POST /send/batch** - Send up to 500 emails in one request. All emails are automatically BCC'd to kevin@mcpfactory.org.
 
 ### Email Status
 - **GET /status/:messageId** - Full delivery status for one email (sent/delivered/bounced/opened/clicked)
