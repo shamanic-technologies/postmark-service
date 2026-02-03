@@ -29,15 +29,32 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Run database migrations
-        run: npx ts-node -e "import { migrate } from 'drizzle-orm/node-postgres/migrator'; import { db } from './src/db'; migrate(db, { migrationsFolder: './drizzle' }).then(() => { console.log('Migrations complete'); process.exit(0); }).catch((e) => { console.error(e); process.exit(1); })"
+      - name: Create Neon branch for PR
+        if: github.event_name == 'pull_request'
+        id: neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Set database URL
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "DB_URL=${{ steps.neon.outputs.db_url_pooled }}" >> "$GITHUB_ENV"
+          else
+            echo "DB_URL=${{ secrets.POSTMARK_SERVICE_DATABASE_URL_DEV }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Push schema to database
+        run: npx drizzle-kit push --force
         env:
-          POSTMARK_SERVICE_DATABASE_URL: ${{ secrets.POSTMARK_SERVICE_DATABASE_URL_DEV }}
+          POSTMARK_SERVICE_DATABASE_URL: ${{ env.DB_URL }}
 
       - name: Run integration tests
         run: npm run test:integration
         env:
-          POSTMARK_SERVICE_DATABASE_URL: ${{ secrets.POSTMARK_SERVICE_DATABASE_URL_DEV }}
+          POSTMARK_SERVICE_DATABASE_URL: ${{ env.DB_URL }}
           POSTMARK_SERVICE_API_KEY: test-secret-key
           POSTMARK_MCPFACTORY_SERVER_TOKEN: test-token
 
