@@ -1,6 +1,6 @@
 # Postmark Service
 
-Email sending and tracking service built on [Postmark](https://postmarkapp.com/). Handles transactional email delivery, webhook processing for delivery events, and integrates with a runs-service for cost tracking.
+Email sending and tracking service built on [Postmark](https://postmarkapp.com/). Handles email delivery via the **broadcast** message stream (for cold sales/marketing emails), webhook processing for delivery events, and integrates with a runs-service for cost tracking. Emails default to the `broadcast` stream unless overridden per request.
 
 ## API Endpoints
 
