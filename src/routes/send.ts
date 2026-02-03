@@ -91,7 +91,7 @@ router.post("/send", async (req: Request, res: Response) => {
       })
       .returning();
 
-    // Track run in runs-service
+    // Track run in runs-service (non-blocking — email is already sent)
     if (result.success) {
       try {
         const runsOrgId = await ensureOrganization(body.orgId);
@@ -105,8 +105,10 @@ router.post("/send", async (req: Request, res: Response) => {
           { costName: "postmark-email-send", quantity: 1 },
         ]);
         await updateRun(sendRun.id, "completed");
-      } catch (runsError) {
-        console.error("Failed to track run in runs-service:", runsError);
+      } catch (runsError: any) {
+        console.error(
+          `[runs-service] Failed to track email send — orgId=${body.orgId} runId=${body.runId} to=${body.to} error="${runsError.message}". Email was delivered successfully; only run tracking is affected. Check RUNS_SERVICE_URL and RUNS_SERVICE_API_KEY.`
+        );
       }
     }
 
@@ -126,7 +128,9 @@ router.post("/send", async (req: Request, res: Response) => {
       });
     }
   } catch (error: any) {
-    console.error("Error sending email:", error);
+    console.error(
+      `[send] Failed to process email — to=${req.body?.to} error="${error.message}"`
+    );
     res.status(500).json({
       error: "Failed to send email",
       details: error.message,
@@ -195,7 +199,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         })
         .returning();
 
-      // Track run in runs-service
+      // Track run in runs-service (non-blocking — email is already sent)
       if (result.success) {
         try {
           const runsOrgId = await ensureOrganization(email.orgId);
@@ -209,8 +213,10 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             { costName: "postmark-email-send", quantity: 1 },
           ]);
           await updateRun(sendRun.id, "completed");
-        } catch (runsError) {
-          console.error("Failed to track run in runs-service:", runsError);
+        } catch (runsError: any) {
+          console.error(
+            `[runs-service] Failed to track email send — orgId=${email.orgId} runId=${email.runId} to=${email.to} error="${runsError.message}". Email was delivered successfully; only run tracking is affected. Check RUNS_SERVICE_URL and RUNS_SERVICE_API_KEY.`
+          );
         }
       }
 
