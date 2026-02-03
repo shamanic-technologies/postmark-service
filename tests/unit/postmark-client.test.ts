@@ -32,7 +32,7 @@ describe("postmark-client types and interfaces", () => {
         textBody: "Hello",
         replyTo: "reply@test.com",
         tag: "campaign-1",
-        messageStream: "outbound",
+        messageStream: "broadcast",
         headers: [{ name: "X-Custom", value: "test" }],
         metadata: { key: "value" },
         trackOpens: true,

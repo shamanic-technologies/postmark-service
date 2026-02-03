@@ -64,7 +64,7 @@ export async function insertTestDelivery(messageId: string, recipient?: string) 
       recordType: "Delivery",
       recipient: recipient || "test@example.com",
       deliveredAt: new Date(),
-      messageStream: "outbound",
+      messageStream: "broadcast",
     })
     .returning();
   
@@ -85,7 +85,7 @@ export async function insertTestBounce(messageId: string, email?: string) {
       typeCode: 1,
       email: email || "bounced@example.com",
       bouncedAt: new Date(),
-      messageStream: "outbound",
+      messageStream: "broadcast",
     })
     .returning();
   
@@ -105,7 +105,7 @@ export async function insertTestOpening(messageId: string, recipient?: string) {
       receivedAt: new Date(),
       firstOpen: true,
       platform: "Desktop",
-      messageStream: "outbound",
+      messageStream: "broadcast",
     })
     .returning();
   
