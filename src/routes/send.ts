@@ -33,6 +33,7 @@ interface SendEmailRequest {
 /**
  * POST /send
  * Send an email via Postmark and record it in the database
+ * BLOCKING: runs-service must succeed before email is sent
  */
 router.post("/send", async (req: Request, res: Response) => {
   const body = req.body as SendEmailRequest;
@@ -52,80 +53,82 @@ router.post("/send", async (req: Request, res: Response) => {
   }
 
   try {
-    // Send email via Postmark
-    const sendParams: SendEmailParams = {
-      from: body.from,
-      to: body.to,
-      cc: body.cc,
-      bcc: body.bcc,
-      subject: body.subject,
-      htmlBody: body.htmlBody,
-      textBody: body.textBody,
-      replyTo: body.replyTo,
-      tag: body.tag,
-      messageStream: body.messageStream,
-      headers: body.headers,
-      metadata: body.metadata,
-      trackOpens: body.trackOpens,
-      trackLinks: body.trackLinks,
-    };
+    // 1. Create run in runs-service FIRST (BLOCKING)
+    const runsOrgId = await ensureOrganization(body.orgId);
+    const sendRun = await createRun({
+      organizationId: runsOrgId,
+      serviceName: "postmark-service",
+      taskName: "email-send",
+      parentRunId: body.runId,
+    });
 
-    const result = await sendEmail(sendParams);
-
-    // Record in database
-    const [sending] = await db
-      .insert(postmarkSendings)
-      .values({
-        messageId: result.messageId,
-        toEmail: body.to,
-        fromEmail: body.from,
+    try {
+      // 2. Send email via Postmark
+      const sendParams: SendEmailParams = {
+        from: body.from,
+        to: body.to,
+        cc: body.cc,
+        bcc: body.bcc,
         subject: body.subject,
+        htmlBody: body.htmlBody,
+        textBody: body.textBody,
+        replyTo: body.replyTo,
         tag: body.tag,
-        messageStream: body.messageStream || "broadcast",
-        errorCode: result.errorCode,
-        message: result.message,
-        submittedAt: result.submittedAt,
-        orgId: body.orgId,
-        runId: body.runId,
+        messageStream: body.messageStream,
+        headers: body.headers,
         metadata: body.metadata,
-      })
-      .returning();
+        trackOpens: body.trackOpens,
+        trackLinks: body.trackLinks,
+      };
 
-    // Track run in runs-service (non-blocking — email is already sent)
-    if (result.success) {
-      try {
-        const runsOrgId = await ensureOrganization(body.orgId);
-        const sendRun = await createRun({
-          organizationId: runsOrgId,
-          serviceName: "postmark-service",
-          taskName: "email-send",
-          parentRunId: body.runId,
-        });
+      const result = await sendEmail(sendParams);
+
+      // 3. Record in database
+      const [sending] = await db
+        .insert(postmarkSendings)
+        .values({
+          messageId: result.messageId,
+          toEmail: body.to,
+          fromEmail: body.from,
+          subject: body.subject,
+          tag: body.tag,
+          messageStream: body.messageStream || "broadcast",
+          errorCode: result.errorCode,
+          message: result.message,
+          submittedAt: result.submittedAt,
+          orgId: body.orgId,
+          runId: sendRun.id,
+          metadata: body.metadata,
+        })
+        .returning();
+
+      // 4. Log costs and complete run
+      if (result.success) {
         await addCosts(sendRun.id, [
           { costName: "postmark-email-send", quantity: 1 },
         ]);
         await updateRun(sendRun.id, "completed");
-      } catch (runsError: any) {
-        console.error(
-          `[runs-service] Failed to track email send — orgId=${body.orgId} runId=${body.runId} to=${body.to} error="${runsError.message}". Email was delivered successfully; only run tracking is affected. Check RUNS_SERVICE_URL and RUNS_SERVICE_API_KEY.`
-        );
-      }
-    }
 
-    if (result.success) {
-      res.status(200).json({
-        success: true,
-        messageId: result.messageId,
-        submittedAt: result.submittedAt,
-        sendingId: sending.id,
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        errorCode: result.errorCode,
-        message: result.message,
-        sendingId: sending.id,
-      });
+        res.status(200).json({
+          success: true,
+          messageId: result.messageId,
+          submittedAt: result.submittedAt,
+          sendingId: sending.id,
+        });
+      } else {
+        await updateRun(sendRun.id, "failed", result.message);
+
+        res.status(400).json({
+          success: false,
+          errorCode: result.errorCode,
+          message: result.message,
+          sendingId: sending.id,
+        });
+      }
+    } catch (error: any) {
+      // Email send or DB failed — mark run as failed
+      await updateRun(sendRun.id, "failed", error.message);
+      throw error;
     }
   } catch (error: any) {
     console.error(
@@ -141,6 +144,7 @@ router.post("/send", async (req: Request, res: Response) => {
 /**
  * POST /send/batch
  * Send multiple emails in a batch
+ * BLOCKING: runs-service must succeed before each email is sent
  */
 router.post("/send/batch", async (req: Request, res: Response) => {
   const { emails } = req.body as { emails: SendEmailRequest[] };
@@ -161,73 +165,78 @@ router.post("/send/batch", async (req: Request, res: Response) => {
 
   for (const email of emails) {
     try {
-      const sendParams: SendEmailParams = {
-        from: email.from,
-        to: email.to,
-        cc: email.cc,
-        bcc: email.bcc,
-        subject: email.subject,
-        htmlBody: email.htmlBody,
-        textBody: email.textBody,
-        replyTo: email.replyTo,
-        tag: email.tag,
-        messageStream: email.messageStream,
-        headers: email.headers,
-        metadata: email.metadata,
-        trackOpens: email.trackOpens,
-        trackLinks: email.trackLinks,
-      };
+      // 1. Create run in runs-service FIRST (BLOCKING)
+      const runsOrgId = await ensureOrganization(email.orgId);
+      const sendRun = await createRun({
+        organizationId: runsOrgId,
+        serviceName: "postmark-service",
+        taskName: "email-send",
+        parentRunId: email.runId,
+      });
 
-      const result = await sendEmail(sendParams);
-
-      // Record in database
-      const [sending] = await db
-        .insert(postmarkSendings)
-        .values({
-          messageId: result.messageId,
-          toEmail: email.to,
-          fromEmail: email.from,
+      try {
+        // 2. Send email via Postmark
+        const sendParams: SendEmailParams = {
+          from: email.from,
+          to: email.to,
+          cc: email.cc,
+          bcc: email.bcc,
           subject: email.subject,
+          htmlBody: email.htmlBody,
+          textBody: email.textBody,
+          replyTo: email.replyTo,
           tag: email.tag,
-          messageStream: email.messageStream || "broadcast",
-          errorCode: result.errorCode,
-          message: result.message,
-          submittedAt: result.submittedAt,
-          orgId: email.orgId,
-          runId: email.runId,
+          messageStream: email.messageStream,
+          headers: email.headers,
           metadata: email.metadata,
-        })
-        .returning();
+          trackOpens: email.trackOpens,
+          trackLinks: email.trackLinks,
+        };
 
-      // Track run in runs-service (non-blocking — email is already sent)
-      if (result.success) {
-        try {
-          const runsOrgId = await ensureOrganization(email.orgId);
-          const sendRun = await createRun({
-            organizationId: runsOrgId,
-            serviceName: "postmark-service",
-            taskName: "email-send",
-            parentRunId: email.runId,
-          });
+        const result = await sendEmail(sendParams);
+
+        // 3. Record in database
+        const [sending] = await db
+          .insert(postmarkSendings)
+          .values({
+            messageId: result.messageId,
+            toEmail: email.to,
+            fromEmail: email.from,
+            subject: email.subject,
+            tag: email.tag,
+            messageStream: email.messageStream || "broadcast",
+            errorCode: result.errorCode,
+            message: result.message,
+            submittedAt: result.submittedAt,
+            orgId: email.orgId,
+            runId: sendRun.id,
+            metadata: email.metadata,
+          })
+          .returning();
+
+        // 4. Log costs and complete run
+        if (result.success) {
           await addCosts(sendRun.id, [
             { costName: "postmark-email-send", quantity: 1 },
           ]);
           await updateRun(sendRun.id, "completed");
-        } catch (runsError: any) {
-          console.error(
-            `[runs-service] Failed to track email send — orgId=${email.orgId} runId=${email.runId} to=${email.to} error="${runsError.message}". Email was delivered successfully; only run tracking is affected. Check RUNS_SERVICE_URL and RUNS_SERVICE_API_KEY.`
-          );
+        } else {
+          await updateRun(sendRun.id, "failed", result.message);
         }
-      }
 
-      results.push({
-        to: email.to,
-        success: result.success,
-        messageId: result.messageId,
-        sendingId: sending.id,
-        errorCode: result.errorCode,
-        message: result.message,
-      });
+        results.push({
+          to: email.to,
+          success: result.success,
+          messageId: result.messageId,
+          sendingId: sending.id,
+          errorCode: result.errorCode,
+          message: result.message,
+        });
+      } catch (error: any) {
+        // Email send or DB failed — mark run as failed
+        await updateRun(sendRun.id, "failed", error.message);
+        throw error;
+      }
     } catch (error: any) {
       results.push({
         to: email.to,

@@ -112,11 +112,12 @@ export async function createRun(params: CreateRunParams): Promise<Run> {
 
 export async function updateRun(
   runId: string,
-  status: "completed" | "failed"
+  status: "completed" | "failed",
+  error?: string
 ): Promise<Run> {
   return runsRequest<Run>(`/v1/runs/${runId}`, {
     method: "PATCH",
-    body: { status },
+    body: { status, error },
   });
 }
 
