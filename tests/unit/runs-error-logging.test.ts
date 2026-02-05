@@ -29,7 +29,7 @@ import { sendEmail } from "../../src/lib/postmark-client";
 import request from "supertest";
 import { createTestApp, getAuthHeaders } from "../helpers/test-app";
 
-describe("runs-service error logging", () => {
+describe("runs-service BLOCKING behavior", () => {
   const app = createTestApp();
   const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -44,72 +44,9 @@ describe("runs-service error logging", () => {
     });
   });
 
-  it("should log structured error with orgId, runId, and recipient on runs-service failure", async () => {
+  it("should return 500 when ensureOrganization fails (BLOCKING)", async () => {
     vi.mocked(ensureOrganization).mockRejectedValue(
       new Error("runs-service POST /v1/organizations failed: 500 - Internal server error")
-    );
-
-    await request(app)
-      .post("/send")
-      .set(getAuthHeaders())
-      .send({
-        orgId: "org_abc",
-        runId: "run_xyz",
-        from: "sender@test.com",
-        to: "recipient@test.com",
-        subject: "Test",
-        textBody: "Hello",
-      });
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[runs-service]")
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("orgId=org_abc")
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("runId=run_xyz")
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("to=recipient@test.com")
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Email was delivered successfully")
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Check RUNS_SERVICE_URL and RUNS_SERVICE_API_KEY")
-    );
-  });
-
-  it("should log structured error when createRun fails", async () => {
-    vi.mocked(ensureOrganization).mockResolvedValue("runs-org-id");
-    vi.mocked(createRun).mockRejectedValue(
-      new Error("runs-service POST /v1/runs failed: 500 - Internal server error")
-    );
-
-    await request(app)
-      .post("/send")
-      .set(getAuthHeaders())
-      .send({
-        orgId: "org_abc",
-        runId: "run_xyz",
-        from: "sender@test.com",
-        to: "recipient@test.com",
-        subject: "Test",
-        textBody: "Hello",
-      });
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[runs-service]")
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("runs-service POST /v1/runs failed: 500")
-    );
-  });
-
-  it("should still return 200 when runs-service fails", async () => {
-    vi.mocked(ensureOrganization).mockRejectedValue(
-      new Error("runs-service unreachable")
     );
 
     const res = await request(app)
@@ -124,7 +61,59 @@ describe("runs-service error logging", () => {
         textBody: "Hello",
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
+    // BLOCKING: should return 500
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe("Failed to send email");
+
+    // Email should NOT have been sent
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("should return 500 when createRun fails (BLOCKING)", async () => {
+    vi.mocked(ensureOrganization).mockResolvedValue("runs-org-id");
+    vi.mocked(createRun).mockRejectedValue(
+      new Error("runs-service POST /v1/runs failed: 500 - Internal server error")
+    );
+
+    const res = await request(app)
+      .post("/send")
+      .set(getAuthHeaders())
+      .send({
+        orgId: "org_abc",
+        runId: "run_xyz",
+        from: "sender@test.com",
+        to: "recipient@test.com",
+        subject: "Test",
+        textBody: "Hello",
+      });
+
+    // BLOCKING: should return 500
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe("Failed to send email");
+
+    // Email should NOT have been sent
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("should log error to console when runs-service fails", async () => {
+    vi.mocked(ensureOrganization).mockRejectedValue(
+      new Error("runs-service unreachable")
+    );
+
+    await request(app)
+      .post("/send")
+      .set(getAuthHeaders())
+      .send({
+        orgId: "org_abc",
+        runId: "run_xyz",
+        from: "sender@test.com",
+        to: "recipient@test.com",
+        subject: "Test",
+        textBody: "Hello",
+      });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[send] Failed to process email")
+    );
   });
 });
