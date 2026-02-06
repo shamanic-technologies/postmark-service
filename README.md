@@ -17,6 +17,9 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 ### Webhooks
 - **POST /webhooks/postmark** - Receives Postmark webhook events (delivery, bounce, open, click, spam complaint, subscription change)
 
+### OpenAPI
+- **GET /openapi.json** - Returns the OpenAPI 3.0 specification (no auth required)
+
 ### Health
 - **GET /** - Service info
 - **GET /health** - Health check
@@ -27,6 +30,7 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 - **Framework:** Express
 - **Database:** PostgreSQL (Neon) via Drizzle ORM
 - **Email provider:** Postmark SDK
+- **API docs:** swagger-autogen (OpenAPI 3.0)
 - **Testing:** Vitest + Supertest
 - **Deployment:** Docker on Railway
 
@@ -60,7 +64,8 @@ npm run dev
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start dev server (nodemon) |
-| `npm run build` | Compile TypeScript |
+| `npm run build` | Compile TypeScript + generate OpenAPI spec |
+| `npm run generate:openapi` | Generate OpenAPI spec only |
 | `npm start` | Run compiled app |
 | `npm test` | Run all tests |
 | `npm run test:unit` | Unit tests only |
@@ -84,6 +89,7 @@ See [`.env.example`](.env.example) for required configuration:
 
 All endpoints require `X-API-Key` header except:
 - `GET /` and `GET /health` (public)
+- `GET /openapi.json` (public)
 - `POST /webhooks/postmark` (uses its own webhook secret verification)
 
 ## Project Structure
@@ -104,6 +110,8 @@ src/
     send.ts             # Email sending (single + batch)
     status.ts           # Email status queries + stats
     webhooks.ts         # Postmark webhook handlers
+scripts/
+  generate-openapi.ts   # OpenAPI spec generation script
 tests/
   unit/                 # Unit tests
   integration/          # Integration tests

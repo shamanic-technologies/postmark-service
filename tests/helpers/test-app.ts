@@ -1,4 +1,6 @@
 import express from "express";
+import path from "path";
+import fs from "fs";
 import { serviceAuth } from "../../src/middleware/serviceAuth";
 import healthRoutes from "../../src/routes/health";
 import sendRoutes from "../../src/routes/send";
@@ -13,6 +15,17 @@ export function createTestApp() {
 
   app.use(express.json());
   app.use(serviceAuth);
+
+  // OpenAPI spec endpoint
+  app.get("/openapi.json", (req, res) => {
+    const specPath = path.resolve(__dirname, "../../openapi.json");
+    if (fs.existsSync(specPath)) {
+      const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
+      res.json(spec);
+    } else {
+      res.status(404).json({ error: "OpenAPI spec not generated. Run: npm run generate:openapi" });
+    }
+  });
 
   app.use("/", healthRoutes);
   app.use("/", sendRoutes);
