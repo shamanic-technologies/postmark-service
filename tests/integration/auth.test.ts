@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createTestApp, getAuthHeaders } from "../helpers/test-app";
 
+// Tests the serviceAuth middleware (src/middleware/serviceAuth.ts)
 describe("Authentication", () => {
   const app = createTestApp();
 
@@ -41,6 +42,16 @@ describe("Authentication", () => {
         .set(getAuthHeaders());
 
       // Should not be 401 or 403 (may be 200 or 404 depending on data)
+      expect(response.status).not.toBe(401);
+      expect(response.status).not.toBe(403);
+    });
+  });
+
+  describe("OpenAPI endpoint", () => {
+    it("should serve /openapi.json without auth", async () => {
+      const response = await request(app).get("/openapi.json");
+
+      // Should not be 401 or 403 (openapi endpoint is public)
       expect(response.status).not.toBe(401);
       expect(response.status).not.toBe(403);
     });

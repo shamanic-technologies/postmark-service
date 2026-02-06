@@ -1,9 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
 describe("OpenAPI spec", () => {
   const specPath = path.resolve(__dirname, "../../openapi.json");
+
+  beforeAll(() => {
+    // Generate the spec before tests (it's gitignored, so won't exist in CI)
+    if (!fs.existsSync(specPath)) {
+      execSync("npx tsx scripts/generate-openapi.ts", {
+        cwd: path.resolve(__dirname, "../.."),
+      });
+    }
+  });
 
   it("should have a generated openapi.json file", () => {
     expect(fs.existsSync(specPath)).toBe(true);
