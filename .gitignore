@@ -27,4 +27,7 @@ npm-debug.log*
 
 # Test coverage
 coverage/
+
+# Generated OpenAPI spec
+openapi.json
 .env.local

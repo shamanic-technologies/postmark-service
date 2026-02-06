@@ -36,6 +36,25 @@ interface SendEmailRequest {
  * BLOCKING: runs-service must succeed before email is sent
  */
 router.post("/send", async (req: Request, res: Response) => {
+  // #swagger.tags = ['Email Sending']
+  // #swagger.summary = 'Send a single email'
+  // #swagger.description = 'Send an email via Postmark and record it in the database. Runs-service integration is BLOCKING.'
+  /* #swagger.requestBody = {
+    required: true,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/SendEmailRequest" }
+      }
+    }
+  } */
+  /* #swagger.responses[200] = {
+    description: "Email sent successfully",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/SendEmailResponse" }
+      }
+    }
+  } */
   const body = req.body as SendEmailRequest;
 
   // Validate required fields
@@ -147,6 +166,25 @@ router.post("/send", async (req: Request, res: Response) => {
  * BLOCKING: runs-service must succeed before each email is sent
  */
 router.post("/send/batch", async (req: Request, res: Response) => {
+  // #swagger.tags = ['Email Sending']
+  // #swagger.summary = 'Send batch emails'
+  // #swagger.description = 'Send up to 500 emails in one request. Runs-service integration is BLOCKING for each email.'
+  /* #swagger.requestBody = {
+    required: true,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/BatchSendRequest" }
+      }
+    }
+  } */
+  /* #swagger.responses[200] = {
+    description: "Batch results",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/BatchSendResponse" }
+      }
+    }
+  } */
   const { emails } = req.body as { emails: SendEmailRequest[] };
 
   if (!emails || !Array.isArray(emails) || emails.length === 0) {

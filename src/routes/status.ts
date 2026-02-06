@@ -16,6 +16,17 @@ const router = Router();
  * Get the full status of an email by its Postmark message ID
  */
 router.get("/status/:messageId", async (req: Request, res: Response) => {
+  // #swagger.tags = ['Email Status']
+  // #swagger.summary = 'Get email status'
+  // #swagger.description = 'Get the full delivery status of an email by its Postmark message ID'
+  /* #swagger.responses[200] = {
+    description: "Email status",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/EmailStatus" }
+      }
+    }
+  } */
   const { messageId } = req.params;
 
   if (!messageId) {
@@ -130,6 +141,10 @@ router.get("/status/:messageId", async (req: Request, res: Response) => {
  * Get recent emails for an organization
  */
 router.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
+  // #swagger.tags = ['Email Status']
+  // #swagger.summary = 'Get emails by organization'
+  // #swagger.description = 'Get recent emails for an organization'
+  // #swagger.parameters['limit'] = { in: 'query', type: 'integer', description: 'Max results (default: 50)' }
   const { orgId } = req.params;
   const limit = parseInt(req.query.limit as string) || 50;
 
@@ -172,6 +187,9 @@ router.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
  * Get emails for a specific run
  */
 router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
+  // #swagger.tags = ['Email Status']
+  // #swagger.summary = 'Get emails by run'
+  // #swagger.description = 'Get all emails for a specific run'
   const { runId } = req.params;
 
   if (!runId) {
@@ -220,6 +238,25 @@ router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
  * Body: { runIds: string[] }
  */
 router.post("/stats", async (req: Request, res: Response) => {
+  // #swagger.tags = ['Email Status']
+  // #swagger.summary = 'Get aggregated stats'
+  // #swagger.description = 'Get aggregated email stats for multiple run IDs'
+  /* #swagger.requestBody = {
+    required: true,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/StatsRequest" }
+      }
+    }
+  } */
+  /* #swagger.responses[200] = {
+    description: "Aggregated stats",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/StatsResponse" }
+      }
+    }
+  } */
   const { runIds } = req.body;
 
   if (!runIds || !Array.isArray(runIds)) {

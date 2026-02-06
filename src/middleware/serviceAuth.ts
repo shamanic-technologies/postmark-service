@@ -5,8 +5,8 @@ import { Request, Response, NextFunction } from "express";
  * Validates X-API-Key header (standard convention)
  */
 export function serviceAuth(req: Request, res: Response, next: NextFunction) {
-  // Skip auth for health check
-  if (req.path === "/health" || req.path === "/") {
+  // Skip auth for health check and OpenAPI spec
+  if (req.path === "/health" || req.path === "/" || req.path === "/openapi.json") {
     return next();
   }
 

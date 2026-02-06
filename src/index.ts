@@ -4,6 +4,8 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import path from "path";
+import fs from "fs";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { serviceAuth } from "./middleware/serviceAuth";
 import { db } from "./db";
@@ -49,6 +51,17 @@ app.use(express.json());
 
 // Service-to-service authentication (skips webhooks)
 app.use(serviceAuth);
+
+// OpenAPI spec endpoint
+app.get("/openapi.json", (req, res) => {
+  const specPath = path.resolve(__dirname, "../openapi.json");
+  if (fs.existsSync(specPath)) {
+    const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
+    res.json(spec);
+  } else {
+    res.status(404).json({ error: "OpenAPI spec not generated. Run: npm run generate:openapi" });
+  }
+});
 
 // Mount routes
 app.use("/", healthRoutes);

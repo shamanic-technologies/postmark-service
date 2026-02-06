@@ -24,6 +24,9 @@ const router = Router();
  * - SubscriptionChange
  */
 router.post("/webhooks/postmark", async (req: Request, res: Response) => {
+  // #swagger.tags = ['Webhooks']
+  // #swagger.summary = 'Postmark webhook handler'
+  // #swagger.description = 'Receives Postmark webhook events (Delivery, Bounce, Open, Click, SpamComplaint, SubscriptionChange)'
   const payload = req.body;
 
   // Verify webhook secret via custom header (configured in Postmark webhook settings)
