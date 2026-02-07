@@ -7,7 +7,7 @@ import {
   postmarkOpenings,
   postmarkLinkClicks,
 } from "../db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 
 const router = Router();
 
@@ -234,13 +234,13 @@ router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
 
 /**
  * POST /stats
- * Get aggregated email stats for multiple run IDs
- * Body: { runIds: string[] }
+ * Get aggregated email stats with flexible filtering
+ * Body: { runIds?, clerkOrgId?, brandId?, appId?, campaignId? }
  */
 router.post("/stats", async (req: Request, res: Response) => {
   // #swagger.tags = ['Email Status']
   // #swagger.summary = 'Get aggregated stats'
-  // #swagger.description = 'Get aggregated email stats for multiple run IDs'
+  // #swagger.description = 'Get aggregated email stats filtered by runIds, clerkOrgId, brandId, appId, and/or campaignId. At least one filter required.'
   /* #swagger.requestBody = {
     required: true,
     content: {
@@ -257,60 +257,66 @@ router.post("/stats", async (req: Request, res: Response) => {
       }
     }
   } */
-  const { runIds } = req.body;
+  const { runIds, clerkOrgId, brandId, appId, campaignId } = req.body;
 
-  if (!runIds || !Array.isArray(runIds)) {
-    return res.status(400).json({ error: "runIds array required" });
+  // Build filter conditions
+  const conditions = [];
+  if (Array.isArray(runIds) && runIds.length > 0) {
+    conditions.push(inArray(postmarkSendings.runId, runIds));
+  }
+  if (typeof clerkOrgId === "string" && clerkOrgId) {
+    conditions.push(eq(postmarkSendings.orgId, clerkOrgId));
+  }
+  if (typeof brandId === "string" && brandId) {
+    conditions.push(eq(postmarkSendings.brandId, brandId));
+  }
+  if (typeof appId === "string" && appId) {
+    conditions.push(eq(postmarkSendings.appId, appId));
+  }
+  if (typeof campaignId === "string" && campaignId) {
+    conditions.push(eq(postmarkSendings.campaignId, campaignId));
   }
 
-  if (runIds.length === 0) {
-    return res.json({
-      stats: {
-        emailsSent: 0,
-        emailsOpened: 0,
-        emailsClicked: 0,
-        emailsReplied: 0,
-        emailsBounced: 0,
-        repliesWillingToMeet: 0,
-        repliesInterested: 0,
-        repliesNotInterested: 0,
-        repliesOutOfOffice: 0,
-        repliesUnsubscribe: 0,
-      },
+  if (conditions.length === 0) {
+    return res.status(400).json({
+      error: "At least one filter is required: runIds, clerkOrgId, brandId, appId, or campaignId",
     });
   }
 
   try {
-    // Count successful sends
     const sendings = await db
       .select({ id: postmarkSendings.id, messageId: postmarkSendings.messageId })
       .from(postmarkSendings)
-      .where(inArray(postmarkSendings.runId, runIds));
+      .where(and(...conditions));
 
     const messageIds = sendings
       .map((s) => s.messageId)
       .filter((id): id is string => id !== null);
 
+    let emailsDelivered = 0;
     let emailsOpened = 0;
     let emailsClicked = 0;
     let emailsBounced = 0;
 
     if (messageIds.length > 0) {
-      // Count unique opens (first open per message)
+      const deliveries = await db
+        .select({ messageId: postmarkDeliveries.messageId })
+        .from(postmarkDeliveries)
+        .where(inArray(postmarkDeliveries.messageId, messageIds));
+      emailsDelivered = deliveries.length;
+
       const openings = await db
         .select({ messageId: postmarkOpenings.messageId })
         .from(postmarkOpenings)
         .where(inArray(postmarkOpenings.messageId, messageIds));
       emailsOpened = new Set(openings.map((o) => o.messageId)).size;
 
-      // Count unique clicks
       const clicks = await db
         .select({ messageId: postmarkLinkClicks.messageId })
         .from(postmarkLinkClicks)
         .where(inArray(postmarkLinkClicks.messageId, messageIds));
       emailsClicked = new Set(clicks.map((c) => c.messageId)).size;
 
-      // Count bounces
       const bounces = await db
         .select({ messageId: postmarkBounces.messageId })
         .from(postmarkBounces)
@@ -318,14 +324,13 @@ router.post("/stats", async (req: Request, res: Response) => {
       emailsBounced = bounces.length;
     }
 
-    // Reply tracking is not in postmark-service yet
-    // These will come from reply-qualification-service in the future
     res.json({
       stats: {
         emailsSent: sendings.length,
+        emailsDelivered,
         emailsOpened,
         emailsClicked,
-        emailsReplied: 0, // TODO: integrate with reply tracking
+        emailsReplied: 0,
         emailsBounced,
         repliesWillingToMeet: 0,
         repliesInterested: 0,

@@ -55,6 +55,9 @@ describe("runs-service BLOCKING behavior", () => {
       .send({
         orgId: "org_abc",
         runId: "run_xyz",
+        brandId: "brand_1",
+        appId: "app_1",
+        campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
         subject: "Test",
@@ -81,6 +84,9 @@ describe("runs-service BLOCKING behavior", () => {
       .send({
         orgId: "org_abc",
         runId: "run_xyz",
+        brandId: "brand_1",
+        appId: "app_1",
+        campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
         subject: "Test",
@@ -106,6 +112,9 @@ describe("runs-service BLOCKING behavior", () => {
       .send({
         orgId: "org_abc",
         runId: "run_xyz",
+        brandId: "brand_1",
+        appId: "app_1",
+        campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
         subject: "Test",

@@ -34,6 +34,9 @@ export async function insertTestSending(data: {
   subject?: string;
   orgId?: string;
   runId?: string;
+  brandId?: string;
+  appId?: string;
+  campaignId?: string;
 }) {
   const [sending] = await db
     .insert(postmarkSendings)
@@ -44,6 +47,9 @@ export async function insertTestSending(data: {
       subject: data.subject || "Test Subject",
       orgId: data.orgId || "test-org-id",
       runId: data.runId || "test-run-id",
+      brandId: data.brandId,
+      appId: data.appId,
+      campaignId: data.campaignId,
       errorCode: 0,
       message: "OK",
       submittedAt: new Date(),

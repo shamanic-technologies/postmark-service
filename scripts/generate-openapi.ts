@@ -40,10 +40,13 @@ const routes = [
 const schemas = {
   SendEmailRequest: {
     type: "object",
-    required: ["orgId", "runId", "from", "to", "subject"],
+    required: ["orgId", "runId", "brandId", "appId", "campaignId", "from", "to", "subject"],
     properties: {
       orgId: { type: "string", description: "Clerk organization ID" },
       runId: { type: "string", description: "Parent run ID" },
+      brandId: { type: "string", description: "Brand ID" },
+      appId: { type: "string", description: "App ID" },
+      campaignId: { type: "string", description: "Campaign ID" },
       from: { type: "string", description: "Sender email address" },
       to: { type: "string", description: "Recipient email address" },
       subject: { type: "string", description: "Email subject line" },
@@ -167,9 +170,12 @@ const schemas = {
   },
   StatsRequest: {
     type: "object",
-    required: ["runIds"],
     properties: {
-      runIds: { type: "array", items: { type: "string" } },
+      runIds: { type: "array", items: { type: "string" }, description: "Filter by run IDs" },
+      clerkOrgId: { type: "string", description: "Filter by Clerk organization ID" },
+      brandId: { type: "string", description: "Filter by brand ID" },
+      appId: { type: "string", description: "Filter by app ID" },
+      campaignId: { type: "string", description: "Filter by campaign ID" },
     },
   },
   StatsResponse: {
@@ -179,6 +185,7 @@ const schemas = {
         type: "object",
         properties: {
           emailsSent: { type: "integer" },
+          emailsDelivered: { type: "integer" },
           emailsOpened: { type: "integer" },
           emailsClicked: { type: "integer" },
           emailsReplied: { type: "integer" },
