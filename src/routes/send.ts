@@ -14,6 +14,9 @@ const router = Router();
 interface SendEmailRequest {
   orgId: string;
   runId: string;
+  brandId: string;
+  appId: string;
+  campaignId: string;
   from: string;
   to: string;
   cc?: string;
@@ -58,10 +61,10 @@ router.post("/send", async (req: Request, res: Response) => {
   const body = req.body as SendEmailRequest;
 
   // Validate required fields
-  if (!body.orgId || !body.runId || !body.from || !body.to || !body.subject) {
+  if (!body.orgId || !body.runId || !body.brandId || !body.appId || !body.campaignId || !body.from || !body.to || !body.subject) {
     return res.status(400).json({
       error: "Missing required fields",
-      required: ["orgId", "runId", "from", "to", "subject"],
+      required: ["orgId", "runId", "brandId", "appId", "campaignId", "from", "to", "subject"],
     });
   }
 
@@ -117,6 +120,9 @@ router.post("/send", async (req: Request, res: Response) => {
           submittedAt: result.submittedAt,
           orgId: body.orgId,
           runId: sendRun.id,
+          brandId: body.brandId,
+          appId: body.appId,
+          campaignId: body.campaignId,
           metadata: body.metadata,
         })
         .returning();
@@ -248,6 +254,9 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             submittedAt: result.submittedAt,
             orgId: email.orgId,
             runId: sendRun.id,
+            brandId: email.brandId,
+            appId: email.appId,
+            campaignId: email.campaignId,
             metadata: email.metadata,
           })
           .returning();

@@ -32,6 +32,9 @@ export const postmarkSendings = pgTable(
     // Context for tracking
     orgId: text("org_id"), // Clerk org ID or internal org ID
     runId: text("run_id"), // Parent run ID from caller
+    brandId: text("brand_id"),
+    appId: text("app_id"),
+    campaignId: text("campaign_id"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -39,6 +42,9 @@ export const postmarkSendings = pgTable(
     uniqueIndex("idx_sendings_message_id").on(table.messageId),
     index("idx_sendings_org").on(table.orgId),
     index("idx_sendings_run").on(table.runId),
+    index("idx_sendings_brand").on(table.brandId),
+    index("idx_sendings_app").on(table.appId),
+    index("idx_sendings_campaign").on(table.campaignId),
   ]
 );
 

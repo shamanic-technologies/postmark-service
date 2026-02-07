@@ -5,14 +5,14 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 ## API Endpoints
 
 ### Email Sending
-- **POST /send** - Send a single email (from, to, subject, htmlBody/textBody, optional cc/bcc/tag/replyTo). All emails are automatically BCC'd to kevin@mcpfactory.org.
-- **POST /send/batch** - Send up to 500 emails in one request. All emails are automatically BCC'd to kevin@mcpfactory.org.
+- **POST /send** - Send a single email (orgId, runId, brandId, appId, campaignId, from, to, subject, htmlBody/textBody, optional cc/bcc/tag/replyTo). All emails are automatically BCC'd to kevin@mcpfactory.org.
+- **POST /send/batch** - Send up to 500 emails in one request (same required fields per email). All emails are automatically BCC'd to kevin@mcpfactory.org.
 
 ### Email Status
 - **GET /status/:messageId** - Full delivery status for one email (sent/delivered/bounced/opened/clicked)
 - **GET /status/by-org/:orgId** - Recent emails for an organization
 - **GET /status/by-run/:runId** - Emails for a specific run
-- **POST /stats** - Aggregated stats across multiple runs
+- **POST /stats** - Aggregated stats with filters: runIds, clerkOrgId, brandId, appId, campaignId (at least one required). Returns emailsSent, emailsDelivered, emailsOpened, emailsClicked, emailsBounced, and reply metrics.
 
 ### Webhooks
 - **POST /webhooks/postmark** - Receives Postmark webhook events (delivery, bounce, open, click, spam complaint, subscription change)
@@ -38,7 +38,7 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 
 | Table | Purpose |
 |-------|---------|
-| `postmark_sendings` | Records of sent emails |
+| `postmark_sendings` | Records of sent emails (includes brand_id, app_id, campaign_id for filtering) |
 | `postmark_deliveries` | Successful delivery events |
 | `postmark_bounces` | Bounce events (hard/soft) |
 | `postmark_openings` | Email open tracking |
