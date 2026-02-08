@@ -5,8 +5,8 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 ## API Endpoints
 
 ### Email Sending
-- **POST /send** - Send a single email (runId, from, to, subject, htmlBody/textBody required; orgId, brandId, appId, campaignId, cc/bcc/tag/replyTo optional). Runs-service tracking only happens when orgId is provided. All emails are automatically BCC'd to kevin@mcpfactory.org.
-- **POST /send/batch** - Send up to 500 emails in one request (same fields per email). All emails are automatically BCC'd to kevin@mcpfactory.org.
+- **POST /send** - Send a single email (runId, from, to, subject, htmlBody/textBody required; orgId, brandId, appId, campaignId, cc/bcc/tag/replyTo optional). When orgId is provided, creates a run in runs-service with `clerkOrgId` (org resolved server-side), `appId` (defaults to `mcpfactory`), and optional `brandId`/`campaignId`. All emails are automatically BCC'd to kevin@mcpfactory.org.
+- **POST /send/batch** - Send up to 500 emails in one request (same fields per email). Same runs-service integration per email. All emails are automatically BCC'd to kevin@mcpfactory.org.
 
 ### Email Status
 - **GET /status/:messageId** - Full delivery status for one email (sent/delivered/bounced/opened/clicked)
@@ -103,7 +103,7 @@ src/
     schema.ts           # All table definitions
   lib/
     postmark-client.ts  # Postmark SDK wrapper (multi-project)
-    runs-client.ts      # Runs service HTTP client
+    runs-client.ts      # Runs service HTTP client (createRun, updateRun, addCosts)
   middleware/
     serviceAuth.ts      # API key auth middleware
   routes/
