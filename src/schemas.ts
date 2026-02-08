@@ -29,11 +29,11 @@ const EmailHeaderSchema = z.object({
 
 export const SendEmailRequestSchema = z
   .object({
-    orgId: z.string().openapi({ description: "Clerk organization ID" }),
+    orgId: z.string().optional().openapi({ description: "Clerk organization ID (optional for admin/lifecycle emails)" }),
     runId: z.string().openapi({ description: "Parent run ID" }),
-    brandId: z.string().openapi({ description: "Brand ID" }),
-    appId: z.string().openapi({ description: "App ID" }),
-    campaignId: z.string().openapi({ description: "Campaign ID" }),
+    brandId: z.string().optional().openapi({ description: "Brand ID" }),
+    appId: z.string().optional().openapi({ description: "App ID" }),
+    campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     from: z.string().openapi({ description: "Sender email address" }),
     to: z.string().openapi({ description: "Recipient email address" }),
     subject: z.string().openapi({ description: "Email subject line" }),
@@ -80,11 +80,11 @@ export const BatchSendRequestSchema = z
     emails: z
       .array(
         z.object({
-          orgId: z.string(),
+          orgId: z.string().optional(),
           runId: z.string(),
-          brandId: z.string(),
-          appId: z.string(),
-          campaignId: z.string(),
+          brandId: z.string().optional(),
+          appId: z.string().optional(),
+          campaignId: z.string().optional(),
           from: z.string(),
           to: z.string(),
           subject: z.string(),

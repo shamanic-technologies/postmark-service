@@ -15,7 +15,7 @@ const router = Router();
 /**
  * POST /send
  * Send an email via Postmark and record it in the database
- * BLOCKING: runs-service must succeed before email is sent
+ * BLOCKING: runs-service must succeed before email is sent (when orgId provided)
  */
 router.post("/send", async (req: Request, res: Response) => {
   const parsed = SendEmailRequestSchema.safeParse(req.body);
@@ -29,14 +29,18 @@ router.post("/send", async (req: Request, res: Response) => {
   const body = parsed.data;
 
   try {
-    // 1. Create run in runs-service FIRST (BLOCKING)
-    const runsOrgId = await ensureOrganization(body.orgId);
-    const sendRun = await createRun({
-      organizationId: runsOrgId,
-      serviceName: "postmark-service",
-      taskName: "email-send",
-      parentRunId: body.runId,
-    });
+    // 1. Create run in runs-service if orgId provided (BLOCKING)
+    let sendRunId: string | undefined;
+    if (body.orgId) {
+      const runsOrgId = await ensureOrganization(body.orgId);
+      const sendRun = await createRun({
+        organizationId: runsOrgId,
+        serviceName: "postmark-service",
+        taskName: "email-send",
+        parentRunId: body.runId,
+      });
+      sendRunId = sendRun.id;
+    }
 
     try {
       // 2. Send email via Postmark
@@ -73,7 +77,7 @@ router.post("/send", async (req: Request, res: Response) => {
           message: result.message,
           submittedAt: result.submittedAt,
           orgId: body.orgId,
-          runId: sendRun.id,
+          runId: sendRunId,
           brandId: body.brandId,
           appId: body.appId,
           campaignId: body.campaignId,
@@ -83,10 +87,12 @@ router.post("/send", async (req: Request, res: Response) => {
 
       // 4. Log costs and complete run
       if (result.success) {
-        await addCosts(sendRun.id, [
-          { costName: "postmark-email-send", quantity: 1 },
-        ]);
-        await updateRun(sendRun.id, "completed");
+        if (sendRunId) {
+          await addCosts(sendRunId, [
+            { costName: "postmark-email-send", quantity: 1 },
+          ]);
+          await updateRun(sendRunId, "completed");
+        }
 
         res.status(200).json({
           success: true,
@@ -95,7 +101,9 @@ router.post("/send", async (req: Request, res: Response) => {
           sendingId: sending.id,
         });
       } else {
-        await updateRun(sendRun.id, "failed", result.message);
+        if (sendRunId) {
+          await updateRun(sendRunId, "failed", result.message);
+        }
 
         res.status(400).json({
           success: false,
@@ -106,7 +114,9 @@ router.post("/send", async (req: Request, res: Response) => {
       }
     } catch (error: any) {
       // Email send or DB failed — mark run as failed
-      await updateRun(sendRun.id, "failed", error.message);
+      if (sendRunId) {
+        await updateRun(sendRunId, "failed", error.message);
+      }
       throw error;
     }
   } catch (error: any) {
@@ -123,7 +133,7 @@ router.post("/send", async (req: Request, res: Response) => {
 /**
  * POST /send/batch
  * Send multiple emails in a batch
- * BLOCKING: runs-service must succeed before each email is sent
+ * BLOCKING: runs-service must succeed before each email is sent (when orgId provided)
  */
 router.post("/send/batch", async (req: Request, res: Response) => {
   const parsed = BatchSendRequestSchema.safeParse(req.body);
@@ -139,14 +149,18 @@ router.post("/send/batch", async (req: Request, res: Response) => {
 
   for (const email of emails) {
     try {
-      // 1. Create run in runs-service FIRST (BLOCKING)
-      const runsOrgId = await ensureOrganization(email.orgId);
-      const sendRun = await createRun({
-        organizationId: runsOrgId,
-        serviceName: "postmark-service",
-        taskName: "email-send",
-        parentRunId: email.runId,
-      });
+      // 1. Create run in runs-service if orgId provided (BLOCKING)
+      let sendRunId: string | undefined;
+      if (email.orgId) {
+        const runsOrgId = await ensureOrganization(email.orgId);
+        const sendRun = await createRun({
+          organizationId: runsOrgId,
+          serviceName: "postmark-service",
+          taskName: "email-send",
+          parentRunId: email.runId,
+        });
+        sendRunId = sendRun.id;
+      }
 
       try {
         // 2. Send email via Postmark
@@ -183,7 +197,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             message: result.message,
             submittedAt: result.submittedAt,
             orgId: email.orgId,
-            runId: sendRun.id,
+            runId: sendRunId,
             brandId: email.brandId,
             appId: email.appId,
             campaignId: email.campaignId,
@@ -193,12 +207,16 @@ router.post("/send/batch", async (req: Request, res: Response) => {
 
         // 4. Log costs and complete run
         if (result.success) {
-          await addCosts(sendRun.id, [
-            { costName: "postmark-email-send", quantity: 1 },
-          ]);
-          await updateRun(sendRun.id, "completed");
+          if (sendRunId) {
+            await addCosts(sendRunId, [
+              { costName: "postmark-email-send", quantity: 1 },
+            ]);
+            await updateRun(sendRunId, "completed");
+          }
         } else {
-          await updateRun(sendRun.id, "failed", result.message);
+          if (sendRunId) {
+            await updateRun(sendRunId, "failed", result.message);
+          }
         }
 
         results.push({
@@ -211,7 +229,9 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         });
       } catch (error: any) {
         // Email send or DB failed — mark run as failed
-        await updateRun(sendRun.id, "failed", error.message);
+        if (sendRunId) {
+          await updateRun(sendRunId, "failed", error.message);
+        }
         throw error;
       }
     } catch (error: any) {
