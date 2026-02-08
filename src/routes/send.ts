@@ -3,7 +3,6 @@ import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
 import {
-  ensureOrganization,
   createRun,
   updateRun,
   addCosts,
@@ -32,12 +31,14 @@ router.post("/send", async (req: Request, res: Response) => {
     // 1. Create run in runs-service if orgId provided (BLOCKING)
     let sendRunId: string | undefined;
     if (body.orgId) {
-      const runsOrgId = await ensureOrganization(body.orgId);
       const sendRun = await createRun({
-        organizationId: runsOrgId,
+        clerkOrgId: body.orgId,
+        appId: body.appId || "mcpfactory",
         serviceName: "postmark-service",
         taskName: "email-send",
         parentRunId: body.runId,
+        brandId: body.brandId,
+        campaignId: body.campaignId,
       });
       sendRunId = sendRun.id;
     }
@@ -152,12 +153,14 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       // 1. Create run in runs-service if orgId provided (BLOCKING)
       let sendRunId: string | undefined;
       if (email.orgId) {
-        const runsOrgId = await ensureOrganization(email.orgId);
         const sendRun = await createRun({
-          organizationId: runsOrgId,
+          clerkOrgId: email.orgId,
+          appId: email.appId || "mcpfactory",
           serviceName: "postmark-service",
           taskName: "email-send",
           parentRunId: email.runId,
+          brandId: email.brandId,
+          campaignId: email.campaignId,
         });
         sendRunId = sendRun.id;
       }
