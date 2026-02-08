@@ -30,7 +30,7 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 - **Framework:** Express
 - **Database:** PostgreSQL (Neon) via Drizzle ORM
 - **Email provider:** Postmark SDK
-- **API docs:** swagger-autogen (OpenAPI 3.0)
+- **API docs:** Zod + @asteasolutions/zod-to-openapi (OpenAPI 3.0)
 - **Testing:** Vitest + Supertest
 - **Deployment:** Docker on Railway
 
@@ -97,6 +97,7 @@ All endpoints require `X-API-Key` header except:
 ```
 src/
   index.ts              # Express app setup, CORS, middleware
+  schemas.ts            # Zod schemas + OpenAPI registry (single source of truth)
   db/
     index.ts            # Database connection (pg + Drizzle)
     schema.ts           # All table definitions
