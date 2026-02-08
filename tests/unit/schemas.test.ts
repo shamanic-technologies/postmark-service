@@ -72,6 +72,21 @@ describe("Zod schemas", () => {
         expect(result.success).toBe(true);
       }
     });
+
+    it("should accept request without orgId (admin/lifecycle emails)", () => {
+      const { orgId, ...noOrg } = validRequest;
+      const result = SendEmailRequestSchema.safeParse(noOrg);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.orgId).toBeUndefined();
+      }
+    });
+
+    it("should accept request without brandId, appId, campaignId", () => {
+      const { brandId, appId, campaignId, ...minimal } = validRequest;
+      const result = SendEmailRequestSchema.safeParse(minimal);
+      expect(result.success).toBe(true);
+    });
   });
 
   describe("BatchSendRequestSchema", () => {
@@ -108,6 +123,14 @@ describe("Zod schemas", () => {
       const emails = Array(501).fill(validEmail);
       const result = BatchSendRequestSchema.safeParse({ emails });
       expect(result.success).toBe(false);
+    });
+
+    it("should accept emails without orgId", () => {
+      const { orgId, ...noOrg } = validEmail;
+      const result = BatchSendRequestSchema.safeParse({
+        emails: [noOrg],
+      });
+      expect(result.success).toBe(true);
     });
   });
 
