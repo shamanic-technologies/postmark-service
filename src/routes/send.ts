@@ -8,30 +8,9 @@ import {
   updateRun,
   addCosts,
 } from "../lib/runs-client";
+import { SendEmailRequestSchema, BatchSendRequestSchema } from "../schemas";
 
 const router = Router();
-
-interface SendEmailRequest {
-  orgId: string;
-  runId: string;
-  brandId: string;
-  appId: string;
-  campaignId: string;
-  from: string;
-  to: string;
-  cc?: string;
-  bcc?: string;
-  subject: string;
-  htmlBody?: string;
-  textBody?: string;
-  replyTo?: string;
-  tag?: string;
-  messageStream?: string;
-  headers?: { name: string; value: string }[];
-  metadata?: Record<string, string>;
-  trackOpens?: boolean;
-  trackLinks?: "None" | "HtmlAndText" | "HtmlOnly" | "TextOnly";
-}
 
 /**
  * POST /send
@@ -39,40 +18,15 @@ interface SendEmailRequest {
  * BLOCKING: runs-service must succeed before email is sent
  */
 router.post("/send", async (req: Request, res: Response) => {
-  // #swagger.tags = ['Email Sending']
-  // #swagger.summary = 'Send a single email'
-  // #swagger.description = 'Send an email via Postmark and record it in the database. Runs-service integration is BLOCKING.'
-  /* #swagger.requestBody = {
-    required: true,
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/SendEmailRequest" }
-      }
-    }
-  } */
-  /* #swagger.responses[200] = {
-    description: "Email sent successfully",
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/SendEmailResponse" }
-      }
-    }
-  } */
-  const body = req.body as SendEmailRequest;
-
-  // Validate required fields
-  if (!body.orgId || !body.runId || !body.brandId || !body.appId || !body.campaignId || !body.from || !body.to || !body.subject) {
+  const parsed = SendEmailRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
     return res.status(400).json({
-      error: "Missing required fields",
-      required: ["orgId", "runId", "brandId", "appId", "campaignId", "from", "to", "subject"],
+      error: "Invalid request",
+      details: parsed.error.flatten(),
     });
   }
 
-  if (!body.htmlBody && !body.textBody) {
-    return res.status(400).json({
-      error: "Either htmlBody or textBody is required",
-    });
-  }
+  const body = parsed.data;
 
   try {
     // 1. Create run in runs-service FIRST (BLOCKING)
@@ -172,39 +126,15 @@ router.post("/send", async (req: Request, res: Response) => {
  * BLOCKING: runs-service must succeed before each email is sent
  */
 router.post("/send/batch", async (req: Request, res: Response) => {
-  // #swagger.tags = ['Email Sending']
-  // #swagger.summary = 'Send batch emails'
-  // #swagger.description = 'Send up to 500 emails in one request. Runs-service integration is BLOCKING for each email.'
-  /* #swagger.requestBody = {
-    required: true,
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/BatchSendRequest" }
-      }
-    }
-  } */
-  /* #swagger.responses[200] = {
-    description: "Batch results",
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/BatchSendResponse" }
-      }
-    }
-  } */
-  const { emails } = req.body as { emails: SendEmailRequest[] };
-
-  if (!emails || !Array.isArray(emails) || emails.length === 0) {
+  const parsed = BatchSendRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
     return res.status(400).json({
-      error: "emails array is required",
+      error: "Invalid request",
+      details: parsed.error.flatten(),
     });
   }
 
-  if (emails.length > 500) {
-    return res.status(400).json({
-      error: "Maximum 500 emails per batch",
-    });
-  }
-
+  const { emails } = parsed.data;
   const results = [];
 
   for (const email of emails) {

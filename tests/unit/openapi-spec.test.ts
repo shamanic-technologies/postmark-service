@@ -85,4 +85,16 @@ describe("OpenAPI spec", () => {
     expect(tagNames).toContain("Email Status");
     expect(tagNames).toContain("Webhooks");
   });
+
+  it("should use $ref for schema references in paths", () => {
+    const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
+    const sendPath = spec.paths["/send"].post;
+
+    expect(sendPath.requestBody.content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/SendEmailRequest"
+    );
+    expect(
+      sendPath.responses["200"].content["application/json"].schema.$ref
+    ).toBe("#/components/schemas/SendEmailResponse");
+  });
 });
