@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
+import { normalizeSslMode } from "./utils";
 
 const connectionString = process.env.POSTMARK_SERVICE_DATABASE_URL;
 
@@ -9,8 +10,7 @@ if (!connectionString) {
 }
 
 const pool = new Pool({
-  connectionString,
-  ssl: { rejectUnauthorized: true }, // Explicit SSL config to suppress pg warning
+  connectionString: normalizeSslMode(connectionString),
 });
 
 export const db = drizzle(pool, { schema });
