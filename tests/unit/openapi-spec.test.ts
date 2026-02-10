@@ -86,6 +86,13 @@ describe("OpenAPI spec", () => {
     expect(tagNames).toContain("Webhooks");
   });
 
+  it("should include production server URL", () => {
+    const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
+    const urls = spec.servers.map((s: { url: string }) => s.url);
+
+    expect(urls).toContain("https://postmark.mcpfactory.org");
+  });
+
   it("should use $ref for schema references in paths", () => {
     const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
     const sendPath = spec.paths["/send"].post;

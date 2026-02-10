@@ -13,6 +13,7 @@ const document = generator.generateDocument({
     version: "1.0.0",
   },
   servers: [
+    { url: "https://postmark.mcpfactory.org", description: "Production" },
     { url: "http://localhost:3010", description: "Local development" },
   ],
   tags: [
