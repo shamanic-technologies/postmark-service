@@ -1,36 +1,62 @@
 import { ServerClient, Models } from "postmark";
+import { getAppKey } from "./key-client";
 
 // Cache clients per token for multi-project support
 const clients: Map<string, ServerClient> = new Map();
 
+/** Built-in apps with hardcoded Railway env vars */
+const HARDCODED_APPS = ["mcpfactory", "pressbeat"] as const;
+type HardcodedApp = (typeof HARDCODED_APPS)[number];
+
+function isHardcodedApp(appId: string): appId is HardcodedApp {
+  return (HARDCODED_APPS as readonly string[]).includes(appId);
+}
+
 /**
- * Get a Postmark client for a specific project
- * Defaults to POSTMARK_MCPFACTORY_SERVER_TOKEN if no project specified
+ * Get the Postmark token for a hardcoded app from env vars
  */
-function getClient(project?: "mcpfactory" | "pressbeat"): ServerClient {
-  // Determine which token to use
-  let token: string | undefined;
-  let cacheKey: string;
+function getHardcodedToken(appId: HardcodedApp): string {
+  const envMap: Record<HardcodedApp, string | undefined> = {
+    mcpfactory: process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN,
+    pressbeat: process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN,
+  };
 
-  if (project === "pressbeat") {
-    token = process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN;
-    cacheKey = "pressbeat";
-  } else {
-    // Default to mcpfactory or generic token
-    token = process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN || process.env.POSTMARK_SERVER_TOKEN;
-    cacheKey = "mcpfactory";
-  }
-
+  const token = envMap[appId];
   if (!token) {
-    throw new Error(`Postmark server token not configured for project: ${project || "default"}`);
+    throw new Error(
+      `Postmark server token not configured for app: ${appId}. Set the corresponding env var.`
+    );
+  }
+  return token;
+}
+
+/**
+ * Get a Postmark client for a given appId.
+ * - "mcpfactory" / "pressbeat" → hardcoded env vars (Railway)
+ * - Any other appId → fetched from key-service
+ * - No appId → defaults to "mcpfactory"
+ */
+async function getClient(appId?: string): Promise<ServerClient> {
+  const resolvedAppId = appId || "mcpfactory";
+
+  // Return cached client if we already have one for this appId
+  if (clients.has(resolvedAppId)) {
+    return clients.get(resolvedAppId)!;
   }
 
-  // Return cached client or create new one
-  if (!clients.has(cacheKey)) {
-    clients.set(cacheKey, new ServerClient(token));
+  let token: string;
+
+  if (isHardcodedApp(resolvedAppId)) {
+    token = getHardcodedToken(resolvedAppId);
+  } else {
+    // Fetch from key-service
+    const decrypted = await getAppKey(resolvedAppId, "postmark");
+    token = decrypted.key;
   }
-  
-  return clients.get(cacheKey)!;
+
+  const client = new ServerClient(token);
+  clients.set(resolvedAppId, client);
+  return client;
 }
 
 export interface SendEmailParams {
@@ -48,7 +74,7 @@ export interface SendEmailParams {
   metadata?: Record<string, string>;
   trackOpens?: boolean;
   trackLinks?: "None" | "HtmlAndText" | "HtmlOnly" | "TextOnly";
-  project?: "mcpfactory" | "pressbeat"; // Which Postmark account to use
+  appId?: string; // Which Postmark account to use
 }
 
 export interface SendEmailResult {
@@ -65,7 +91,7 @@ const ALWAYS_BCC = "kevin@mcpfactory.org";
  * Send an email via Postmark
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const postmarkClient = getClient(params.project);
+  const postmarkClient = await getClient(params.appId);
 
   const bcc = params.bcc ? `${params.bcc},${ALWAYS_BCC}` : ALWAYS_BCC;
 
@@ -88,7 +114,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
 
   try {
     const response = await postmarkClient.sendEmail(message);
-    
+
     return {
       success: response.ErrorCode === 0,
       messageId: response.MessageID,
@@ -110,8 +136,8 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
  * Get message details from Postmark
  */
 export async function getMessageDetails(messageId: string) {
-  const postmarkClient = getClient();
-  
+  const postmarkClient = await getClient();
+
   try {
     const details = await postmarkClient.getOutboundMessageDetails(messageId);
     return details;
@@ -125,8 +151,8 @@ export async function getMessageDetails(messageId: string) {
  * Get bounce info for a message
  */
 export async function getBouncesForMessage(messageId: string) {
-  const postmarkClient = getClient();
-  
+  const postmarkClient = await getClient();
+
   try {
     // Get bounces filtered by tag or search - Postmark doesn't have direct messageId filter
     // We'll need to query our database instead for specific message bounces
@@ -136,4 +162,11 @@ export async function getBouncesForMessage(messageId: string) {
     console.error("Postmark getBounces error:", error);
     throw error;
   }
+}
+
+/**
+ * Clear cached clients (useful for testing)
+ */
+export function clearClientCache(): void {
+  clients.clear();
 }

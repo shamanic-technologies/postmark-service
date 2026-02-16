@@ -60,6 +60,7 @@ router.post("/send", async (req: Request, res: Response) => {
         metadata: body.metadata,
         trackOpens: body.trackOpens,
         trackLinks: body.trackLinks,
+        appId: body.appId,
       };
 
       const result = await sendEmail(sendParams);
@@ -182,6 +183,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           metadata: email.metadata,
           trackOpens: email.trackOpens,
           trackLinks: email.trackLinks,
+          appId: email.appId,
         };
 
         const result = await sendEmail(sendParams);

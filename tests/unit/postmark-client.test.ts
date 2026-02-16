@@ -1,26 +1,172 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-/**
- * Unit tests for postmark-client module
- * 
- * Note: Since the postmark client uses a lazy singleton pattern,
- * we test the interface and types rather than mocking the SDK directly.
- * Integration tests with real API calls are done separately.
- */
+// Mock key-client before importing postmark-client
+vi.mock("../../src/lib/key-client", () => ({
+  getAppKey: vi.fn(),
+}));
 
-describe("postmark-client types and interfaces", () => {
+// Mock postmark SDK
+const mockSendEmail = vi.fn().mockResolvedValue({
+  ErrorCode: 0,
+  MessageID: "test-msg-id",
+  SubmittedAt: new Date().toISOString(),
+  Message: "OK",
+});
+
+vi.mock("postmark", () => {
+  return {
+    ServerClient: class MockServerClient {
+      _token: string;
+      sendEmail = mockSendEmail;
+      getOutboundMessageDetails = vi.fn();
+      getBounces = vi.fn();
+      constructor(token: string) {
+        this._token = token;
+        // Track constructor calls for assertions
+        MockServerClient._instances.push({ token });
+      }
+      static _instances: { token: string }[] = [];
+    },
+    Models: {
+      LinkTrackingOptions: { HtmlAndText: "HtmlAndText" },
+    },
+  };
+});
+
+import { sendEmail, clearClientCache } from "../../src/lib/postmark-client";
+import { getAppKey } from "../../src/lib/key-client";
+import { ServerClient } from "postmark";
+
+const mockedGetAppKey = vi.mocked(getAppKey);
+const MockedServerClient = ServerClient as any;
+
+function getCreatedTokens(): string[] {
+  return MockedServerClient._instances.map((i: any) => i.token);
+}
+
+describe("postmark-client key resolution", () => {
+  beforeEach(() => {
+    clearClientCache();
+    vi.clearAllMocks();
+    mockSendEmail.mockClear();
+    MockedServerClient._instances = [];
+    process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN = "hardcoded-mcpfactory-token";
+    process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN = "hardcoded-pressbeat-token";
+  });
+
+  afterEach(() => {
+    delete process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN;
+    delete process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN;
+  });
+
+  const baseSendParams = {
+    from: "test@example.com",
+    to: "recipient@example.com",
+    subject: "Test",
+    htmlBody: "<p>Hi</p>",
+  };
+
+  describe("hardcoded apps (mcpfactory, pressbeat)", () => {
+    it("should use POSTMARK_MCPFACTORY_SERVER_TOKEN when appId is mcpfactory", async () => {
+      await sendEmail({ ...baseSendParams, appId: "mcpfactory" });
+
+      expect(getCreatedTokens()).toEqual(["hardcoded-mcpfactory-token"]);
+      expect(mockedGetAppKey).not.toHaveBeenCalled();
+    });
+
+    it("should use POSTMARK_PRESSBEAT_SERVER_TOKEN when appId is pressbeat", async () => {
+      await sendEmail({ ...baseSendParams, appId: "pressbeat" });
+
+      expect(getCreatedTokens()).toEqual(["hardcoded-pressbeat-token"]);
+      expect(mockedGetAppKey).not.toHaveBeenCalled();
+    });
+
+    it("should default to mcpfactory when no appId provided", async () => {
+      await sendEmail(baseSendParams);
+
+      expect(getCreatedTokens()).toEqual(["hardcoded-mcpfactory-token"]);
+      expect(mockedGetAppKey).not.toHaveBeenCalled();
+    });
+
+    it("should throw if mcpfactory env var is missing", async () => {
+      delete process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN;
+
+      await expect(sendEmail(baseSendParams)).rejects.toThrow(
+        "Postmark server token not configured for app: mcpfactory"
+      );
+    });
+
+    it("should throw if pressbeat env var is missing", async () => {
+      delete process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN;
+
+      await expect(
+        sendEmail({ ...baseSendParams, appId: "pressbeat" })
+      ).rejects.toThrow(
+        "Postmark server token not configured for app: pressbeat"
+      );
+    });
+  });
+
+  describe("dynamic apps (key-service)", () => {
+    it("should fetch token from key-service for non-hardcoded appId", async () => {
+      mockedGetAppKey.mockResolvedValue({
+        provider: "postmark",
+        key: "dynamic-token-from-key-service",
+      });
+
+      await sendEmail({ ...baseSendParams, appId: "my-saas-app" });
+
+      expect(mockedGetAppKey).toHaveBeenCalledWith("my-saas-app", "postmark");
+      expect(getCreatedTokens()).toEqual(["dynamic-token-from-key-service"]);
+    });
+
+    it("should propagate key-service 404 error (no fallback)", async () => {
+      mockedGetAppKey.mockRejectedValue(
+        new Error('No Postmark key configured for appId "unknown-app". Register it via key-service first.')
+      );
+
+      await expect(
+        sendEmail({ ...baseSendParams, appId: "unknown-app" })
+      ).rejects.toThrow(
+        'No Postmark key configured for appId "unknown-app"'
+      );
+    });
+
+    it("should propagate key-service connection errors (no fallback)", async () => {
+      mockedGetAppKey.mockRejectedValue(
+        new Error("key-service GET /internal/app-keys/postmark/decrypt failed: 500 - Internal server error")
+      );
+
+      await expect(
+        sendEmail({ ...baseSendParams, appId: "my-app" })
+      ).rejects.toThrow("key-service GET");
+    });
+
+    it("should cache the client after first key-service call", async () => {
+      mockedGetAppKey.mockResolvedValue({
+        provider: "postmark",
+        key: "cached-token",
+      });
+
+      await sendEmail({ ...baseSendParams, appId: "cached-app" });
+      await sendEmail({ ...baseSendParams, appId: "cached-app" });
+
+      // key-service should only be called once
+      expect(mockedGetAppKey).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("SendEmailParams interface", () => {
-    it("should define required fields", () => {
+    it("should accept appId as a string", () => {
       const params = {
         from: "sender@test.com",
         to: "recipient@test.com",
         subject: "Test Subject",
         htmlBody: "<p>Hello</p>",
+        appId: "my-custom-app",
       };
 
-      expect(params.from).toBeDefined();
-      expect(params.to).toBeDefined();
-      expect(params.subject).toBeDefined();
+      expect(params.appId).toBe("my-custom-app");
     });
 
     it("should allow optional fields", () => {
@@ -68,13 +214,6 @@ describe("postmark-client types and interfaces", () => {
 
       expect(failResult.success).toBe(false);
       expect(failResult.errorCode).toBe(300);
-    });
-  });
-
-  describe("Environment configuration", () => {
-    it("should read POSTMARK_SERVER_TOKEN from env", () => {
-      process.env.POSTMARK_SERVER_TOKEN = "test-token";
-      expect(process.env.POSTMARK_SERVER_TOKEN).toBe("test-token");
     });
   });
 });
