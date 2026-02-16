@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock key-client before importing postmark-client
+vi.mock("../../src/lib/key-client", () => ({
+  getAppKey: vi.fn(),
+}));
+
 // Mock the postmark SDK before importing the module
 const mockSendEmail = vi.fn();
 
