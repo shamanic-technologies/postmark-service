@@ -264,7 +264,7 @@ export const GroupedStatsResponseSchema = z
   .object({
     groups: z.array(
       z.object({
-        key: z.string().nullable(),
+        key: z.string(),
         stats: StatsObjectSchema,
         recipients: z.number(),
       })

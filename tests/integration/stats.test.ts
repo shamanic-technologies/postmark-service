@@ -359,7 +359,7 @@ describe("POST /stats", () => {
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
 
-    const nullGroup = response.body.groups.find((g: any) => g.key === null);
+    const nullGroup = response.body.groups.find((g: any) => g.key === "");
     const wf1 = response.body.groups.find((g: any) => g.key === "wf-1");
     expect(nullGroup.stats.emailsSent).toBe(1);
     expect(wf1.stats.emailsSent).toBe(1);
