@@ -7,7 +7,7 @@ import {
   postmarkOpenings,
   postmarkLinkClicks,
 } from "../db/schema";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, and, SQL } from "drizzle-orm";
 import { StatsRequestSchema } from "../schemas";
 
 const router = Router();
@@ -207,9 +207,99 @@ router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Stats helpers ────────────────────────────────────────────────────────────
+
+const GROUP_BY_COLUMN_MAP = {
+  brandId: postmarkSendings.brandId,
+  campaignId: postmarkSendings.campaignId,
+  workflowName: postmarkSendings.workflowName,
+  leadEmail: postmarkSendings.toEmail,
+} as const;
+
+function buildStatsConditions(data: {
+  runIds?: string[];
+  clerkOrgId?: string;
+  brandId?: string;
+  appId?: string;
+  campaignId?: string;
+  workflowName?: string;
+}): SQL[] {
+  const conditions: SQL[] = [];
+  if (Array.isArray(data.runIds) && data.runIds.length > 0) {
+    conditions.push(inArray(postmarkSendings.runId, data.runIds));
+  }
+  if (data.clerkOrgId) {
+    conditions.push(eq(postmarkSendings.orgId, data.clerkOrgId));
+  }
+  if (data.brandId) {
+    conditions.push(eq(postmarkSendings.brandId, data.brandId));
+  }
+  if (data.appId) {
+    conditions.push(eq(postmarkSendings.appId, data.appId));
+  }
+  if (data.campaignId) {
+    conditions.push(eq(postmarkSendings.campaignId, data.campaignId));
+  }
+  if (data.workflowName) {
+    conditions.push(eq(postmarkSendings.workflowName, data.workflowName));
+  }
+  return conditions;
+}
+
+async function computeStats(messageIds: string[]) {
+  const stats = {
+    emailsDelivered: 0,
+    emailsOpened: 0,
+    emailsClicked: 0,
+    emailsBounced: 0,
+  };
+
+  if (messageIds.length === 0) return stats;
+
+  const [deliveries, openings, clicks, bounces] = await Promise.all([
+    db.select({ messageId: postmarkDeliveries.messageId })
+      .from(postmarkDeliveries)
+      .where(inArray(postmarkDeliveries.messageId, messageIds)),
+    db.select({ messageId: postmarkOpenings.messageId })
+      .from(postmarkOpenings)
+      .where(inArray(postmarkOpenings.messageId, messageIds)),
+    db.select({ messageId: postmarkLinkClicks.messageId })
+      .from(postmarkLinkClicks)
+      .where(inArray(postmarkLinkClicks.messageId, messageIds)),
+    db.select({ messageId: postmarkBounces.messageId })
+      .from(postmarkBounces)
+      .where(inArray(postmarkBounces.messageId, messageIds)),
+  ]);
+
+  stats.emailsDelivered = deliveries.length;
+  stats.emailsOpened = new Set(openings.map((o) => o.messageId)).size;
+  stats.emailsClicked = new Set(clicks.map((c) => c.messageId)).size;
+  stats.emailsBounced = bounces.length;
+
+  return stats;
+}
+
+function buildStatsObject(emailsSent: number, eventStats: Awaited<ReturnType<typeof computeStats>>) {
+  return {
+    emailsSent,
+    emailsDelivered: eventStats.emailsDelivered,
+    emailsOpened: eventStats.emailsOpened,
+    emailsClicked: eventStats.emailsClicked,
+    emailsReplied: 0,
+    emailsBounced: eventStats.emailsBounced,
+    repliesWillingToMeet: 0,
+    repliesInterested: 0,
+    repliesNotInterested: 0,
+    repliesOutOfOffice: 0,
+    repliesUnsubscribe: 0,
+  };
+}
+
+// ─── POST /stats ──────────────────────────────────────────────────────────────
+
 /**
  * POST /stats
- * Get aggregated email stats with flexible filtering
+ * Get aggregated email stats with flexible filtering and optional groupBy
  */
 router.post("/stats", async (req: Request, res: Response) => {
   const parsed = StatsRequestSchema.safeParse(req.body);
@@ -220,88 +310,110 @@ router.post("/stats", async (req: Request, res: Response) => {
     });
   }
 
-  const { runIds, clerkOrgId, brandId, appId, campaignId } = parsed.data;
-
-  // Build filter conditions
-  const conditions = [];
-  if (Array.isArray(runIds) && runIds.length > 0) {
-    conditions.push(inArray(postmarkSendings.runId, runIds));
-  }
-  if (typeof clerkOrgId === "string" && clerkOrgId) {
-    conditions.push(eq(postmarkSendings.orgId, clerkOrgId));
-  }
-  if (typeof brandId === "string" && brandId) {
-    conditions.push(eq(postmarkSendings.brandId, brandId));
-  }
-  if (typeof appId === "string" && appId) {
-    conditions.push(eq(postmarkSendings.appId, appId));
-  }
-  if (typeof campaignId === "string" && campaignId) {
-    conditions.push(eq(postmarkSendings.campaignId, campaignId));
-  }
+  const { groupBy, ...filters } = parsed.data;
+  const conditions = buildStatsConditions(filters);
 
   if (conditions.length === 0) {
     return res.status(400).json({
-      error: "At least one filter is required: runIds, clerkOrgId, brandId, appId, or campaignId",
+      error: "At least one filter is required: runIds, clerkOrgId, brandId, appId, campaignId, or workflowName",
     });
   }
 
   try {
+    if (!groupBy) {
+      // ─── Flat response (backwards compatible) ────────────────────────
+      const sendings = await db
+        .select({
+          messageId: postmarkSendings.messageId,
+          toEmail: postmarkSendings.toEmail,
+        })
+        .from(postmarkSendings)
+        .where(and(...conditions));
+
+      const messageIds = sendings
+        .map((s) => s.messageId)
+        .filter((id): id is string => id !== null);
+
+      const eventStats = await computeStats(messageIds);
+      const recipients = new Set(sendings.map((s) => s.toEmail)).size;
+
+      return res.json({
+        stats: buildStatsObject(sendings.length, eventStats),
+        recipients,
+      });
+    }
+
+    // ─── Grouped response ────────────────────────────────────────────
+    const groupColumn = GROUP_BY_COLUMN_MAP[groupBy];
+
     const sendings = await db
-      .select({ id: postmarkSendings.id, messageId: postmarkSendings.messageId })
+      .select({
+        messageId: postmarkSendings.messageId,
+        toEmail: postmarkSendings.toEmail,
+        groupKey: groupColumn,
+      })
       .from(postmarkSendings)
       .where(and(...conditions));
 
-    const messageIds = sendings
+    // Group sendings by dimension key
+    const grouped = new Map<string | null, { messageIds: string[]; toEmails: Set<string>; count: number }>();
+    for (const s of sendings) {
+      const key = s.groupKey ?? null;
+      let group = grouped.get(key);
+      if (!group) {
+        group = { messageIds: [], toEmails: new Set(), count: 0 };
+        grouped.set(key, group);
+      }
+      group.count++;
+      group.toEmails.add(s.toEmail);
+      if (s.messageId) group.messageIds.push(s.messageId);
+    }
+
+    // Compute stats for all messageIds at once, then distribute
+    const allMessageIds = sendings
       .map((s) => s.messageId)
       .filter((id): id is string => id !== null);
 
-    let emailsDelivered = 0;
-    let emailsOpened = 0;
-    let emailsClicked = 0;
-    let emailsBounced = 0;
+    // Fetch all events in parallel
+    const [allDeliveries, allOpenings, allClicks, allBounces] = allMessageIds.length > 0
+      ? await Promise.all([
+          db.select({ messageId: postmarkDeliveries.messageId })
+            .from(postmarkDeliveries)
+            .where(inArray(postmarkDeliveries.messageId, allMessageIds)),
+          db.select({ messageId: postmarkOpenings.messageId })
+            .from(postmarkOpenings)
+            .where(inArray(postmarkOpenings.messageId, allMessageIds)),
+          db.select({ messageId: postmarkLinkClicks.messageId })
+            .from(postmarkLinkClicks)
+            .where(inArray(postmarkLinkClicks.messageId, allMessageIds)),
+          db.select({ messageId: postmarkBounces.messageId })
+            .from(postmarkBounces)
+            .where(inArray(postmarkBounces.messageId, allMessageIds)),
+        ])
+      : [[], [], [], []];
 
-    if (messageIds.length > 0) {
-      const deliveries = await db
-        .select({ messageId: postmarkDeliveries.messageId })
-        .from(postmarkDeliveries)
-        .where(inArray(postmarkDeliveries.messageId, messageIds));
-      emailsDelivered = deliveries.length;
+    // Build lookup sets for O(1) membership checks
+    const deliveredSet = new Set(allDeliveries.map((d) => d.messageId));
+    const openedSet = new Set(allOpenings.map((o) => o.messageId));
+    const clickedSet = new Set(allClicks.map((c) => c.messageId));
+    const bouncedSet = new Set(allBounces.map((b) => b.messageId));
 
-      const openings = await db
-        .select({ messageId: postmarkOpenings.messageId })
-        .from(postmarkOpenings)
-        .where(inArray(postmarkOpenings.messageId, messageIds));
-      emailsOpened = new Set(openings.map((o) => o.messageId)).size;
+    const groups = Array.from(grouped.entries()).map(([key, group]) => {
+      const eventStats = {
+        emailsDelivered: group.messageIds.filter((id) => deliveredSet.has(id)).length,
+        emailsOpened: group.messageIds.filter((id) => openedSet.has(id)).length,
+        emailsClicked: group.messageIds.filter((id) => clickedSet.has(id)).length,
+        emailsBounced: group.messageIds.filter((id) => bouncedSet.has(id)).length,
+      };
 
-      const clicks = await db
-        .select({ messageId: postmarkLinkClicks.messageId })
-        .from(postmarkLinkClicks)
-        .where(inArray(postmarkLinkClicks.messageId, messageIds));
-      emailsClicked = new Set(clicks.map((c) => c.messageId)).size;
-
-      const bounces = await db
-        .select({ messageId: postmarkBounces.messageId })
-        .from(postmarkBounces)
-        .where(inArray(postmarkBounces.messageId, messageIds));
-      emailsBounced = bounces.length;
-    }
-
-    res.json({
-      stats: {
-        emailsSent: sendings.length,
-        emailsDelivered,
-        emailsOpened,
-        emailsClicked,
-        emailsReplied: 0,
-        emailsBounced,
-        repliesWillingToMeet: 0,
-        repliesInterested: 0,
-        repliesNotInterested: 0,
-        repliesOutOfOffice: 0,
-        repliesUnsubscribe: 0,
-      },
+      return {
+        key,
+        stats: buildStatsObject(group.count, eventStats),
+        recipients: group.toEmails.size,
+      };
     });
+
+    return res.json({ groups });
   } catch (error: any) {
     console.error("Error getting stats:", error);
     res.status(500).json({

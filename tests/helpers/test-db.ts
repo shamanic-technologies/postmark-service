@@ -37,6 +37,7 @@ export async function insertTestSending(data: {
   brandId?: string;
   appId?: string;
   campaignId?: string;
+  workflowName?: string;
 }) {
   const [sending] = await db
     .insert(postmarkSendings)
@@ -50,6 +51,7 @@ export async function insertTestSending(data: {
       brandId: data.brandId,
       appId: data.appId,
       campaignId: data.campaignId,
+      workflowName: data.workflowName,
       errorCode: 0,
       message: "OK",
       submittedAt: new Date(),

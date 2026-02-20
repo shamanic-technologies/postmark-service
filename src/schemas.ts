@@ -34,6 +34,7 @@ export const SendEmailRequestSchema = z
     brandId: z.string().optional().openapi({ description: "Brand ID" }),
     appId: z.string().optional().openapi({ description: "App ID" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
+    workflowName: z.string().optional().openapi({ description: "Workflow name for tracking/grouping" }),
     from: z.string().openapi({ description: "Sender email address" }),
     to: z.string().openapi({ description: "Recipient email address" }),
     subject: z.string().openapi({ description: "Email subject line" }),
@@ -85,6 +86,7 @@ export const BatchSendRequestSchema = z
           brandId: z.string().optional(),
           appId: z.string().optional(),
           campaignId: z.string().optional(),
+          workflowName: z.string().optional(),
           from: z.string(),
           to: z.string(),
           subject: z.string(),
@@ -219,6 +221,8 @@ export const RunEmailsResponseSchema = z
 
 // ===== Stats =====
 
+export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowName", "leadEmail"]);
+
 export const StatsRequestSchema = z
   .object({
     runIds: z.array(z.string()).optional().openapi({ description: "Filter by run IDs" }),
@@ -226,30 +230,49 @@ export const StatsRequestSchema = z
     brandId: z.string().optional().openapi({ description: "Filter by brand ID" }),
     appId: z.string().optional().openapi({ description: "Filter by app ID" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
+    workflowName: z.string().optional().openapi({ description: "Filter by workflow name" }),
+    groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
   })
   .openapi("StatsRequest");
 
 export type StatsRequest = z.infer<typeof StatsRequestSchema>;
 
+const StatsObjectSchema = z.object({
+  emailsSent: z.number(),
+  emailsDelivered: z.number(),
+  emailsOpened: z.number(),
+  emailsClicked: z.number(),
+  emailsReplied: z.number(),
+  emailsBounced: z.number(),
+  repliesWillingToMeet: z.number(),
+  repliesInterested: z.number(),
+  repliesNotInterested: z.number(),
+  repliesOutOfOffice: z.number(),
+  repliesUnsubscribe: z.number(),
+});
+
 export const StatsResponseSchema = z
   .object({
-    stats: z.object({
-      emailsSent: z.number(),
-      emailsDelivered: z.number(),
-      emailsOpened: z.number(),
-      emailsClicked: z.number(),
-      emailsReplied: z.number(),
-      emailsBounced: z.number(),
-      repliesWillingToMeet: z.number(),
-      repliesInterested: z.number(),
-      repliesNotInterested: z.number(),
-      repliesOutOfOffice: z.number(),
-      repliesUnsubscribe: z.number(),
-    }),
+    stats: StatsObjectSchema,
+    recipients: z.number(),
   })
   .openapi("StatsResponse");
 
 export type StatsResponse = z.infer<typeof StatsResponseSchema>;
+
+export const GroupedStatsResponseSchema = z
+  .object({
+    groups: z.array(
+      z.object({
+        key: z.string().nullable(),
+        stats: StatsObjectSchema,
+        recipients: z.number(),
+      })
+    ),
+  })
+  .openapi("GroupedStatsResponse");
+
+export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
 // ===== Health =====
 
@@ -448,7 +471,7 @@ registry.registerPath({
   path: "/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats filtered by runIds, clerkOrgId, brandId, appId, and/or campaignId. At least one filter required.",
+    "Get aggregated email stats filtered by runIds, clerkOrgId, brandId, appId, campaignId, and/or workflowName. At least one filter required. When groupBy is provided, returns grouped results.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
@@ -458,8 +481,12 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Aggregated stats",
-      content: { "application/json": { schema: StatsResponseSchema } },
+      description: "Aggregated stats (flat or grouped depending on groupBy parameter)",
+      content: {
+        "application/json": {
+          schema: z.union([StatsResponseSchema, GroupedStatsResponseSchema]),
+        },
+      },
     },
     400: {
       description: "Invalid request",

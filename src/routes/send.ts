@@ -39,6 +39,7 @@ router.post("/send", async (req: Request, res: Response) => {
         parentRunId: body.runId,
         brandId: body.brandId,
         campaignId: body.campaignId,
+        workflowName: body.workflowName,
       });
       sendRunId = sendRun.id;
     }
@@ -83,6 +84,7 @@ router.post("/send", async (req: Request, res: Response) => {
           brandId: body.brandId,
           appId: body.appId,
           campaignId: body.campaignId,
+          workflowName: body.workflowName,
           metadata: body.metadata,
         })
         .returning();
@@ -162,6 +164,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           parentRunId: email.runId,
           brandId: email.brandId,
           campaignId: email.campaignId,
+          workflowName: email.workflowName,
         });
         sendRunId = sendRun.id;
       }
@@ -206,6 +209,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             brandId: email.brandId,
             appId: email.appId,
             campaignId: email.campaignId,
+            workflowName: email.workflowName,
             metadata: email.metadata,
           })
           .returning();
