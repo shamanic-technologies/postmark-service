@@ -356,9 +356,9 @@ router.post("/stats", async (req: Request, res: Response) => {
       .where(and(...conditions));
 
     // Group sendings by dimension key
-    const grouped = new Map<string | null, { messageIds: string[]; toEmails: Set<string>; count: number }>();
+    const grouped = new Map<string, { messageIds: string[]; toEmails: Set<string>; count: number }>();
     for (const s of sendings) {
-      const key = s.groupKey ?? null;
+      const key = s.groupKey ?? "";
       let group = grouped.get(key);
       if (!group) {
         group = { messageIds: [], toEmails: new Set(), count: 0 };
