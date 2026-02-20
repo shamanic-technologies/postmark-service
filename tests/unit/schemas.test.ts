@@ -162,5 +162,63 @@ describe("Zod schemas", () => {
       });
       expect(result.success).toBe(true);
     });
+
+    it("should accept workflowName filter", () => {
+      const result = StatsRequestSchema.safeParse({
+        clerkOrgId: "org_123",
+        workflowName: "outbound-v2",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.workflowName).toBe("outbound-v2");
+      }
+    });
+
+    it("should accept groupBy with valid enum values", () => {
+      for (const value of ["brandId", "campaignId", "workflowName", "leadEmail"]) {
+        const result = StatsRequestSchema.safeParse({
+          clerkOrgId: "org_123",
+          groupBy: value,
+        });
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it("should reject invalid groupBy value", () => {
+      const result = StatsRequestSchema.safeParse({
+        clerkOrgId: "org_123",
+        groupBy: "invalidDimension",
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("SendEmailRequestSchema - workflowName", () => {
+    const validRequest = {
+      runId: "run_456",
+      from: "sender@example.com",
+      to: "recipient@example.com",
+      subject: "Test Email",
+      htmlBody: "<p>Hello</p>",
+    };
+
+    it("should accept workflowName as optional field", () => {
+      const result = SendEmailRequestSchema.safeParse({
+        ...validRequest,
+        workflowName: "outbound-v2",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.workflowName).toBe("outbound-v2");
+      }
+    });
+
+    it("should accept request without workflowName", () => {
+      const result = SendEmailRequestSchema.safeParse(validRequest);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.workflowName).toBeUndefined();
+      }
+    });
   });
 });

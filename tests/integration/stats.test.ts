@@ -186,4 +186,191 @@ describe("POST /stats", () => {
     expect(stats.emailsClicked).toBe(0);
     expect(stats.emailsBounced).toBe(0);
   });
+
+  it("should include recipients count in flat response", async () => {
+    const brand = "brand-recipients";
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ brandId: brand });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBe(3);
+    expect(response.body.recipients).toBe(2); // alice + bob
+  });
+
+  it("should filter by workflowName", async () => {
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-alpha" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-beta" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-alpha" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ brandId: "b1", workflowName: "wf-alpha" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBe(2);
+  });
+
+  it("should accept workflowName as the sole filter", async () => {
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-solo" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ workflowName: "wf-solo" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBe(1);
+  });
+
+  // ─── groupBy tests ────────────────────────────────────────────────────────
+
+  it("should group by campaignId", async () => {
+    const brand = "brand-group-campaign";
+    const msg1 = randomUUID();
+    const msg2 = randomUUID();
+    const msg3 = randomUUID();
+
+    await insertTestSending({ messageId: msg1, brandId: brand, appId: "a1", campaignId: "camp-a" });
+    await insertTestSending({ messageId: msg2, brandId: brand, appId: "a1", campaignId: "camp-a" });
+    await insertTestSending({ messageId: msg3, brandId: brand, appId: "a1", campaignId: "camp-b" });
+
+    await insertTestDelivery(msg1);
+    await insertTestDelivery(msg2);
+    await insertTestOpening(msg1);
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ brandId: brand, groupBy: "campaignId" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toBeDefined();
+    expect(response.body.groups).toHaveLength(2);
+
+    const campA = response.body.groups.find((g: any) => g.key === "camp-a");
+    const campB = response.body.groups.find((g: any) => g.key === "camp-b");
+
+    expect(campA).toBeDefined();
+    expect(campA.stats.emailsSent).toBe(2);
+    expect(campA.stats.emailsDelivered).toBe(2);
+    expect(campA.stats.emailsOpened).toBe(1);
+
+    expect(campB).toBeDefined();
+    expect(campB.stats.emailsSent).toBe(1);
+    expect(campB.stats.emailsDelivered).toBe(0);
+  });
+
+  it("should group by brandId", async () => {
+    const org = "org-group-brand";
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-x", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-x", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-y", appId: "a1", campaignId: "c1" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ clerkOrgId: org, groupBy: "brandId" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+
+    const brandX = response.body.groups.find((g: any) => g.key === "brand-x");
+    const brandY = response.body.groups.find((g: any) => g.key === "brand-y");
+    expect(brandX.stats.emailsSent).toBe(2);
+    expect(brandY.stats.emailsSent).toBe(1);
+  });
+
+  it("should group by workflowName", async () => {
+    const org = "org-group-wf";
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-2" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-1" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ clerkOrgId: org, groupBy: "workflowName" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+
+    const wf1 = response.body.groups.find((g: any) => g.key === "wf-1");
+    const wf2 = response.body.groups.find((g: any) => g.key === "wf-2");
+    expect(wf1.stats.emailsSent).toBe(2);
+    expect(wf2.stats.emailsSent).toBe(1);
+  });
+
+  it("should group by leadEmail", async () => {
+    const brand = "brand-group-lead";
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ brandId: brand, groupBy: "leadEmail" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+
+    const alice = response.body.groups.find((g: any) => g.key === "alice@test.com");
+    const bob = response.body.groups.find((g: any) => g.key === "bob@test.com");
+    expect(alice.stats.emailsSent).toBe(2);
+    expect(alice.recipients).toBe(1);
+    expect(bob.stats.emailsSent).toBe(1);
+  });
+
+  it("should include recipients per group", async () => {
+    const brand = "brand-group-recip";
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, appId: "a1", campaignId: "c2" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ brandId: brand, groupBy: "campaignId" });
+
+    expect(response.status).toBe(200);
+    const c1 = response.body.groups.find((g: any) => g.key === "c1");
+    const c2 = response.body.groups.find((g: any) => g.key === "c2");
+    expect(c1.recipients).toBe(2); // a + b
+    expect(c2.recipients).toBe(1); // a
+  });
+
+  it("should handle null group keys", async () => {
+    const org = "org-null-wf";
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1" }); // no workflowName
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ clerkOrgId: org, groupBy: "workflowName" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+
+    const nullGroup = response.body.groups.find((g: any) => g.key === null);
+    const wf1 = response.body.groups.find((g: any) => g.key === "wf-1");
+    expect(nullGroup.stats.emailsSent).toBe(1);
+    expect(wf1.stats.emailsSent).toBe(1);
+  });
+
+  it("should reject invalid groupBy value", async () => {
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ brandId: "b1", groupBy: "invalidField" });
+
+    expect(response.status).toBe(400);
+  });
 });

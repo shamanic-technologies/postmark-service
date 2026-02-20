@@ -45,6 +45,7 @@ export interface CreateRunParams {
   clerkUserId?: string;
   brandId?: string;
   campaignId?: string;
+  workflowName?: string;
 }
 
 export interface CostItem {
