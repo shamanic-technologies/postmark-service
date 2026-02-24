@@ -85,6 +85,7 @@ router.post("/send", async (req: Request, res: Response) => {
           appId: body.appId,
           campaignId: body.campaignId,
           workflowName: body.workflowName,
+          leadId: body.leadId,
           metadata: body.metadata,
         })
         .returning();
@@ -210,6 +211,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             appId: email.appId,
             campaignId: email.campaignId,
             workflowName: email.workflowName,
+            leadId: email.leadId,
             metadata: email.metadata,
           })
           .returning();
