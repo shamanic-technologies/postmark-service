@@ -682,72 +682,224 @@
           "emails"
         ]
       },
-      "ByEmailResponse": {
+      "StatusResponse": {
         "type": "object",
         "properties": {
-          "campaignId": {
-            "type": "string"
-          },
           "results": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
+                "leadId": {
+                  "type": "string"
+                },
                 "email": {
                   "type": "string"
                 },
-                "sent": {
-                  "type": "boolean"
-                },
-                "delivered": {
-                  "type": "boolean"
-                },
-                "leadId": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "deliveredAt": {
-                  "type": "string",
+                "campaign": {
+                  "type": "object",
                   "nullable": true,
-                  "format": "date-time"
+                  "properties": {
+                    "lead": {
+                      "type": "object",
+                      "properties": {
+                        "contacted": {
+                          "type": "boolean"
+                        },
+                        "delivered": {
+                          "type": "boolean"
+                        },
+                        "replied": {
+                          "type": "boolean"
+                        },
+                        "lastDeliveredAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "contacted",
+                        "delivered",
+                        "replied",
+                        "lastDeliveredAt"
+                      ]
+                    },
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "contacted": {
+                          "type": "boolean"
+                        },
+                        "delivered": {
+                          "type": "boolean"
+                        },
+                        "bounced": {
+                          "type": "boolean"
+                        },
+                        "unsubscribed": {
+                          "type": "boolean"
+                        },
+                        "lastDeliveredAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "contacted",
+                        "delivered",
+                        "bounced",
+                        "unsubscribed",
+                        "lastDeliveredAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "lead",
+                    "email"
+                  ]
+                },
+                "brand": {
+                  "type": "object",
+                  "properties": {
+                    "lead": {
+                      "type": "object",
+                      "properties": {
+                        "contacted": {
+                          "type": "boolean"
+                        },
+                        "delivered": {
+                          "type": "boolean"
+                        },
+                        "replied": {
+                          "type": "boolean"
+                        },
+                        "lastDeliveredAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "contacted",
+                        "delivered",
+                        "replied",
+                        "lastDeliveredAt"
+                      ]
+                    },
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "contacted": {
+                          "type": "boolean"
+                        },
+                        "delivered": {
+                          "type": "boolean"
+                        },
+                        "bounced": {
+                          "type": "boolean"
+                        },
+                        "unsubscribed": {
+                          "type": "boolean"
+                        },
+                        "lastDeliveredAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "contacted",
+                        "delivered",
+                        "bounced",
+                        "unsubscribed",
+                        "lastDeliveredAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "lead",
+                    "email"
+                  ]
+                },
+                "global": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "bounced": {
+                          "type": "boolean"
+                        },
+                        "unsubscribed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "bounced",
+                        "unsubscribed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "email"
+                  ]
                 }
               },
               "required": [
-                "email",
-                "sent",
-                "delivered",
                 "leadId",
-                "deliveredAt"
+                "email",
+                "campaign",
+                "brand",
+                "global"
               ]
             }
           }
         },
         "required": [
-          "campaignId",
           "results"
         ]
       },
-      "ByEmailRequest": {
+      "StatusRequest": {
         "type": "object",
         "properties": {
-          "emails": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "email"
-            },
-            "minItems": 1,
-            "maxItems": 1000,
-            "description": "List of email addresses to check"
+          "brandId": {
+            "type": "string",
+            "description": "Brand ID — primary dedup scope"
           },
           "campaignId": {
             "type": "string",
-            "description": "Campaign ID to scope the lookup"
+            "description": "Campaign ID — optional scope"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "leadId": {
+                  "type": "string",
+                  "description": "Lead ID"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "Email address"
+                }
+              },
+              "required": [
+                "leadId",
+                "email"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "description": "Lead+email pairs to check"
           }
         },
         "required": [
-          "emails",
-          "campaignId"
+          "brandId",
+          "items"
         ]
       },
       "StatsResponse": {
@@ -1228,58 +1380,10 @@
         }
       }
     },
-    "/status/by-lead/{leadId}": {
-      "get": {
-        "summary": "Get email status by lead ID",
-        "description": "Get the full delivery status of the most recent email sent to a lead",
-        "tags": [
-          "Email Status"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Lead ID"
-            },
-            "required": true,
-            "description": "Lead ID",
-            "name": "leadId",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Email status for lead",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailStatus"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No email found for lead",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/status/by-email": {
+    "/status": {
       "post": {
-        "summary": "Batch email delivery lookup",
-        "description": "Check delivery status for a list of email addresses within a campaign. Designed for hot-path dedup.",
+        "summary": "Batch status lookup by lead and email",
+        "description": "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results.",
         "tags": [
           "Email Status"
         ],
@@ -1292,18 +1396,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ByEmailRequest"
+                "$ref": "#/components/schemas/StatusRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Per-email delivery status",
+            "description": "Per-item status results",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ByEmailResponse"
+                  "$ref": "#/components/schemas/StatusResponse"
                 }
               }
             }

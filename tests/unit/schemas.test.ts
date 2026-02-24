@@ -3,7 +3,7 @@ import {
   SendEmailRequestSchema,
   BatchSendRequestSchema,
   StatsRequestSchema,
-  ByEmailRequestSchema,
+  StatusRequestSchema,
 } from "../../src/schemas";
 
 describe("Zod schemas", () => {
@@ -223,34 +223,51 @@ describe("Zod schemas", () => {
     });
   });
 
-  describe("ByEmailRequestSchema", () => {
-    it("should accept valid request", () => {
-      const result = ByEmailRequestSchema.safeParse({
-        emails: ["a@test.com", "b@test.com"],
-        campaignId: "camp_123",
+  describe("StatusRequestSchema", () => {
+    it("should accept valid request with brandId, campaignId, and items", () => {
+      const result = StatusRequestSchema.safeParse({
+        brandId: "brand_123",
+        campaignId: "camp_456",
+        items: [{ leadId: "lead_1", email: "a@test.com" }],
       });
       expect(result.success).toBe(true);
     });
 
-    it("should reject empty emails array", () => {
-      const result = ByEmailRequestSchema.safeParse({
-        emails: [],
-        campaignId: "camp_123",
+    it("should accept valid request without campaignId", () => {
+      const result = StatusRequestSchema.safeParse({
+        brandId: "brand_123",
+        items: [{ leadId: "lead_1", email: "a@test.com" }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject empty items array", () => {
+      const result = StatusRequestSchema.safeParse({
+        brandId: "brand_123",
+        items: [],
       });
       expect(result.success).toBe(false);
     });
 
-    it("should reject missing campaignId", () => {
-      const result = ByEmailRequestSchema.safeParse({
-        emails: ["a@test.com"],
+    it("should reject missing brandId", () => {
+      const result = StatusRequestSchema.safeParse({
+        items: [{ leadId: "lead_1", email: "a@test.com" }],
       });
       expect(result.success).toBe(false);
     });
 
-    it("should reject invalid email format", () => {
-      const result = ByEmailRequestSchema.safeParse({
-        emails: ["not-an-email"],
-        campaignId: "camp_123",
+    it("should reject invalid email format in items", () => {
+      const result = StatusRequestSchema.safeParse({
+        brandId: "brand_123",
+        items: [{ leadId: "lead_1", email: "not-an-email" }],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject item missing leadId", () => {
+      const result = StatusRequestSchema.safeParse({
+        brandId: "brand_123",
+        items: [{ email: "a@test.com" }],
       });
       expect(result.success).toBe(false);
     });
