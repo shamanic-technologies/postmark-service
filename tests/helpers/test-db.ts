@@ -123,6 +123,29 @@ export async function insertTestOpening(messageId: string, recipient?: string) {
 }
 
 /**
+ * Insert test subscription change record
+ */
+export async function insertTestSubscriptionChange(
+  messageId: string,
+  recipient?: string,
+  suppressSending?: boolean,
+) {
+  const [change] = await db
+    .insert(postmarkSubscriptionChanges)
+    .values({
+      messageId,
+      recordType: "SubscriptionChange",
+      recipient: recipient || "test@example.com",
+      suppressSending: suppressSending ?? true,
+      changedAt: new Date(),
+      messageStream: "broadcast",
+    })
+    .returning();
+
+  return change;
+}
+
+/**
  * Close database connection
  */
 export async function closeDb() {

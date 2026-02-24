@@ -221,35 +221,65 @@ export const RunEmailsResponseSchema = z
   })
   .openapi("RunEmailsResponse");
 
-// ===== By-Email Dedup =====
+// ===== Unified Status Lookup =====
 
-export const ByEmailRequestSchema = z
+const LeadStatusSchema = z.object({
+  contacted: z.boolean(),
+  delivered: z.boolean(),
+  replied: z.boolean(),
+  lastDeliveredAt: z.string().nullable().openapi({ format: "date-time" }),
+});
+
+const EmailStatusDetailSchema = z.object({
+  contacted: z.boolean(),
+  delivered: z.boolean(),
+  bounced: z.boolean(),
+  unsubscribed: z.boolean(),
+  lastDeliveredAt: z.string().nullable().openapi({ format: "date-time" }),
+});
+
+const ScopeStatusSchema = z.object({
+  lead: LeadStatusSchema,
+  email: EmailStatusDetailSchema,
+});
+
+const GlobalStatusSchema = z.object({
+  email: z.object({
+    bounced: z.boolean(),
+    unsubscribed: z.boolean(),
+  }),
+});
+
+export const StatusRequestSchema = z
   .object({
-    emails: z.array(z.string().email()).min(1).max(1000)
-      .openapi({ description: "List of email addresses to check" }),
-    campaignId: z.string()
-      .openapi({ description: "Campaign ID to scope the lookup" }),
+    brandId: z.string().openapi({ description: "Brand ID — primary dedup scope" }),
+    campaignId: z.string().optional().openapi({ description: "Campaign ID — optional scope" }),
+    items: z.array(
+      z.object({
+        leadId: z.string().openapi({ description: "Lead ID" }),
+        email: z.string().email().openapi({ description: "Email address" }),
+      })
+    ).min(1).max(1000).openapi({ description: "Lead+email pairs to check" }),
   })
-  .openapi("ByEmailRequest");
+  .openapi("StatusRequest");
 
-export type ByEmailRequest = z.infer<typeof ByEmailRequestSchema>;
+export type StatusRequest = z.infer<typeof StatusRequestSchema>;
 
-export const ByEmailResponseSchema = z
+export const StatusResponseSchema = z
   .object({
-    campaignId: z.string(),
     results: z.array(
       z.object({
+        leadId: z.string(),
         email: z.string(),
-        sent: z.boolean(),
-        delivered: z.boolean(),
-        leadId: z.string().nullable(),
-        deliveredAt: z.string().nullable().openapi({ format: "date-time" }),
+        campaign: ScopeStatusSchema.nullable(),
+        brand: ScopeStatusSchema,
+        global: GlobalStatusSchema,
       })
     ),
   })
-  .openapi("ByEmailResponse");
+  .openapi("StatusResponse");
 
-export type ByEmailResponse = z.infer<typeof ByEmailResponseSchema>;
+export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 // ===== Stats =====
 
@@ -499,47 +529,22 @@ registry.registerPath({
 });
 
 registry.registerPath({
-  method: "get",
-  path: "/status/by-lead/{leadId}",
-  summary: "Get email status by lead ID",
-  description:
-    "Get the full delivery status of the most recent email sent to a lead",
-  tags: ["Email Status"],
-  security: [{ apiKey: [] }],
-  request: {
-    params: z.object({
-      leadId: z.string().openapi({ description: "Lead ID" }),
-    }),
-  },
-  responses: {
-    200: {
-      description: "Email status for lead",
-      content: { "application/json": { schema: EmailStatusSchema } },
-    },
-    404: {
-      description: "No email found for lead",
-      content: { "application/json": { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
-registry.registerPath({
   method: "post",
-  path: "/status/by-email",
-  summary: "Batch email delivery lookup",
+  path: "/status",
+  summary: "Batch status lookup by lead and email",
   description:
-    "Check delivery status for a list of email addresses within a campaign. Designed for hot-path dedup.",
+    "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
     body: {
-      content: { "application/json": { schema: ByEmailRequestSchema } },
+      content: { "application/json": { schema: StatusRequestSchema } },
     },
   },
   responses: {
     200: {
-      description: "Per-email delivery status",
-      content: { "application/json": { schema: ByEmailResponseSchema } },
+      description: "Per-item status results",
+      content: { "application/json": { schema: StatusResponseSchema } },
     },
     400: {
       description: "Invalid request",

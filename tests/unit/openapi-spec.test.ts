@@ -37,6 +37,7 @@ describe("OpenAPI spec", () => {
     expect(paths).toContain("/status/{messageId}");
     expect(paths).toContain("/status/by-org/{orgId}");
     expect(paths).toContain("/status/by-run/{runId}");
+    expect(paths).toContain("/status");
     expect(paths).toContain("/stats");
     expect(paths).toContain("/webhooks/postmark");
   });
@@ -52,6 +53,8 @@ describe("OpenAPI spec", () => {
     expect(schemas).toContain("EmailStatus");
     expect(schemas).toContain("StatsRequest");
     expect(schemas).toContain("StatsResponse");
+    expect(schemas).toContain("StatusRequest");
+    expect(schemas).toContain("StatusResponse");
   });
 
   it("should have correct schema structure for SendEmailRequest", () => {
