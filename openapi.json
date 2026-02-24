@@ -1,0 +1,1408 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Postmark Service API",
+    "description": "Email sending and tracking service built on Postmark. Handles email delivery via the broadcast message stream, webhook processing for delivery events, and integrates with a runs-service for cost tracking.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://postmark.mcpfactory.org",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3010",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Health check endpoints"
+    },
+    {
+      "name": "Email Sending",
+      "description": "Send emails via Postmark"
+    },
+    {
+      "name": "Email Status",
+      "description": "Query email delivery status"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Postmark webhook handlers"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Service-to-service API key"
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "service"
+        ]
+      },
+      "SendEmailResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sendingId": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "number"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "SendEmailRequest": {
+        "type": "object",
+        "properties": {
+          "orgId": {
+            "type": "string",
+            "description": "Clerk organization ID (optional for admin/lifecycle emails)"
+          },
+          "runId": {
+            "type": "string",
+            "description": "Parent run ID"
+          },
+          "brandId": {
+            "type": "string",
+            "description": "Brand ID"
+          },
+          "appId": {
+            "type": "string",
+            "description": "App ID"
+          },
+          "campaignId": {
+            "type": "string",
+            "description": "Campaign ID"
+          },
+          "workflowName": {
+            "type": "string",
+            "description": "Workflow name for tracking/grouping"
+          },
+          "leadId": {
+            "type": "string",
+            "description": "Lead ID for tracking and dedup"
+          },
+          "from": {
+            "type": "string",
+            "description": "Sender email address"
+          },
+          "to": {
+            "type": "string",
+            "description": "Recipient email address"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject line"
+          },
+          "htmlBody": {
+            "type": "string",
+            "description": "HTML email body"
+          },
+          "textBody": {
+            "type": "string",
+            "description": "Plain text email body"
+          },
+          "cc": {
+            "type": "string"
+          },
+          "bcc": {
+            "type": "string"
+          },
+          "replyTo": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "messageStream": {
+            "type": "string",
+            "default": "broadcast",
+            "description": "Postmark message stream"
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ]
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "trackOpens": {
+            "type": "boolean",
+            "default": true
+          },
+          "trackLinks": {
+            "type": "string",
+            "enum": [
+              "None",
+              "HtmlAndText",
+              "HtmlOnly",
+              "TextOnly"
+            ]
+          }
+        },
+        "required": [
+          "runId",
+          "from",
+          "to",
+          "subject"
+        ]
+      },
+      "BatchSendResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "successCount": {
+            "type": "number"
+          },
+          "failCount": {
+            "type": "number"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "to": {
+                  "type": "string"
+                },
+                "success": {
+                  "type": "boolean"
+                },
+                "messageId": {
+                  "type": "string"
+                },
+                "sendingId": {
+                  "type": "string"
+                },
+                "errorCode": {
+                  "type": "number"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "to",
+                "success"
+              ]
+            }
+          }
+        },
+        "required": [
+          "total",
+          "successCount",
+          "failCount",
+          "results"
+        ]
+      },
+      "BatchSendRequest": {
+        "type": "object",
+        "properties": {
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "orgId": {
+                  "type": "string"
+                },
+                "runId": {
+                  "type": "string"
+                },
+                "brandId": {
+                  "type": "string"
+                },
+                "appId": {
+                  "type": "string"
+                },
+                "campaignId": {
+                  "type": "string"
+                },
+                "workflowName": {
+                  "type": "string"
+                },
+                "leadId": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "htmlBody": {
+                  "type": "string"
+                },
+                "textBody": {
+                  "type": "string"
+                },
+                "cc": {
+                  "type": "string"
+                },
+                "bcc": {
+                  "type": "string"
+                },
+                "replyTo": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "string"
+                },
+                "messageStream": {
+                  "type": "string",
+                  "default": "broadcast"
+                },
+                "headers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value"
+                    ]
+                  }
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "trackOpens": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "trackLinks": {
+                  "type": "string",
+                  "enum": [
+                    "None",
+                    "HtmlAndText",
+                    "HtmlOnly",
+                    "TextOnly"
+                  ]
+                }
+              },
+              "required": [
+                "runId",
+                "from",
+                "to",
+                "subject"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 500
+          }
+        },
+        "required": [
+          "emails"
+        ]
+      },
+      "EmailStatus": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "delivered",
+              "bounced",
+              "opened",
+              "clicked"
+            ]
+          },
+          "sending": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "submittedAt": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
+              },
+              "orgId": {
+                "type": "string",
+                "nullable": true
+              },
+              "runId": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "to",
+              "from",
+              "subject",
+              "submittedAt",
+              "orgId",
+              "runId"
+            ]
+          },
+          "delivery": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "deliveredAt": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
+              },
+              "recipient": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "deliveredAt",
+              "recipient"
+            ]
+          },
+          "bounce": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "type": {
+                "type": "string",
+                "nullable": true
+              },
+              "typeCode": {
+                "type": "number",
+                "nullable": true
+              },
+              "description": {
+                "type": "string",
+                "nullable": true
+              },
+              "bouncedAt": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
+              },
+              "email": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "type",
+              "typeCode",
+              "description",
+              "bouncedAt",
+              "email"
+            ]
+          },
+          "openings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "receivedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "firstOpen": {
+                  "type": "boolean",
+                  "nullable": true
+                },
+                "platform": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "readSeconds": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "geo": {
+                  "nullable": true
+                }
+              },
+              "required": [
+                "receivedAt",
+                "firstOpen",
+                "platform",
+                "readSeconds"
+              ]
+            }
+          },
+          "clicks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "receivedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "originalLink": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "clickLocation": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "platform": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "geo": {
+                  "nullable": true
+                }
+              },
+              "required": [
+                "receivedAt",
+                "originalLink",
+                "clickLocation",
+                "platform"
+              ]
+            }
+          }
+        },
+        "required": [
+          "messageId",
+          "status",
+          "sending",
+          "delivery",
+          "bounce",
+          "openings",
+          "clicks"
+        ]
+      },
+      "OrgEmailsResponse": {
+        "type": "object",
+        "properties": {
+          "orgId": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "messageId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "to": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "submittedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "runId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "errorCode": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "messageId",
+                "to",
+                "subject",
+                "submittedAt",
+                "runId",
+                "errorCode"
+              ]
+            }
+          }
+        },
+        "required": [
+          "orgId",
+          "count",
+          "emails"
+        ]
+      },
+      "RunEmailsResponse": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "total": {
+            "type": "number"
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "messageId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "to": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "submittedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "success": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "messageId",
+                "to",
+                "subject",
+                "submittedAt",
+                "success"
+              ]
+            }
+          }
+        },
+        "required": [
+          "runId",
+          "total",
+          "emails"
+        ]
+      },
+      "ByEmailResponse": {
+        "type": "object",
+        "properties": {
+          "campaignId": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "sent": {
+                  "type": "boolean"
+                },
+                "delivered": {
+                  "type": "boolean"
+                },
+                "leadId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "deliveredAt": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "email",
+                "sent",
+                "delivered",
+                "leadId",
+                "deliveredAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "campaignId",
+          "results"
+        ]
+      },
+      "ByEmailRequest": {
+        "type": "object",
+        "properties": {
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "description": "List of email addresses to check"
+          },
+          "campaignId": {
+            "type": "string",
+            "description": "Campaign ID to scope the lookup"
+          }
+        },
+        "required": [
+          "emails",
+          "campaignId"
+        ]
+      },
+      "StatsResponse": {
+        "type": "object",
+        "properties": {
+          "stats": {
+            "type": "object",
+            "properties": {
+              "emailsSent": {
+                "type": "number"
+              },
+              "emailsDelivered": {
+                "type": "number"
+              },
+              "emailsOpened": {
+                "type": "number"
+              },
+              "emailsClicked": {
+                "type": "number"
+              },
+              "emailsReplied": {
+                "type": "number"
+              },
+              "emailsBounced": {
+                "type": "number"
+              },
+              "repliesWillingToMeet": {
+                "type": "number"
+              },
+              "repliesInterested": {
+                "type": "number"
+              },
+              "repliesNotInterested": {
+                "type": "number"
+              },
+              "repliesOutOfOffice": {
+                "type": "number"
+              },
+              "repliesUnsubscribe": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "emailsSent",
+              "emailsDelivered",
+              "emailsOpened",
+              "emailsClicked",
+              "emailsReplied",
+              "emailsBounced",
+              "repliesWillingToMeet",
+              "repliesInterested",
+              "repliesNotInterested",
+              "repliesOutOfOffice",
+              "repliesUnsubscribe"
+            ]
+          },
+          "recipients": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stats",
+          "recipients"
+        ]
+      },
+      "GroupedStatsResponse": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "stats": {
+                  "type": "object",
+                  "properties": {
+                    "emailsSent": {
+                      "type": "number"
+                    },
+                    "emailsDelivered": {
+                      "type": "number"
+                    },
+                    "emailsOpened": {
+                      "type": "number"
+                    },
+                    "emailsClicked": {
+                      "type": "number"
+                    },
+                    "emailsReplied": {
+                      "type": "number"
+                    },
+                    "emailsBounced": {
+                      "type": "number"
+                    },
+                    "repliesWillingToMeet": {
+                      "type": "number"
+                    },
+                    "repliesInterested": {
+                      "type": "number"
+                    },
+                    "repliesNotInterested": {
+                      "type": "number"
+                    },
+                    "repliesOutOfOffice": {
+                      "type": "number"
+                    },
+                    "repliesUnsubscribe": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "emailsSent",
+                    "emailsDelivered",
+                    "emailsOpened",
+                    "emailsClicked",
+                    "emailsReplied",
+                    "emailsBounced",
+                    "repliesWillingToMeet",
+                    "repliesInterested",
+                    "repliesNotInterested",
+                    "repliesOutOfOffice",
+                    "repliesUnsubscribe"
+                  ]
+                },
+                "recipients": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "stats",
+                "recipients"
+              ]
+            }
+          }
+        },
+        "required": [
+          "groups"
+        ]
+      },
+      "StatsRequest": {
+        "type": "object",
+        "properties": {
+          "runIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by run IDs"
+          },
+          "clerkOrgId": {
+            "type": "string",
+            "description": "Filter by Clerk organization ID"
+          },
+          "brandId": {
+            "type": "string",
+            "description": "Filter by brand ID"
+          },
+          "appId": {
+            "type": "string",
+            "description": "Filter by app ID"
+          },
+          "campaignId": {
+            "type": "string",
+            "description": "Filter by campaign ID"
+          },
+          "workflowName": {
+            "type": "string",
+            "description": "Filter by workflow name"
+          },
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "brandId",
+              "campaignId",
+              "workflowName",
+              "leadEmail"
+            ],
+            "description": "Group results by dimension"
+          }
+        }
+      },
+      "WebhookResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "recordType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "recordType"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Service info",
+        "description": "Returns service name",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Service info string",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Returns service health status",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/send": {
+      "post": {
+        "summary": "Send a single email",
+        "description": "Send an email via Postmark and record it in the database. Runs-service integration is BLOCKING.",
+        "tags": [
+          "Email Sending"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendEmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/send/batch": {
+      "post": {
+        "summary": "Send batch emails",
+        "description": "Send up to 500 emails in one request. Runs-service integration is BLOCKING for each email.",
+        "tags": [
+          "Email Sending"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchSendResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/{messageId}": {
+      "get": {
+        "summary": "Get email status",
+        "description": "Get the full delivery status of an email by its Postmark message ID",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Postmark message ID"
+            },
+            "required": true,
+            "description": "Postmark message ID",
+            "name": "messageId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Email status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Message not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/by-org/{orgId}": {
+      "get": {
+        "summary": "Get emails by organization",
+        "description": "Get recent emails for an organization",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Organization ID"
+            },
+            "required": true,
+            "description": "Organization ID",
+            "name": "orgId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Max results (default: 50)"
+            },
+            "required": false,
+            "description": "Max results (default: 50)",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization emails",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgEmailsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/by-run/{runId}": {
+      "get": {
+        "summary": "Get emails by run",
+        "description": "Get all emails for a specific run",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Run ID"
+            },
+            "required": true,
+            "description": "Run ID",
+            "name": "runId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run emails",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunEmailsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/by-lead/{leadId}": {
+      "get": {
+        "summary": "Get email status by lead ID",
+        "description": "Get the full delivery status of the most recent email sent to a lead",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Lead ID"
+            },
+            "required": true,
+            "description": "Lead ID",
+            "name": "leadId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Email status for lead",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No email found for lead",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/by-email": {
+      "post": {
+        "summary": "Batch email delivery lookup",
+        "description": "Check delivery status for a list of email addresses within a campaign. Designed for hot-path dedup.",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ByEmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-email delivery status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ByEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "post": {
+        "summary": "Get aggregated stats",
+        "description": "Get aggregated email stats filtered by runIds, clerkOrgId, brandId, appId, campaignId, and/or workflowName. At least one filter required. When groupBy is provided, returns grouped results.",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregated stats (flat or grouped depending on groupBy parameter)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StatsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GroupedStatsResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/postmark": {
+      "post": {
+        "summary": "Postmark webhook handler",
+        "description": "Receives Postmark webhook events (Delivery, Bounce, Open, Click, SpamComplaint, SubscriptionChange)",
+        "tags": [
+          "Webhooks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

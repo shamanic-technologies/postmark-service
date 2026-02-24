@@ -36,6 +36,7 @@ export const postmarkSendings = pgTable(
     appId: text("app_id"),
     campaignId: text("campaign_id"),
     workflowName: text("workflow_name"),
+    leadId: text("lead_id"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -47,6 +48,8 @@ export const postmarkSendings = pgTable(
     index("idx_sendings_app").on(table.appId),
     index("idx_sendings_campaign").on(table.campaignId),
     index("idx_sendings_workflow").on(table.workflowName),
+    index("idx_sendings_lead").on(table.leadId),
+    index("idx_sendings_campaign_email").on(table.campaignId, table.toEmail),
   ]
 );
 

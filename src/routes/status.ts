@@ -7,8 +7,8 @@ import {
   postmarkOpenings,
   postmarkLinkClicks,
 } from "../db/schema";
-import { eq, inArray, and, SQL } from "drizzle-orm";
-import { StatsRequestSchema } from "../schemas";
+import { eq, inArray, and, desc, SQL } from "drizzle-orm";
+import { StatsRequestSchema, ByEmailRequestSchema } from "../schemas";
 
 const router = Router();
 
@@ -202,6 +202,222 @@ router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
     console.error("Error getting campaign emails:", error);
     res.status(500).json({
       error: "Failed to get campaign emails",
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * GET /status/by-lead/:leadId
+ * Get the full status of the most recent email sent to a lead
+ */
+router.get("/status/by-lead/:leadId", async (req: Request, res: Response) => {
+  const { leadId } = req.params;
+
+  if (!leadId) {
+    return res.status(400).json({ error: "leadId is required" });
+  }
+
+  try {
+    // Get the most recent sending for this leadId
+    const [sending] = await db
+      .select()
+      .from(postmarkSendings)
+      .where(eq(postmarkSendings.leadId, leadId))
+      .orderBy(desc(postmarkSendings.createdAt))
+      .limit(1);
+
+    if (!sending) {
+      return res.status(404).json({ error: "No email found for lead" });
+    }
+
+    if (!sending.messageId) {
+      return res.json({
+        messageId: null,
+        status: "sent",
+        sending: {
+          id: sending.id,
+          to: sending.toEmail,
+          from: sending.fromEmail,
+          subject: sending.subject,
+          submittedAt: sending.submittedAt,
+          orgId: sending.orgId,
+          runId: sending.runId,
+        },
+        delivery: null,
+        bounce: null,
+        openings: [],
+        clicks: [],
+      });
+    }
+
+    const messageId = sending.messageId;
+
+    const [delivery] = await db
+      .select()
+      .from(postmarkDeliveries)
+      .where(eq(postmarkDeliveries.messageId, messageId))
+      .limit(1);
+
+    const [bounce] = await db
+      .select()
+      .from(postmarkBounces)
+      .where(eq(postmarkBounces.messageId, messageId))
+      .limit(1);
+
+    const openings = await db
+      .select()
+      .from(postmarkOpenings)
+      .where(eq(postmarkOpenings.messageId, messageId));
+
+    const clicks = await db
+      .select()
+      .from(postmarkLinkClicks)
+      .where(eq(postmarkLinkClicks.messageId, messageId));
+
+    let status: "sent" | "delivered" | "bounced" | "opened" | "clicked";
+    if (clicks.length > 0) {
+      status = "clicked";
+    } else if (openings.length > 0) {
+      status = "opened";
+    } else if (bounce) {
+      status = "bounced";
+    } else if (delivery) {
+      status = "delivered";
+    } else {
+      status = "sent";
+    }
+
+    res.json({
+      messageId,
+      status,
+      sending: {
+        id: sending.id,
+        to: sending.toEmail,
+        from: sending.fromEmail,
+        subject: sending.subject,
+        submittedAt: sending.submittedAt,
+        orgId: sending.orgId,
+        runId: sending.runId,
+      },
+      delivery: delivery
+        ? {
+            deliveredAt: delivery.deliveredAt,
+            recipient: delivery.recipient,
+          }
+        : null,
+      bounce: bounce
+        ? {
+            type: bounce.type,
+            typeCode: bounce.typeCode,
+            description: bounce.description,
+            bouncedAt: bounce.bouncedAt,
+            email: bounce.email,
+          }
+        : null,
+      openings: openings.map((o) => ({
+        receivedAt: o.receivedAt,
+        firstOpen: o.firstOpen,
+        platform: o.platform,
+        readSeconds: o.readSeconds,
+        geo: o.geo,
+      })),
+      clicks: clicks.map((c) => ({
+        receivedAt: c.receivedAt,
+        originalLink: c.originalLink,
+        clickLocation: c.clickLocation,
+        platform: c.platform,
+        geo: c.geo,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Error getting lead status:", error);
+    res.status(500).json({
+      error: "Failed to get lead status",
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * POST /status/by-email
+ * Batch email delivery lookup for dedup (hot path)
+ */
+router.post("/status/by-email", async (req: Request, res: Response) => {
+  const parsed = ByEmailRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid request",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { emails, campaignId } = parsed.data;
+
+  try {
+    const sendings = await db
+      .select({
+        toEmail: postmarkSendings.toEmail,
+        messageId: postmarkSendings.messageId,
+        leadId: postmarkSendings.leadId,
+        deliveredAt: postmarkDeliveries.deliveredAt,
+      })
+      .from(postmarkSendings)
+      .leftJoin(
+        postmarkDeliveries,
+        eq(postmarkSendings.messageId, postmarkDeliveries.messageId)
+      )
+      .where(
+        and(
+          eq(postmarkSendings.campaignId, campaignId),
+          inArray(postmarkSendings.toEmail, emails)
+        )
+      );
+
+    // Build map: email -> best result (any delivery wins, prefer non-null leadId)
+    const emailMap = new Map<string, {
+      sent: boolean;
+      delivered: boolean;
+      leadId: string | null;
+      deliveredAt: Date | null;
+    }>();
+
+    for (const row of sendings) {
+      const existing = emailMap.get(row.toEmail);
+      if (!existing) {
+        emailMap.set(row.toEmail, {
+          sent: true,
+          delivered: row.deliveredAt !== null,
+          leadId: row.leadId,
+          deliveredAt: row.deliveredAt,
+        });
+      } else {
+        if (row.deliveredAt !== null) {
+          existing.delivered = true;
+          existing.deliveredAt = row.deliveredAt;
+        }
+        if (row.leadId && !existing.leadId) {
+          existing.leadId = row.leadId;
+        }
+      }
+    }
+
+    const results = emails.map((email) => {
+      const found = emailMap.get(email);
+      return {
+        email,
+        sent: found?.sent ?? false,
+        delivered: found?.delivered ?? false,
+        leadId: found?.leadId ?? null,
+        deliveredAt: found?.deliveredAt?.toISOString() ?? null,
+      };
+    });
+
+    res.json({ campaignId, results });
+  } catch (error: any) {
+    console.error("Error checking email delivery status:", error);
+    res.status(500).json({
+      error: "Failed to check email delivery status",
       details: error.message,
     });
   }

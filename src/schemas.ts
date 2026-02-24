@@ -35,6 +35,7 @@ export const SendEmailRequestSchema = z
     appId: z.string().optional().openapi({ description: "App ID" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     workflowName: z.string().optional().openapi({ description: "Workflow name for tracking/grouping" }),
+    leadId: z.string().optional().openapi({ description: "Lead ID for tracking and dedup" }),
     from: z.string().openapi({ description: "Sender email address" }),
     to: z.string().openapi({ description: "Recipient email address" }),
     subject: z.string().openapi({ description: "Email subject line" }),
@@ -87,6 +88,7 @@ export const BatchSendRequestSchema = z
           appId: z.string().optional(),
           campaignId: z.string().optional(),
           workflowName: z.string().optional(),
+          leadId: z.string().optional(),
           from: z.string(),
           to: z.string(),
           subject: z.string(),
@@ -218,6 +220,36 @@ export const RunEmailsResponseSchema = z
     ),
   })
   .openapi("RunEmailsResponse");
+
+// ===== By-Email Dedup =====
+
+export const ByEmailRequestSchema = z
+  .object({
+    emails: z.array(z.string().email()).min(1).max(1000)
+      .openapi({ description: "List of email addresses to check" }),
+    campaignId: z.string()
+      .openapi({ description: "Campaign ID to scope the lookup" }),
+  })
+  .openapi("ByEmailRequest");
+
+export type ByEmailRequest = z.infer<typeof ByEmailRequestSchema>;
+
+export const ByEmailResponseSchema = z
+  .object({
+    campaignId: z.string(),
+    results: z.array(
+      z.object({
+        email: z.string(),
+        sent: z.boolean(),
+        delivered: z.boolean(),
+        leadId: z.string().nullable(),
+        deliveredAt: z.string().nullable().openapi({ format: "date-time" }),
+      })
+    ),
+  })
+  .openapi("ByEmailResponse");
+
+export type ByEmailResponse = z.infer<typeof ByEmailResponseSchema>;
 
 // ===== Stats =====
 
@@ -462,6 +494,56 @@ registry.registerPath({
     200: {
       description: "Run emails",
       content: { "application/json": { schema: RunEmailsResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/status/by-lead/{leadId}",
+  summary: "Get email status by lead ID",
+  description:
+    "Get the full delivery status of the most recent email sent to a lead",
+  tags: ["Email Status"],
+  security: [{ apiKey: [] }],
+  request: {
+    params: z.object({
+      leadId: z.string().openapi({ description: "Lead ID" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Email status for lead",
+      content: { "application/json": { schema: EmailStatusSchema } },
+    },
+    404: {
+      description: "No email found for lead",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/status/by-email",
+  summary: "Batch email delivery lookup",
+  description:
+    "Check delivery status for a list of email addresses within a campaign. Designed for hot-path dedup.",
+  tags: ["Email Status"],
+  security: [{ apiKey: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: ByEmailRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Per-email delivery status",
+      content: { "application/json": { schema: ByEmailResponseSchema } },
+    },
+    400: {
+      description: "Invalid request",
+      content: { "application/json": { schema: ErrorResponseSchema } },
     },
   },
 });

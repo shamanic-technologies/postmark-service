@@ -3,6 +3,7 @@ import {
   SendEmailRequestSchema,
   BatchSendRequestSchema,
   StatsRequestSchema,
+  ByEmailRequestSchema,
 } from "../../src/schemas";
 
 describe("Zod schemas", () => {
@@ -188,6 +189,68 @@ describe("Zod schemas", () => {
       const result = StatsRequestSchema.safeParse({
         clerkOrgId: "org_123",
         groupBy: "invalidDimension",
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("SendEmailRequestSchema - leadId", () => {
+    const validRequest = {
+      runId: "run_456",
+      from: "sender@example.com",
+      to: "recipient@example.com",
+      subject: "Test Email",
+      htmlBody: "<p>Hello</p>",
+    };
+
+    it("should accept leadId as optional field", () => {
+      const result = SendEmailRequestSchema.safeParse({
+        ...validRequest,
+        leadId: "lead_123",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.leadId).toBe("lead_123");
+      }
+    });
+
+    it("should accept request without leadId", () => {
+      const result = SendEmailRequestSchema.safeParse(validRequest);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.leadId).toBeUndefined();
+      }
+    });
+  });
+
+  describe("ByEmailRequestSchema", () => {
+    it("should accept valid request", () => {
+      const result = ByEmailRequestSchema.safeParse({
+        emails: ["a@test.com", "b@test.com"],
+        campaignId: "camp_123",
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject empty emails array", () => {
+      const result = ByEmailRequestSchema.safeParse({
+        emails: [],
+        campaignId: "camp_123",
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject missing campaignId", () => {
+      const result = ByEmailRequestSchema.safeParse({
+        emails: ["a@test.com"],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject invalid email format", () => {
+      const result = ByEmailRequestSchema.safeParse({
+        emails: ["not-an-email"],
+        campaignId: "camp_123",
       });
       expect(result.success).toBe(false);
     });
