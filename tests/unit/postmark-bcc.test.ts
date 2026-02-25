@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock key-client before importing postmark-client
 vi.mock("../../src/lib/key-client", () => ({
-  getAppKey: vi.fn(),
+  getAppKey: vi.fn().mockResolvedValue({ provider: "postmark", key: "test-token" }),
 }));
 
 // Mock the postmark SDK before importing the module
@@ -20,9 +20,6 @@ vi.mock("postmark", () => {
     },
   };
 });
-
-// Set required env var before importing
-process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN = "test-token";
 
 import { sendEmail } from "../../src/lib/postmark-client";
 

@@ -1,42 +1,15 @@
 import { ServerClient, Models } from "postmark";
-import { getAppKey } from "./key-client";
+import { getAppKey, CallerContext } from "./key-client";
 
 // Cache clients per token for multi-project support
 const clients: Map<string, ServerClient> = new Map();
 
-/** Built-in apps with hardcoded Railway env vars */
-const HARDCODED_APPS = ["mcpfactory", "pressbeat"] as const;
-type HardcodedApp = (typeof HARDCODED_APPS)[number];
-
-function isHardcodedApp(appId: string): appId is HardcodedApp {
-  return (HARDCODED_APPS as readonly string[]).includes(appId);
-}
-
-/**
- * Get the Postmark token for a hardcoded app from env vars
- */
-function getHardcodedToken(appId: HardcodedApp): string {
-  const envMap: Record<HardcodedApp, string | undefined> = {
-    mcpfactory: process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN,
-    pressbeat: process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN,
-  };
-
-  const token = envMap[appId];
-  if (!token) {
-    throw new Error(
-      `Postmark server token not configured for app: ${appId}. Set the corresponding env var.`
-    );
-  }
-  return token;
-}
-
 /**
  * Get a Postmark client for a given appId.
- * - "mcpfactory" / "pressbeat" → hardcoded env vars (Railway)
- * - Any other appId → fetched from key-service
- * - No appId → defaults to "mcpfactory"
+ * All tokens are resolved via key-service.
+ * No appId → defaults to "mcpfactory"
  */
-async function getClient(appId?: string): Promise<ServerClient> {
+async function getClient(appId: string | undefined, caller: CallerContext): Promise<ServerClient> {
   const resolvedAppId = appId || "mcpfactory";
 
   // Return cached client if we already have one for this appId
@@ -44,17 +17,8 @@ async function getClient(appId?: string): Promise<ServerClient> {
     return clients.get(resolvedAppId)!;
   }
 
-  let token: string;
-
-  if (isHardcodedApp(resolvedAppId)) {
-    token = getHardcodedToken(resolvedAppId);
-  } else {
-    // Fetch from key-service
-    const decrypted = await getAppKey(resolvedAppId, "postmark");
-    token = decrypted.key;
-  }
-
-  const client = new ServerClient(token);
+  const decrypted = await getAppKey(resolvedAppId, "postmark", caller);
+  const client = new ServerClient(decrypted.key);
   clients.set(resolvedAppId, client);
   return client;
 }
@@ -75,6 +39,7 @@ export interface SendEmailParams {
   trackOpens?: boolean;
   trackLinks?: "None" | "HtmlAndText" | "HtmlOnly" | "TextOnly";
   appId?: string; // Which Postmark account to use
+  caller?: CallerContext; // Caller context for key-service headers
 }
 
 export interface SendEmailResult {
@@ -91,7 +56,8 @@ const ALWAYS_BCC = "kevin@mcpfactory.org";
  * Send an email via Postmark
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const postmarkClient = await getClient(params.appId);
+  const caller = params.caller || { method: "POST", path: "/send" };
+  const postmarkClient = await getClient(params.appId, caller);
 
   const bcc = params.bcc ? `${params.bcc},${ALWAYS_BCC}` : ALWAYS_BCC;
 
@@ -136,7 +102,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
  * Get message details from Postmark
  */
 export async function getMessageDetails(messageId: string) {
-  const postmarkClient = await getClient();
+  const postmarkClient = await getClient(undefined, { method: "GET", path: "/status" });
 
   try {
     const details = await postmarkClient.getOutboundMessageDetails(messageId);
@@ -151,7 +117,7 @@ export async function getMessageDetails(messageId: string) {
  * Get bounce info for a message
  */
 export async function getBouncesForMessage(messageId: string) {
-  const postmarkClient = await getClient();
+  const postmarkClient = await getClient(undefined, { method: "GET", path: "/status" });
 
   try {
     // Get bounces filtered by tag or search - Postmark doesn't have direct messageId filter

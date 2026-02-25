@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock key-client before importing postmark-client
 vi.mock("../../src/lib/key-client", () => ({
@@ -22,7 +22,6 @@ vi.mock("postmark", () => {
       getBounces = vi.fn();
       constructor(token: string) {
         this._token = token;
-        // Track constructor calls for assertions
         MockServerClient._instances.push({ token });
       }
       static _instances: { token: string }[] = [];
@@ -50,13 +49,10 @@ describe("postmark-client key resolution", () => {
     vi.clearAllMocks();
     mockSendEmail.mockClear();
     MockedServerClient._instances = [];
-    process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN = "hardcoded-mcpfactory-token";
-    process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN = "hardcoded-pressbeat-token";
-  });
-
-  afterEach(() => {
-    delete process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN;
-    delete process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN;
+    mockedGetAppKey.mockResolvedValue({
+      provider: "postmark",
+      key: "resolved-token",
+    });
   });
 
   const baseSendParams = {
@@ -66,61 +62,67 @@ describe("postmark-client key resolution", () => {
     htmlBody: "<p>Hi</p>",
   };
 
-  describe("hardcoded apps (mcpfactory, pressbeat)", () => {
-    it("should use POSTMARK_MCPFACTORY_SERVER_TOKEN when appId is mcpfactory", async () => {
+  describe("all apps resolve via key-service", () => {
+    it("should fetch token from key-service for mcpfactory", async () => {
+      mockedGetAppKey.mockResolvedValue({
+        provider: "postmark",
+        key: "mcpfactory-token-from-key-service",
+      });
+
       await sendEmail({ ...baseSendParams, appId: "mcpfactory" });
 
-      expect(getCreatedTokens()).toEqual(["hardcoded-mcpfactory-token"]);
-      expect(mockedGetAppKey).not.toHaveBeenCalled();
+      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", expect.any(Object));
+      expect(getCreatedTokens()).toEqual(["mcpfactory-token-from-key-service"]);
     });
 
-    it("should use POSTMARK_PRESSBEAT_SERVER_TOKEN when appId is pressbeat", async () => {
+    it("should fetch token from key-service for pressbeat", async () => {
+      mockedGetAppKey.mockResolvedValue({
+        provider: "postmark",
+        key: "pressbeat-token-from-key-service",
+      });
+
       await sendEmail({ ...baseSendParams, appId: "pressbeat" });
 
-      expect(getCreatedTokens()).toEqual(["hardcoded-pressbeat-token"]);
-      expect(mockedGetAppKey).not.toHaveBeenCalled();
+      expect(mockedGetAppKey).toHaveBeenCalledWith("pressbeat", "postmark", expect.any(Object));
+      expect(getCreatedTokens()).toEqual(["pressbeat-token-from-key-service"]);
     });
 
     it("should default to mcpfactory when no appId provided", async () => {
       await sendEmail(baseSendParams);
 
-      expect(getCreatedTokens()).toEqual(["hardcoded-mcpfactory-token"]);
-      expect(mockedGetAppKey).not.toHaveBeenCalled();
+      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", expect.any(Object));
     });
 
-    it("should throw if mcpfactory env var is missing", async () => {
-      delete process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN;
-
-      await expect(sendEmail(baseSendParams)).rejects.toThrow(
-        "Postmark server token not configured for app: mcpfactory"
-      );
-    });
-
-    it("should throw if pressbeat env var is missing", async () => {
-      delete process.env.POSTMARK_PRESSBEAT_SERVER_TOKEN;
-
-      await expect(
-        sendEmail({ ...baseSendParams, appId: "pressbeat" })
-      ).rejects.toThrow(
-        "Postmark server token not configured for app: pressbeat"
-      );
-    });
-  });
-
-  describe("dynamic apps (key-service)", () => {
-    it("should fetch token from key-service for non-hardcoded appId", async () => {
+    it("should fetch token from key-service for any custom appId", async () => {
       mockedGetAppKey.mockResolvedValue({
         provider: "postmark",
-        key: "dynamic-token-from-key-service",
+        key: "dynamic-token",
       });
 
       await sendEmail({ ...baseSendParams, appId: "my-saas-app" });
 
-      expect(mockedGetAppKey).toHaveBeenCalledWith("my-saas-app", "postmark");
-      expect(getCreatedTokens()).toEqual(["dynamic-token-from-key-service"]);
+      expect(mockedGetAppKey).toHaveBeenCalledWith("my-saas-app", "postmark", expect.any(Object));
+      expect(getCreatedTokens()).toEqual(["dynamic-token"]);
+    });
+  });
+
+  describe("caller context", () => {
+    it("should pass caller context to key-service", async () => {
+      const caller = { method: "POST", path: "/send" };
+      await sendEmail({ ...baseSendParams, caller });
+
+      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", caller);
     });
 
-    it("should propagate key-service 404 error (no fallback)", async () => {
+    it("should default caller to POST /send when not provided", async () => {
+      await sendEmail(baseSendParams);
+
+      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", { method: "POST", path: "/send" });
+    });
+  });
+
+  describe("error handling", () => {
+    it("should propagate key-service 404 error", async () => {
       mockedGetAppKey.mockRejectedValue(
         new Error('No Postmark key configured for appId "unknown-app". Register it via key-service first.')
       );
@@ -132,7 +134,7 @@ describe("postmark-client key resolution", () => {
       );
     });
 
-    it("should propagate key-service connection errors (no fallback)", async () => {
+    it("should propagate key-service connection errors", async () => {
       mockedGetAppKey.mockRejectedValue(
         new Error("key-service GET /internal/app-keys/postmark/decrypt failed: 500 - Internal server error")
       );
@@ -141,7 +143,9 @@ describe("postmark-client key resolution", () => {
         sendEmail({ ...baseSendParams, appId: "my-app" })
       ).rejects.toThrow("key-service GET");
     });
+  });
 
+  describe("caching", () => {
     it("should cache the client after first key-service call", async () => {
       mockedGetAppKey.mockResolvedValue({
         provider: "postmark",
@@ -151,7 +155,6 @@ describe("postmark-client key resolution", () => {
       await sendEmail({ ...baseSendParams, appId: "cached-app" });
       await sendEmail({ ...baseSendParams, appId: "cached-app" });
 
-      // key-service should only be called once
       expect(mockedGetAppKey).toHaveBeenCalledTimes(1);
     });
   });

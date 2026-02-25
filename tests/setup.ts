@@ -11,7 +11,6 @@ if (!process.env.POSTMARK_SERVICE_DATABASE_URL) {
 
 // Set test-specific defaults
 process.env.POSTMARK_SERVICE_API_KEY = process.env.POSTMARK_SERVICE_API_KEY || "test-secret-key";
-process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN = process.env.POSTMARK_MCPFACTORY_SERVER_TOKEN || "test-token";
 
 beforeAll(() => {
   console.log("Test suite starting...");

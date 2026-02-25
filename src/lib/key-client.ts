@@ -16,16 +16,23 @@ export interface DecryptedAppKey {
   key: string;
 }
 
+export interface CallerContext {
+  method: string;
+  path: string;
+}
+
 /**
  * Fetch a decrypted app key from key-service
  * @param appId - The app identifier (e.g. "my-saas-app")
  * @param provider - The provider name (e.g. "postmark")
+ * @param caller - The caller context (HTTP method + path of the originating endpoint)
  * @returns The decrypted key
  * @throws Error if key-service is unreachable or key not found
  */
 export async function getAppKey(
   appId: string,
-  provider: string
+  provider: string,
+  caller: CallerContext
 ): Promise<DecryptedAppKey> {
   const url = `${getKeyServiceUrl()}/internal/app-keys/${encodeURIComponent(provider)}/decrypt?appId=${encodeURIComponent(appId)}`;
 
@@ -33,6 +40,9 @@ export async function getAppKey(
     method: "GET",
     headers: {
       "x-api-key": getKeyServiceApiKey(),
+      "X-Caller-Service": "postmark-service",
+      "X-Caller-Method": caller.method,
+      "X-Caller-Path": caller.path,
     },
   });
 
