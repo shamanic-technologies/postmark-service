@@ -80,7 +80,7 @@ npm run dev
 
 See [`.env.example`](.env.example) for required configuration:
 - `POSTMARK_SERVICE_DATABASE_URL` - PostgreSQL connection string
-- `POSTMARK_MCPFACTORY_SERVER_TOKEN` / `POSTMARK_PRESSBEAT_SERVER_TOKEN` - Postmark API tokens
+- `KEY_SERVICE_URL` / `KEY_SERVICE_API_KEY` - Key service (Postmark token resolution)
 - `POSTMARK_SERVICE_API_KEY` - Service-to-service auth secret
 - `RUNS_SERVICE_URL` / `RUNS_SERVICE_API_KEY` - Runs service integration
 - `PORT` - Server port (default: 3010)

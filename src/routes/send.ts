@@ -62,6 +62,7 @@ router.post("/send", async (req: Request, res: Response) => {
         trackOpens: body.trackOpens,
         trackLinks: body.trackLinks,
         appId: body.appId,
+        caller: { method: "POST", path: "/send" },
       };
 
       const result = await sendEmail(sendParams);
@@ -188,6 +189,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           trackOpens: email.trackOpens,
           trackLinks: email.trackLinks,
           appId: email.appId,
+          caller: { method: "POST", path: "/send/batch" },
         };
 
         const result = await sendEmail(sendParams);

@@ -56,7 +56,6 @@ jobs:
         env:
           POSTMARK_SERVICE_DATABASE_URL: ${{ env.DB_URL }}
           POSTMARK_SERVICE_API_KEY: test-secret-key
-          POSTMARK_MCPFACTORY_SERVER_TOKEN: test-token
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
