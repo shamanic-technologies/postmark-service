@@ -90,7 +90,7 @@ See [`.env.example`](.env.example) for required configuration:
 All endpoints require `X-API-Key` header except:
 - `GET /` and `GET /health` (public)
 - `GET /openapi.json` (public)
-- `POST /webhooks/postmark` (uses its own webhook secret verification)
+- `POST /webhooks/postmark` (public, events validated by MessageID lookup)
 
 ## Project Structure
 
