@@ -1085,6 +1085,29 @@
           }
         }
       },
+      "WebhookUrlResponse": {
+        "type": "object",
+        "properties": {
+          "webhookUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "instructions": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhookUrl",
+          "events",
+          "instructions"
+        ]
+      },
       "WebhookResponse": {
         "type": "object",
         "properties": {
@@ -1477,6 +1500,27 @@
         }
       }
     },
+    "/webhooks/postmark/url": {
+      "get": {
+        "summary": "Get webhook URL",
+        "description": "Returns the webhook URL that BYOK users should configure in their Postmark dashboard, along with the list of event types to enable.",
+        "tags": [
+          "Webhooks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook configuration details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookUrlResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhooks/postmark": {
       "post": {
         "summary": "Postmark webhook handler",
@@ -1491,16 +1535,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WebhookResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

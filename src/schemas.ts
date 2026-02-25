@@ -354,6 +354,14 @@ const WebhookResponseSchema = z
   })
   .openapi("WebhookResponse");
 
+const WebhookUrlResponseSchema = z
+  .object({
+    webhookUrl: z.string().url(),
+    events: z.array(z.string()),
+    instructions: z.string(),
+  })
+  .openapi("WebhookUrlResponse");
+
 // ===== Error schema =====
 
 const ErrorResponseSchema = z
@@ -585,6 +593,21 @@ registry.registerPath({
 // --- Webhooks ---
 
 registry.registerPath({
+  method: "get",
+  path: "/webhooks/postmark/url",
+  summary: "Get webhook URL",
+  description:
+    "Returns the webhook URL that BYOK users should configure in their Postmark dashboard, along with the list of event types to enable.",
+  tags: ["Webhooks"],
+  responses: {
+    200: {
+      description: "Webhook configuration details",
+      content: { "application/json": { schema: WebhookUrlResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/webhooks/postmark",
   summary: "Postmark webhook handler",
@@ -595,10 +618,6 @@ registry.registerPath({
     200: {
       description: "Webhook processed",
       content: { "application/json": { schema: WebhookResponseSchema } },
-    },
-    401: {
-      description: "Unauthorized",
-      content: { "application/json": { schema: ErrorResponseSchema } },
     },
   },
 });
