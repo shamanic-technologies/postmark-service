@@ -29,7 +29,7 @@ const EmailHeaderSchema = z.object({
 
 export const SendEmailRequestSchema = z
   .object({
-    orgId: z.string().optional().openapi({ description: "Clerk organization ID (optional for admin/lifecycle emails)" }),
+    orgId: z.string().optional().openapi({ description: "Organization ID (optional for admin/lifecycle emails)" }),
     runId: z.string().openapi({ description: "Parent run ID" }),
     brandId: z.string().optional().openapi({ description: "Brand ID" }),
     appId: z.string().optional().openapi({ description: "App ID" }),
@@ -288,7 +288,7 @@ export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowName", "lea
 export const StatsRequestSchema = z
   .object({
     runIds: z.array(z.string()).optional().openapi({ description: "Filter by run IDs" }),
-    clerkOrgId: z.string().optional().openapi({ description: "Filter by Clerk organization ID" }),
+    orgId: z.string().optional().openapi({ description: "Filter by organization ID" }),
     brandId: z.string().optional().openapi({ description: "Filter by brand ID" }),
     appId: z.string().optional().openapi({ description: "Filter by app ID" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
@@ -566,7 +566,7 @@ registry.registerPath({
   path: "/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats filtered by runIds, clerkOrgId, brandId, appId, campaignId, and/or workflowName. At least one filter required. When groupBy is provided, returns grouped results.",
+    "Get aggregated email stats filtered by runIds, orgId, brandId, appId, campaignId, and/or workflowName. At least one filter required. When groupBy is provided, returns grouped results.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {

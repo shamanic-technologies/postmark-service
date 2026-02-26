@@ -32,7 +32,7 @@ router.post("/send", async (req: Request, res: Response) => {
     let sendRunId: string | undefined;
     if (body.orgId) {
       const sendRun = await createRun({
-        clerkOrgId: body.orgId,
+        orgId: body.orgId,
         appId: body.appId || "mcpfactory",
         serviceName: "postmark-service",
         taskName: "email-send",
@@ -159,7 +159,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       let sendRunId: string | undefined;
       if (email.orgId) {
         const sendRun = await createRun({
-          clerkOrgId: email.orgId,
+          orgId: email.orgId,
           appId: email.appId || "mcpfactory",
           serviceName: "postmark-service",
           taskName: "email-send",

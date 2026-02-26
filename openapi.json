@@ -113,7 +113,7 @@
         "properties": {
           "orgId": {
             "type": "string",
-            "description": "Clerk organization ID (optional for admin/lifecycle emails)"
+            "description": "Organization ID (optional for admin/lifecycle emails)"
           },
           "runId": {
             "type": "string",
@@ -1053,9 +1053,9 @@
             },
             "description": "Filter by run IDs"
           },
-          "clerkOrgId": {
+          "orgId": {
             "type": "string",
-            "description": "Filter by Clerk organization ID"
+            "description": "Filter by organization ID"
           },
           "brandId": {
             "type": "string",
@@ -1451,7 +1451,7 @@
     "/stats": {
       "post": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats filtered by runIds, clerkOrgId, brandId, appId, campaignId, and/or workflowName. At least one filter required. When groupBy is provided, returns grouped results.",
+        "description": "Get aggregated email stats filtered by runIds, orgId, brandId, appId, campaignId, and/or workflowName. At least one filter required. When groupBy is provided, returns grouped results.",
         "tags": [
           "Email Status"
         ],

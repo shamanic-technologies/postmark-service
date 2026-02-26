@@ -47,14 +47,14 @@ describe("POST /stats", () => {
     expect(response.body.stats.emailsSent).toBe(1);
   });
 
-  it("should filter by clerkOrgId", async () => {
+  it("should filter by orgId", async () => {
     await insertTestSending({ messageId: randomUUID(), orgId: "org-abc", brandId: "b1", appId: "a1", campaignId: "c1" });
     await insertTestSending({ messageId: randomUUID(), orgId: "org-other", brandId: "b2", appId: "a2", campaignId: "c2" });
 
     const response = await request(app)
       .post("/stats")
       .set(getAuthHeaders())
-      .send({ clerkOrgId: "org-abc" });
+      .send({ orgId: "org-abc" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -107,7 +107,7 @@ describe("POST /stats", () => {
     const response = await request(app)
       .post("/stats")
       .set(getAuthHeaders())
-      .send({ clerkOrgId: "org-1", brandId: "brand-a" });
+      .send({ orgId: "org-1", brandId: "brand-a" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -276,7 +276,7 @@ describe("POST /stats", () => {
     const response = await request(app)
       .post("/stats")
       .set(getAuthHeaders())
-      .send({ clerkOrgId: org, groupBy: "brandId" });
+      .send({ orgId: org, groupBy: "brandId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -296,7 +296,7 @@ describe("POST /stats", () => {
     const response = await request(app)
       .post("/stats")
       .set(getAuthHeaders())
-      .send({ clerkOrgId: org, groupBy: "workflowName" });
+      .send({ orgId: org, groupBy: "workflowName" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -354,7 +354,7 @@ describe("POST /stats", () => {
     const response = await request(app)
       .post("/stats")
       .set(getAuthHeaders())
-      .send({ clerkOrgId: org, groupBy: "workflowName" });
+      .send({ orgId: org, groupBy: "workflowName" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
