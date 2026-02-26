@@ -71,7 +71,7 @@ describe("runs-service BLOCKING behavior", () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("should pass clerkOrgId and appId to createRun", async () => {
+  it("should pass orgId and appId to createRun", async () => {
     vi.mocked(createRun).mockResolvedValue({
       id: "run-1",
       parentRunId: "run_xyz",
@@ -105,7 +105,7 @@ describe("runs-service BLOCKING behavior", () => {
       });
 
     expect(createRun).toHaveBeenCalledWith({
-      clerkOrgId: "org_abc",
+      orgId: "org_abc",
       appId: "app_1",
       serviceName: "postmark-service",
       taskName: "email-send",

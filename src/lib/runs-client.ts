@@ -37,12 +37,12 @@ export interface RunCost {
 }
 
 export interface CreateRunParams {
-  clerkOrgId: string;
+  orgId: string;
   appId: string;
   serviceName: string;
   taskName: string;
   parentRunId?: string;
-  clerkUserId?: string;
+  userId?: string;
   brandId?: string;
   campaignId?: string;
   workflowName?: string;

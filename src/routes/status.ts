@@ -404,7 +404,7 @@ const GROUP_BY_COLUMN_MAP = {
 
 function buildStatsConditions(data: {
   runIds?: string[];
-  clerkOrgId?: string;
+  orgId?: string;
   brandId?: string;
   appId?: string;
   campaignId?: string;
@@ -414,8 +414,8 @@ function buildStatsConditions(data: {
   if (Array.isArray(data.runIds) && data.runIds.length > 0) {
     conditions.push(inArray(postmarkSendings.runId, data.runIds));
   }
-  if (data.clerkOrgId) {
-    conditions.push(eq(postmarkSendings.orgId, data.clerkOrgId));
+  if (data.orgId) {
+    conditions.push(eq(postmarkSendings.orgId, data.orgId));
   }
   if (data.brandId) {
     conditions.push(eq(postmarkSendings.brandId, data.brandId));
@@ -501,7 +501,7 @@ router.post("/stats", async (req: Request, res: Response) => {
 
   if (conditions.length === 0) {
     return res.status(400).json({
-      error: "At least one filter is required: runIds, clerkOrgId, brandId, appId, campaignId, or workflowName",
+      error: "At least one filter is required: runIds, orgId, brandId, appId, campaignId, or workflowName",
     });
   }
 

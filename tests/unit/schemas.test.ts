@@ -143,9 +143,9 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should accept clerkOrgId filter", () => {
+    it("should accept orgId filter", () => {
       const result = StatsRequestSchema.safeParse({
-        clerkOrgId: "org_123",
+        orgId: "org_123",
       });
       expect(result.success).toBe(true);
     });
@@ -166,7 +166,7 @@ describe("Zod schemas", () => {
 
     it("should accept workflowName filter", () => {
       const result = StatsRequestSchema.safeParse({
-        clerkOrgId: "org_123",
+        orgId: "org_123",
         workflowName: "outbound-v2",
       });
       expect(result.success).toBe(true);
@@ -178,7 +178,7 @@ describe("Zod schemas", () => {
     it("should accept groupBy with valid enum values", () => {
       for (const value of ["brandId", "campaignId", "workflowName", "leadEmail"]) {
         const result = StatsRequestSchema.safeParse({
-          clerkOrgId: "org_123",
+          orgId: "org_123",
           groupBy: value,
         });
         expect(result.success).toBe(true);
@@ -187,7 +187,7 @@ describe("Zod schemas", () => {
 
     it("should reject invalid groupBy value", () => {
       const result = StatsRequestSchema.safeParse({
-        clerkOrgId: "org_123",
+        orgId: "org_123",
         groupBy: "invalidDimension",
       });
       expect(result.success).toBe(false);
