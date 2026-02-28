@@ -150,7 +150,7 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should accept empty object (validation of at least one filter is in route)", () => {
+    it("should accept empty object (no filters = global stats)", () => {
       const result = StatsRequestSchema.safeParse({});
       expect(result.success).toBe(true);
     });

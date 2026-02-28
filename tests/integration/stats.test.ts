@@ -23,14 +23,34 @@ describe("POST /stats", () => {
     await closeDb();
   });
 
-  it("should return 400 when no filters provided", async () => {
+  it("should return global stats when no filters provided", async () => {
+    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-2", appId: "a2", campaignId: "c2" });
+
     const response = await request(app)
       .post("/stats")
       .set(getAuthHeaders())
       .send({});
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toContain("At least one filter");
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(2);
+  });
+
+  it("should return grouped global stats when only groupBy is provided", async () => {
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-global-a" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-global-b" });
+
+    const response = await request(app)
+      .post("/stats")
+      .set(getAuthHeaders())
+      .send({ groupBy: "workflowName" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toBeDefined();
+    const wfA = response.body.groups.find((g: any) => g.key === "wf-global-a");
+    const wfB = response.body.groups.find((g: any) => g.key === "wf-global-b");
+    expect(wfA).toBeDefined();
+    expect(wfB).toBeDefined();
   });
 
   it("should filter by runIds (backward compat)", async () => {

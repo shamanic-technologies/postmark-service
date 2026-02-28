@@ -499,12 +499,6 @@ router.post("/stats", async (req: Request, res: Response) => {
   const { groupBy, ...filters } = parsed.data;
   const conditions = buildStatsConditions(filters);
 
-  if (conditions.length === 0) {
-    return res.status(400).json({
-      error: "At least one filter is required: runIds, orgId, brandId, appId, campaignId, or workflowName",
-    });
-  }
-
   try {
     if (!groupBy) {
       // ─── Flat response (backwards compatible) ────────────────────────

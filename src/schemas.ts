@@ -566,7 +566,7 @@ registry.registerPath({
   path: "/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats filtered by runIds, orgId, brandId, appId, campaignId, and/or workflowName. At least one filter required. When groupBy is provided, returns grouped results.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, appId, campaignId, and/or workflowName. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
