@@ -1,0 +1,191 @@
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import request from "supertest";
+import { createTestApp, getAuthHeaders } from "../helpers/test-app";
+import {
+  cleanTestData,
+  closeDb,
+  insertTestSending,
+  insertTestDelivery,
+  insertTestBounce,
+  insertTestOpening,
+  randomUUID,
+} from "../helpers/test-db";
+
+describe("GET /performance/leaderboard", () => {
+  const app = createTestApp();
+
+  beforeEach(async () => {
+    await cleanTestData();
+  });
+
+  afterAll(async () => {
+    await cleanTestData();
+    await closeDb();
+  });
+
+  it("should return empty workflows when no sendings exist", async () => {
+    const response = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    expect(response.status).toBe(200);
+    expect(response.body.workflows).toEqual([]);
+  });
+
+  it("should return global stats grouped by workflowName", async () => {
+    const msg1 = randomUUID();
+    const msg2 = randomUUID();
+    const msg3 = randomUUID();
+
+    await insertTestSending({ messageId: msg1, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, orgId: "org-2", workflowName: "Darmstadt", brandId: "b2", appId: "a2", campaignId: "c2" });
+
+    await insertTestDelivery(msg1);
+    await insertTestDelivery(msg2);
+    await insertTestOpening(msg1);
+
+    const response = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    expect(response.status).toBe(200);
+    expect(response.body.workflows).toHaveLength(2);
+
+    const pharaoh = response.body.workflows.find((w: any) => w.workflowName === "Pharaoh");
+    const darmstadt = response.body.workflows.find((w: any) => w.workflowName === "Darmstadt");
+
+    expect(pharaoh).toBeDefined();
+    expect(pharaoh.emailsSent).toBe(2);
+    expect(pharaoh.emailsDelivered).toBe(2);
+    expect(pharaoh.emailsOpened).toBe(1);
+    expect(pharaoh.openRate).toBe(0.5);
+
+    expect(darmstadt).toBeDefined();
+    expect(darmstadt.emailsSent).toBe(1);
+    expect(darmstadt.emailsDelivered).toBe(0);
+  });
+
+  it("should return identical data with or without x-org-id/x-user-id headers", async () => {
+    const msg1 = randomUUID();
+    const msg2 = randomUUID();
+    const msg3 = randomUUID();
+
+    await insertTestSending({ messageId: msg1, orgId: "org-A", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, orgId: "org-A", workflowName: "Sienna", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, orgId: "org-B", workflowName: "Pharaoh", brandId: "b2", appId: "a2", campaignId: "c2" });
+
+    await insertTestDelivery(msg1);
+    await insertTestDelivery(msg3);
+    await insertTestOpening(msg1);
+
+    // Without org/user headers
+    const withoutHeaders = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    // With org/user headers — result MUST be identical
+    const withHeaders = await request(app)
+      .get("/performance/leaderboard")
+      .set({
+        ...getAuthHeaders(),
+        "x-org-id": "org-A",
+        "x-user-id": "user-123",
+      });
+
+    expect(withoutHeaders.status).toBe(200);
+    expect(withHeaders.status).toBe(200);
+    expect(withHeaders.body).toEqual(withoutHeaders.body);
+  });
+
+  it("should exclude sendings with no workflowName", async () => {
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1" }); // no workflowName
+
+    const response = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    expect(response.status).toBe(200);
+    expect(response.body.workflows).toHaveLength(1);
+    expect(response.body.workflows[0].workflowName).toBe("Pharaoh");
+  });
+
+  it("should sort workflows by emailsSent descending", async () => {
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Small", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", appId: "a1", campaignId: "c1" });
+
+    const response = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    expect(response.status).toBe(200);
+    expect(response.body.workflows[0].workflowName).toBe("Big");
+    expect(response.body.workflows[0].emailsSent).toBe(3);
+    expect(response.body.workflows[1].workflowName).toBe("Small");
+    expect(response.body.workflows[1].emailsSent).toBe(1);
+  });
+
+  it("should compute rates correctly", async () => {
+    const msg1 = randomUUID();
+    const msg2 = randomUUID();
+    const msg3 = randomUUID();
+    const msg4 = randomUUID();
+
+    await insertTestSending({ messageId: msg1, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg4, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
+
+    await insertTestDelivery(msg1);
+    await insertTestDelivery(msg2);
+    await insertTestDelivery(msg3);
+    await insertTestOpening(msg1);
+    await insertTestOpening(msg2);
+    await insertTestBounce(msg4);
+
+    const response = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    expect(response.status).toBe(200);
+    const wf = response.body.workflows[0];
+    expect(wf.emailsSent).toBe(4);
+    expect(wf.emailsDelivered).toBe(3);
+    expect(wf.emailsOpened).toBe(2);
+    expect(wf.emailsBounced).toBe(1);
+    expect(wf.openRate).toBe(0.5);       // 2/4
+    expect(wf.deliveryRate).toBe(0.75);   // 3/4
+    expect(wf.bounceRate).toBe(0.25);     // 1/4
+  });
+
+  it("should aggregate across multiple orgs for the same workflow", async () => {
+    const msg1 = randomUUID();
+    const msg2 = randomUUID();
+    const msg3 = randomUUID();
+
+    await insertTestSending({ messageId: msg1, orgId: "org-X", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, orgId: "org-Y", workflowName: "Pharaoh", brandId: "b2", appId: "a2", campaignId: "c2" });
+    await insertTestSending({ messageId: msg3, orgId: "org-Z", workflowName: "Pharaoh", brandId: "b3", appId: "a3", campaignId: "c3" });
+
+    await insertTestDelivery(msg1);
+    await insertTestDelivery(msg2);
+    await insertTestDelivery(msg3);
+    await insertTestOpening(msg1);
+    await insertTestOpening(msg3);
+
+    const response = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    expect(response.status).toBe(200);
+    expect(response.body.workflows).toHaveLength(1);
+
+    const pharaoh = response.body.workflows[0];
+    expect(pharaoh.emailsSent).toBe(3);
+    expect(pharaoh.emailsDelivered).toBe(3);
+    expect(pharaoh.emailsOpened).toBe(2);
+  });
+});

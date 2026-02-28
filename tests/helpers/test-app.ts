@@ -6,6 +6,7 @@ import healthRoutes from "../../src/routes/health";
 import sendRoutes from "../../src/routes/send";
 import statusRoutes from "../../src/routes/status";
 import webhooksRoutes from "../../src/routes/webhooks";
+import performanceRoutes from "../../src/routes/performance";
 
 /**
  * Create a test Express app instance
@@ -31,6 +32,7 @@ export function createTestApp() {
   app.use("/", sendRoutes);
   app.use("/", statusRoutes);
   app.use("/", webhooksRoutes);
+  app.use("/", performanceRoutes);
 
   return app;
 }
