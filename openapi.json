@@ -1085,6 +1085,68 @@
           }
         }
       },
+      "LeaderboardResponse": {
+        "type": "object",
+        "properties": {
+          "workflows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "workflowName": {
+                  "type": "string"
+                },
+                "emailsSent": {
+                  "type": "number"
+                },
+                "emailsDelivered": {
+                  "type": "number"
+                },
+                "emailsOpened": {
+                  "type": "number"
+                },
+                "emailsClicked": {
+                  "type": "number"
+                },
+                "emailsBounced": {
+                  "type": "number"
+                },
+                "openRate": {
+                  "type": "number",
+                  "description": "Opens / sent (0-1)"
+                },
+                "clickRate": {
+                  "type": "number",
+                  "description": "Clicks / sent (0-1)"
+                },
+                "bounceRate": {
+                  "type": "number",
+                  "description": "Bounces / sent (0-1)"
+                },
+                "deliveryRate": {
+                  "type": "number",
+                  "description": "Deliveries / sent (0-1)"
+                }
+              },
+              "required": [
+                "workflowName",
+                "emailsSent",
+                "emailsDelivered",
+                "emailsOpened",
+                "emailsClicked",
+                "emailsBounced",
+                "openRate",
+                "clickRate",
+                "bounceRate",
+                "deliveryRate"
+              ]
+            }
+          }
+        },
+        "required": [
+          "workflows"
+        ]
+      },
       "WebhookUrlResponse": {
         "type": "object",
         "properties": {
@@ -1489,6 +1551,42 @@
           },
           "400": {
             "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/performance/leaderboard": {
+      "get": {
+        "summary": "Workflow performance leaderboard",
+        "description": "Returns global workflow performance stats across ALL sendings. This is a global view — auth headers (x-org-id, x-user-id) are ignored for data filtering. If org-scoped stats are needed, use POST /stats with orgId in the body.",
+        "tags": [
+          "Performance"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow leaderboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaderboardResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
             "content": {
               "application/json": {
                 "schema": {

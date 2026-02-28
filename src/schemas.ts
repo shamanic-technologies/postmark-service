@@ -336,6 +336,29 @@ export const GroupedStatsResponseSchema = z
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
+// ===== Performance Leaderboard =====
+
+const WorkflowStatsSchema = z.object({
+  workflowName: z.string(),
+  emailsSent: z.number(),
+  emailsDelivered: z.number(),
+  emailsOpened: z.number(),
+  emailsClicked: z.number(),
+  emailsBounced: z.number(),
+  openRate: z.number().openapi({ description: "Opens / sent (0-1)" }),
+  clickRate: z.number().openapi({ description: "Clicks / sent (0-1)" }),
+  bounceRate: z.number().openapi({ description: "Bounces / sent (0-1)" }),
+  deliveryRate: z.number().openapi({ description: "Deliveries / sent (0-1)" }),
+});
+
+export const LeaderboardResponseSchema = z
+  .object({
+    workflows: z.array(WorkflowStatsSchema),
+  })
+  .openapi("LeaderboardResponse");
+
+export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
+
 // ===== Health =====
 
 const HealthResponseSchema = z
@@ -585,6 +608,28 @@ registry.registerPath({
     },
     400: {
       description: "Invalid request",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// --- Performance ---
+
+registry.registerPath({
+  method: "get",
+  path: "/performance/leaderboard",
+  summary: "Workflow performance leaderboard",
+  description:
+    "Returns global workflow performance stats across ALL sendings. This is a global view — auth headers (x-org-id, x-user-id) are ignored for data filtering. If org-scoped stats are needed, use POST /stats with orgId in the body.",
+  tags: ["Performance"],
+  security: [{ apiKey: [] }],
+  responses: {
+    200: {
+      description: "Workflow leaderboard",
+      content: { "application/json": { schema: LeaderboardResponseSchema } },
+    },
+    500: {
+      description: "Server error",
       content: { "application/json": { schema: ErrorResponseSchema } },
     },
   },
