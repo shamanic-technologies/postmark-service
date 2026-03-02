@@ -48,11 +48,22 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should default messageStream to broadcast", () => {
+    it("should leave messageStream undefined when not provided", () => {
       const result = SendEmailRequestSchema.safeParse(validRequest);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.messageStream).toBe("broadcast");
+        expect(result.data.messageStream).toBeUndefined();
+      }
+    });
+
+    it("should accept explicit messageStream value", () => {
+      const result = SendEmailRequestSchema.safeParse({
+        ...validRequest,
+        messageStream: "my-custom-stream",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.messageStream).toBe("my-custom-stream");
       }
     });
 

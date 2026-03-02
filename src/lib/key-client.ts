@@ -29,6 +29,22 @@ export interface CallerContext {
  * @returns The decrypted key
  * @throws Error if key-service is unreachable or key not found
  */
+export type PostmarkStreamType = "broadcast" | "inbound" | "transactional";
+
+/**
+ * Resolve a Postmark stream ID from key-service.
+ * Providers: postmark-broadcast-stream, postmark-inbound-stream, postmark-transactional-stream
+ */
+export async function getStreamId(
+  appId: string,
+  streamType: PostmarkStreamType,
+  caller: CallerContext
+): Promise<string> {
+  const provider = `postmark-${streamType}-stream`;
+  const result = await getAppKey(appId, provider, caller);
+  return result.key;
+}
+
 export async function getAppKey(
   appId: string,
   provider: string,

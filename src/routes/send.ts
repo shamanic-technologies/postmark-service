@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
+import { getStreamId } from "../lib/key-client";
 import {
   createRun,
   updateRun,
@@ -46,7 +47,12 @@ router.post("/send", async (req: Request, res: Response) => {
     }
 
     try {
-      // 2. Send email via Postmark
+      // 2. Resolve message stream from key-service when not provided
+      const caller = { method: "POST" as const, path: "/send" };
+      const resolvedAppId = body.appId || "mcpfactory";
+      const messageStream = body.messageStream || await getStreamId(resolvedAppId, "broadcast", caller);
+
+      // 3. Send email via Postmark
       const sendParams: SendEmailParams = {
         from: body.from,
         to: body.to,
@@ -57,18 +63,18 @@ router.post("/send", async (req: Request, res: Response) => {
         textBody: body.textBody,
         replyTo: body.replyTo,
         tag: body.tag,
-        messageStream: body.messageStream,
+        messageStream,
         headers: body.headers,
         metadata: body.metadata,
         trackOpens: body.trackOpens,
         trackLinks: body.trackLinks,
         appId: body.appId,
-        caller: { method: "POST", path: "/send" },
+        caller,
       };
 
       const result = await sendEmail(sendParams);
 
-      // 3. Record in database
+      // 4. Record in database
       const [sending] = await db
         .insert(postmarkSendings)
         .values({
@@ -77,7 +83,7 @@ router.post("/send", async (req: Request, res: Response) => {
           fromEmail: body.from,
           subject: body.subject,
           tag: body.tag,
-          messageStream: body.messageStream || "broadcast",
+          messageStream,
           errorCode: result.errorCode,
           message: result.message,
           submittedAt: result.submittedAt,
@@ -93,7 +99,7 @@ router.post("/send", async (req: Request, res: Response) => {
         })
         .returning();
 
-      // 4. Log costs and complete run
+      // 5. Log costs and complete run
       if (result.success) {
         if (sendRunId) {
           await addCosts(sendRunId, [
@@ -175,7 +181,12 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       }
 
       try {
-        // 2. Send email via Postmark
+        // 2. Resolve message stream from key-service when not provided
+        const batchCaller = { method: "POST" as const, path: "/send/batch" };
+        const resolvedAppId = email.appId || "mcpfactory";
+        const messageStream = email.messageStream || await getStreamId(resolvedAppId, "broadcast", batchCaller);
+
+        // 3. Send email via Postmark
         const sendParams: SendEmailParams = {
           from: email.from,
           to: email.to,
@@ -186,18 +197,18 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           textBody: email.textBody,
           replyTo: email.replyTo,
           tag: email.tag,
-          messageStream: email.messageStream,
+          messageStream,
           headers: email.headers,
           metadata: email.metadata,
           trackOpens: email.trackOpens,
           trackLinks: email.trackLinks,
           appId: email.appId,
-          caller: { method: "POST", path: "/send/batch" },
+          caller: batchCaller,
         };
 
         const result = await sendEmail(sendParams);
 
-        // 3. Record in database
+        // 4. Record in database
         const [sending] = await db
           .insert(postmarkSendings)
           .values({
@@ -206,7 +217,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             fromEmail: email.from,
             subject: email.subject,
             tag: email.tag,
-            messageStream: email.messageStream || "broadcast",
+            messageStream,
             errorCode: result.errorCode,
             message: result.message,
             submittedAt: result.submittedAt,
@@ -222,7 +233,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           })
           .returning();
 
-        // 4. Log costs and complete run
+        // 5. Log costs and complete run
         if (result.success) {
           if (sendRunId) {
             await addCosts(sendRunId, [
