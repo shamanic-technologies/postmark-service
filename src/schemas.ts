@@ -30,6 +30,7 @@ const EmailHeaderSchema = z.object({
 export const SendEmailRequestSchema = z
   .object({
     orgId: z.string().optional().openapi({ description: "Organization ID (optional for admin/lifecycle emails)" }),
+    userId: z.string().optional().openapi({ description: "User ID (forwarded to runs-service for attribution)" }),
     runId: z.string().openapi({ description: "Parent run ID" }),
     brandId: z.string().optional().openapi({ description: "Brand ID" }),
     appId: z.string().optional().openapi({ description: "App ID" }),
@@ -83,6 +84,7 @@ export const BatchSendRequestSchema = z
       .array(
         z.object({
           orgId: z.string().optional(),
+          userId: z.string().optional(),
           runId: z.string(),
           brandId: z.string().optional(),
           appId: z.string().optional(),
@@ -620,9 +622,14 @@ registry.registerPath({
   path: "/performance/leaderboard",
   summary: "Workflow performance leaderboard",
   description:
-    "Returns global workflow performance stats across ALL sendings. This is a global view — auth headers (x-org-id, x-user-id) are ignored for data filtering. If org-scoped stats are needed, use POST /stats with orgId in the body.",
+    "Returns workflow performance stats. Global by default — auth headers are never used for filtering. Pass ?appId=xxx to filter by app.",
   tags: ["Performance"],
   security: [{ apiKey: [] }],
+  request: {
+    query: z.object({
+      appId: z.string().optional().openapi({ description: "Filter by application ID (omit for global)" }),
+    }),
+  },
   responses: {
     200: {
       description: "Workflow leaderboard",

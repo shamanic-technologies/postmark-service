@@ -31,6 +31,7 @@ export const postmarkSendings = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     // Context for tracking
     orgId: text("org_id"), // Organization ID
+    userId: text("user_id"), // User ID (for runs-service attribution)
     runId: text("run_id"), // Parent run ID from caller
     brandId: text("brand_id"),
     appId: text("app_id"),
