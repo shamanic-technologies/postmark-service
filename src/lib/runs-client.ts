@@ -14,7 +14,6 @@ export interface Run {
   parentRunId: string | null;
   organizationId: string;
   userId: string | null;
-  appId: string;
   brandId: string | null;
   campaignId: string | null;
   serviceName: string;
@@ -38,7 +37,6 @@ export interface RunCost {
 
 export interface CreateRunParams {
   orgId: string;
-  appId: string;
   serviceName: string;
   taskName: string;
   parentRunId?: string;
@@ -51,6 +49,7 @@ export interface CreateRunParams {
 export interface CostItem {
   costName: string;
   quantity: number;
+  costSource: "platform" | "org";
 }
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────

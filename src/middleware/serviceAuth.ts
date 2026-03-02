@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 
 /**
  * Service-to-service authentication middleware
- * Validates X-API-Key header (standard convention)
+ * Validates X-API-Key header and requires x-org-id + x-user-id identity headers
  */
 export function serviceAuth(req: Request, res: Response, next: NextFunction) {
   // Skip auth for health check and OpenAPI spec
@@ -35,6 +35,22 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
   if (apiKey !== validSecret) {
     return res.status(403).json({
       error: "Invalid API key",
+    });
+  }
+
+  // Require identity headers
+  const orgId = req.headers["x-org-id"];
+  const userId = req.headers["x-user-id"];
+
+  if (!orgId || typeof orgId !== "string") {
+    return res.status(400).json({
+      error: "Missing required header: x-org-id",
+    });
+  }
+
+  if (!userId || typeof userId !== "string") {
+    return res.status(400).json({
+      error: "Missing required header: x-user-id",
     });
   }
 

@@ -7,35 +7,24 @@ import {
   postmarkOpenings,
   postmarkLinkClicks,
 } from "../db/schema";
-import { inArray, eq, and, SQL } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 const router = Router();
 
 /**
  * GET /performance/leaderboard
  *
- * Returns workflow performance stats. Global by default.
- * Auth headers (x-org-id, x-user-id) are NEVER used for filtering.
- * Optional query params for explicit filtering:
- *   ?appId=xxx — filter by application ID
+ * Returns global workflow performance stats.
+ * Auth headers (x-org-id, x-user-id) are required but NEVER used for filtering.
  */
 router.get("/performance/leaderboard", async (req: Request, res: Response) => {
   try {
-    const appId = req.query.appId as string | undefined;
-
-    // Build optional filters from query params only (never from headers)
-    const conditions: SQL[] = [];
-    if (appId) {
-      conditions.push(eq(postmarkSendings.appId, appId));
-    }
-
     const sendings = await db
       .select({
         messageId: postmarkSendings.messageId,
         workflowName: postmarkSendings.workflowName,
       })
-      .from(postmarkSendings)
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
+      .from(postmarkSendings);
 
     // Group by workflowName
     const grouped = new Map<string, { messageIds: string[]; count: number }>();

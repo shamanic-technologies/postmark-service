@@ -406,7 +406,6 @@ function buildStatsConditions(data: {
   runIds?: string[];
   orgId?: string;
   brandId?: string;
-  appId?: string;
   campaignId?: string;
   workflowName?: string;
 }): SQL[] {
@@ -419,9 +418,6 @@ function buildStatsConditions(data: {
   }
   if (data.brandId) {
     conditions.push(eq(postmarkSendings.brandId, data.brandId));
-  }
-  if (data.appId) {
-    conditions.push(eq(postmarkSendings.appId, data.appId));
   }
   if (data.campaignId) {
     conditions.push(eq(postmarkSendings.campaignId, data.campaignId));

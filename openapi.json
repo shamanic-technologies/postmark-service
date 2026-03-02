@@ -111,25 +111,13 @@
       "SendEmailRequest": {
         "type": "object",
         "properties": {
-          "orgId": {
+          "parentRunId": {
             "type": "string",
-            "description": "Organization ID (optional for admin/lifecycle emails)"
-          },
-          "userId": {
-            "type": "string",
-            "description": "User ID (forwarded to runs-service for attribution)"
-          },
-          "runId": {
-            "type": "string",
-            "description": "Parent run ID"
+            "description": "Parent run ID from caller"
           },
           "brandId": {
             "type": "string",
             "description": "Brand ID"
-          },
-          "appId": {
-            "type": "string",
-            "description": "App ID"
           },
           "campaignId": {
             "type": "string",
@@ -214,7 +202,6 @@
           }
         },
         "required": [
-          "runId",
           "from",
           "to",
           "subject"
@@ -281,19 +268,10 @@
             "items": {
               "type": "object",
               "properties": {
-                "orgId": {
-                  "type": "string"
-                },
-                "userId": {
-                  "type": "string"
-                },
-                "runId": {
+                "parentRunId": {
                   "type": "string"
                 },
                 "brandId": {
-                  "type": "string"
-                },
-                "appId": {
                   "type": "string"
                 },
                 "campaignId": {
@@ -371,7 +349,6 @@
                 }
               },
               "required": [
-                "runId",
                 "from",
                 "to",
                 "subject"
@@ -1059,10 +1036,6 @@
             "type": "string",
             "description": "Filter by brand ID"
           },
-          "appId": {
-            "type": "string",
-            "description": "Filter by app ID"
-          },
           "campaignId": {
             "type": "string",
             "description": "Filter by campaign ID"
@@ -1511,7 +1484,7 @@
     "/stats": {
       "post": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, appId, campaignId, and/or workflowName. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowName. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
         "tags": [
           "Email Status"
         ],
@@ -1563,25 +1536,13 @@
     "/performance/leaderboard": {
       "get": {
         "summary": "Workflow performance leaderboard",
-        "description": "Returns workflow performance stats. Global by default — auth headers are never used for filtering. Pass ?appId=xxx to filter by app.",
+        "description": "Returns global workflow performance stats. Requires x-org-id and x-user-id headers.",
         "tags": [
           "Performance"
         ],
         "security": [
           {
             "apiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Filter by application ID (omit for global)"
-            },
-            "required": false,
-            "description": "Filter by application ID (omit for global)",
-            "name": "appId",
-            "in": "query"
           }
         ],
         "responses": {

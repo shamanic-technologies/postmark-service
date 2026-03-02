@@ -9,10 +9,8 @@ import {
 describe("Zod schemas", () => {
   describe("SendEmailRequestSchema", () => {
     const validRequest = {
-      orgId: "org_123",
-      runId: "run_456",
+      parentRunId: "run_456",
       brandId: "brand_789",
-      appId: "app_012",
       campaignId: "camp_345",
       from: "sender@example.com",
       to: "recipient@example.com",
@@ -27,7 +25,6 @@ describe("Zod schemas", () => {
 
     it("should reject when missing required fields", () => {
       const result = SendEmailRequestSchema.safeParse({
-        orgId: "org_123",
         from: "sender@example.com",
       });
       expect(result.success).toBe(false);
@@ -77,28 +74,26 @@ describe("Zod schemas", () => {
       }
     });
 
-    it("should accept request without orgId (admin/lifecycle emails)", () => {
-      const { orgId, ...noOrg } = validRequest;
-      const result = SendEmailRequestSchema.safeParse(noOrg);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.orgId).toBeUndefined();
-      }
-    });
-
-    it("should accept request without brandId, appId, campaignId", () => {
-      const { brandId, appId, campaignId, ...minimal } = validRequest;
+    it("should accept request without brandId, campaignId", () => {
+      const { brandId, campaignId, ...minimal } = validRequest;
       const result = SendEmailRequestSchema.safeParse(minimal);
       expect(result.success).toBe(true);
+    });
+
+    it("should accept request without parentRunId", () => {
+      const { parentRunId, ...noRunId } = validRequest;
+      const result = SendEmailRequestSchema.safeParse(noRunId);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.parentRunId).toBeUndefined();
+      }
     });
   });
 
   describe("BatchSendRequestSchema", () => {
     const validEmail = {
-      orgId: "org_123",
-      runId: "run_456",
+      parentRunId: "run_456",
       brandId: "brand_789",
-      appId: "app_012",
       campaignId: "camp_345",
       from: "sender@example.com",
       to: "recipient@example.com",
@@ -129,10 +124,10 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(false);
     });
 
-    it("should accept emails without orgId", () => {
-      const { orgId, ...noOrg } = validEmail;
+    it("should accept emails without parentRunId", () => {
+      const { parentRunId, ...noRunId } = validEmail;
       const result = BatchSendRequestSchema.safeParse({
-        emails: [noOrg],
+        emails: [noRunId],
       });
       expect(result.success).toBe(true);
     });
@@ -199,7 +194,6 @@ describe("Zod schemas", () => {
 
   describe("SendEmailRequestSchema - leadId", () => {
     const validRequest = {
-      runId: "run_456",
       from: "sender@example.com",
       to: "recipient@example.com",
       subject: "Test Email",
@@ -278,7 +272,6 @@ describe("Zod schemas", () => {
 
   describe("SendEmailRequestSchema - workflowName", () => {
     const validRequest = {
-      runId: "run_456",
       from: "sender@example.com",
       to: "recipient@example.com",
       subject: "Test Email",

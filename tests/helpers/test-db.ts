@@ -35,7 +35,6 @@ export async function insertTestSending(data: {
   orgId?: string;
   runId?: string;
   brandId?: string;
-  appId?: string;
   campaignId?: string;
   workflowName?: string;
   leadId?: string;
@@ -50,7 +49,6 @@ export async function insertTestSending(data: {
       orgId: data.orgId || "test-org-id",
       runId: data.runId || "test-run-id",
       brandId: data.brandId,
-      appId: data.appId,
       campaignId: data.campaignId,
       workflowName: data.workflowName,
       leadId: data.leadId,
@@ -59,7 +57,7 @@ export async function insertTestSending(data: {
       submittedAt: new Date(),
     })
     .returning();
-  
+
   return sending;
 }
 

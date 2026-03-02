@@ -1,25 +1,22 @@
 import { ServerClient, Models } from "postmark";
-import { getAppKey, CallerContext } from "./key-client";
+import { getOrgKey, CallerContext } from "./key-client";
 
-// Cache clients per token for multi-project support
+// Cache clients per token for multi-org support
 const clients: Map<string, ServerClient> = new Map();
 
 /**
- * Get a Postmark client for a given appId.
+ * Get a Postmark client for a given org.
  * All tokens are resolved via key-service.
- * No appId → defaults to "mcpfactory"
  */
-async function getClient(appId: string | undefined, caller: CallerContext): Promise<ServerClient> {
-  const resolvedAppId = appId || "mcpfactory";
-
-  // Return cached client if we already have one for this appId
-  if (clients.has(resolvedAppId)) {
-    return clients.get(resolvedAppId)!;
+async function getClient(orgId: string, userId: string, caller: CallerContext): Promise<ServerClient> {
+  // Return cached client if we already have one for this org
+  if (clients.has(orgId)) {
+    return clients.get(orgId)!;
   }
 
-  const decrypted = await getAppKey(resolvedAppId, "postmark", caller);
+  const decrypted = await getOrgKey(orgId, userId, "postmark", caller);
   const client = new ServerClient(decrypted.key);
-  clients.set(resolvedAppId, client);
+  clients.set(orgId, client);
   return client;
 }
 
@@ -38,8 +35,9 @@ export interface SendEmailParams {
   metadata?: Record<string, string>;
   trackOpens?: boolean;
   trackLinks?: "None" | "HtmlAndText" | "HtmlOnly" | "TextOnly";
-  appId?: string; // Which Postmark account to use
-  caller?: CallerContext; // Caller context for key-service headers
+  orgId: string;
+  userId: string;
+  caller?: CallerContext;
 }
 
 export interface SendEmailResult {
@@ -57,7 +55,7 @@ const ALWAYS_BCC = "kevin@mcpfactory.org";
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const caller = params.caller || { method: "POST", path: "/send" };
-  const postmarkClient = await getClient(params.appId, caller);
+  const postmarkClient = await getClient(params.orgId, params.userId, caller);
 
   const bcc = params.bcc ? `${params.bcc},${ALWAYS_BCC}` : ALWAYS_BCC;
 
@@ -95,38 +93,6 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       errorCode: error.code || -1,
       message: error.message || "Unknown error",
     };
-  }
-}
-
-/**
- * Get message details from Postmark
- */
-export async function getMessageDetails(messageId: string) {
-  const postmarkClient = await getClient(undefined, { method: "GET", path: "/status" });
-
-  try {
-    const details = await postmarkClient.getOutboundMessageDetails(messageId);
-    return details;
-  } catch (error: any) {
-    console.error("Postmark getMessageDetails error:", error);
-    throw error;
-  }
-}
-
-/**
- * Get bounce info for a message
- */
-export async function getBouncesForMessage(messageId: string) {
-  const postmarkClient = await getClient(undefined, { method: "GET", path: "/status" });
-
-  try {
-    // Get bounces filtered by tag or search - Postmark doesn't have direct messageId filter
-    // We'll need to query our database instead for specific message bounces
-    const bounces = await postmarkClient.getBounces({ count: 10 });
-    return bounces.Bounces.filter(b => b.MessageID === messageId);
-  } catch (error: any) {
-    console.error("Postmark getBounces error:", error);
-    throw error;
   }
 }
 

@@ -37,9 +37,9 @@ describe("GET /performance/leaderboard", () => {
     const msg2 = randomUUID();
     const msg3 = randomUUID();
 
-    await insertTestSending({ messageId: msg1, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg3, orgId: "org-2", workflowName: "Darmstadt", brandId: "b2", appId: "a2", campaignId: "c2" });
+    await insertTestSending({ messageId: msg1, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, orgId: "org-2", workflowName: "Darmstadt", brandId: "b2", campaignId: "c2" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);
@@ -66,41 +66,9 @@ describe("GET /performance/leaderboard", () => {
     expect(darmstadt.emailsDelivered).toBe(0);
   });
 
-  it("should return identical data with or without x-org-id/x-user-id headers", async () => {
-    const msg1 = randomUUID();
-    const msg2 = randomUUID();
-    const msg3 = randomUUID();
-
-    await insertTestSending({ messageId: msg1, orgId: "org-A", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, orgId: "org-A", workflowName: "Sienna", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg3, orgId: "org-B", workflowName: "Pharaoh", brandId: "b2", appId: "a2", campaignId: "c2" });
-
-    await insertTestDelivery(msg1);
-    await insertTestDelivery(msg3);
-    await insertTestOpening(msg1);
-
-    // Without org/user headers
-    const withoutHeaders = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
-
-    // With org/user headers — result MUST be identical
-    const withHeaders = await request(app)
-      .get("/performance/leaderboard")
-      .set({
-        ...getAuthHeaders(),
-        "x-org-id": "org-A",
-        "x-user-id": "user-123",
-      });
-
-    expect(withoutHeaders.status).toBe(200);
-    expect(withHeaders.status).toBe(200);
-    expect(withHeaders.body).toEqual(withoutHeaders.body);
-  });
-
   it("should exclude sendings with no workflowName", async () => {
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1" }); // no workflowName
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" }); // no workflowName
 
     const response = await request(app)
       .get("/performance/leaderboard")
@@ -112,10 +80,10 @@ describe("GET /performance/leaderboard", () => {
   });
 
   it("should sort workflows by emailsSent descending", async () => {
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Small", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Small", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", campaignId: "c1" });
 
     const response = await request(app)
       .get("/performance/leaderboard")
@@ -134,10 +102,10 @@ describe("GET /performance/leaderboard", () => {
     const msg3 = randomUUID();
     const msg4 = randomUUID();
 
-    await insertTestSending({ messageId: msg1, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg3, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg4, workflowName: "Test", brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg1, workflowName: "Test", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, workflowName: "Test", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, workflowName: "Test", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg4, workflowName: "Test", brandId: "b1", campaignId: "c1" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);
@@ -161,56 +129,14 @@ describe("GET /performance/leaderboard", () => {
     expect(wf.bounceRate).toBe(0.25);     // 1/4
   });
 
-  it("should filter by appId query param when provided", async () => {
-    const msg1 = randomUUID();
-    const msg2 = randomUUID();
-    const msg3 = randomUUID();
-
-    await insertTestSending({ messageId: msg1, appId: "app-alpha", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, appId: "app-alpha", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg3, appId: "app-beta", workflowName: "Pharaoh", brandId: "b2", campaignId: "c2" });
-
-    await insertTestDelivery(msg1);
-    await insertTestOpening(msg1);
-
-    // Without appId — all 3 sendings
-    const global = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
-
-    expect(global.body.workflows[0].emailsSent).toBe(3);
-
-    // With appId=app-alpha — only 2 sendings
-    const filtered = await request(app)
-      .get("/performance/leaderboard?appId=app-alpha")
-      .set(getAuthHeaders());
-
-    expect(filtered.status).toBe(200);
-    expect(filtered.body.workflows).toHaveLength(1);
-    expect(filtered.body.workflows[0].emailsSent).toBe(2);
-    expect(filtered.body.workflows[0].emailsDelivered).toBe(1);
-    expect(filtered.body.workflows[0].emailsOpened).toBe(1);
-  });
-
-  it("should return empty when appId matches no sendings", async () => {
-    await insertTestSending({ messageId: randomUUID(), appId: "app-alpha", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
-
-    const response = await request(app)
-      .get("/performance/leaderboard?appId=nonexistent")
-      .set(getAuthHeaders());
-
-    expect(response.status).toBe(200);
-    expect(response.body.workflows).toEqual([]);
-  });
-
   it("should aggregate across multiple orgs for the same workflow", async () => {
     const msg1 = randomUUID();
     const msg2 = randomUUID();
     const msg3 = randomUUID();
 
-    await insertTestSending({ messageId: msg1, orgId: "org-X", workflowName: "Pharaoh", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, orgId: "org-Y", workflowName: "Pharaoh", brandId: "b2", appId: "a2", campaignId: "c2" });
-    await insertTestSending({ messageId: msg3, orgId: "org-Z", workflowName: "Pharaoh", brandId: "b3", appId: "a3", campaignId: "c3" });
+    await insertTestSending({ messageId: msg1, orgId: "org-X", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, orgId: "org-Y", workflowName: "Pharaoh", brandId: "b2", campaignId: "c2" });
+    await insertTestSending({ messageId: msg3, orgId: "org-Z", workflowName: "Pharaoh", brandId: "b3", campaignId: "c3" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);

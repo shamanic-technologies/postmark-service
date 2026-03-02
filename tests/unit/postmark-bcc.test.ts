@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock key-client before importing postmark-client
 vi.mock("../../src/lib/key-client", () => ({
-  getAppKey: vi.fn().mockResolvedValue({ provider: "postmark", key: "test-token" }),
+  getOrgKey: vi.fn().mockResolvedValue({ provider: "postmark", key: "test-token", keySource: "platform" }),
 }));
 
 // Mock the postmark SDK before importing the module
@@ -41,6 +41,8 @@ describe("postmark-client BCC behavior", () => {
       subject: "Test",
       textBody: "Hello",
       messageStream: "broadcast",
+      orgId: "test-org",
+      userId: "test-user",
     });
 
     expect(mockSendEmail).toHaveBeenCalledWith(
@@ -58,6 +60,8 @@ describe("postmark-client BCC behavior", () => {
       textBody: "Hello",
       messageStream: "broadcast",
       bcc: "other@test.com",
+      orgId: "test-org",
+      userId: "test-user",
     });
 
     expect(mockSendEmail).toHaveBeenCalledWith(

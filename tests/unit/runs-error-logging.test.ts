@@ -12,6 +12,16 @@ vi.mock("../../src/lib/postmark-client", () => ({
   sendEmail: vi.fn(),
 }));
 
+// Mock key-client
+vi.mock("../../src/lib/key-client", () => ({
+  getOrgKey: vi.fn().mockResolvedValue({
+    provider: "postmark",
+    key: "test-token",
+    keySource: "platform",
+  }),
+  getStreamId: vi.fn().mockResolvedValue("broadcast"),
+}));
+
 // Mock database
 vi.mock("../../src/db", () => ({
   db: {
@@ -52,10 +62,8 @@ describe("runs-service BLOCKING behavior", () => {
       .post("/send")
       .set(getAuthHeaders())
       .send({
-        orgId: "org_abc",
-        runId: "run_xyz",
+        parentRunId: "run_xyz",
         brandId: "brand_1",
-        appId: "app_1",
         campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
@@ -71,13 +79,12 @@ describe("runs-service BLOCKING behavior", () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("should pass orgId and appId to createRun", async () => {
+  it("should pass orgId from header to createRun", async () => {
     vi.mocked(createRun).mockResolvedValue({
       id: "run-1",
       parentRunId: "run_xyz",
       organizationId: "org-internal",
       userId: null,
-      appId: "app_1",
       brandId: "brand_1",
       campaignId: "campaign_1",
       serviceName: "postmark-service",
@@ -91,12 +98,10 @@ describe("runs-service BLOCKING behavior", () => {
 
     await request(app)
       .post("/send")
-      .set(getAuthHeaders())
+      .set(getAuthHeaders({ orgId: "org_abc", userId: "user_xyz" }))
       .send({
-        orgId: "org_abc",
-        runId: "run_xyz",
+        parentRunId: "run_xyz",
         brandId: "brand_1",
-        appId: "app_1",
         campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
@@ -106,22 +111,21 @@ describe("runs-service BLOCKING behavior", () => {
 
     expect(createRun).toHaveBeenCalledWith({
       orgId: "org_abc",
-      appId: "app_1",
       serviceName: "postmark-service",
       taskName: "email-send",
       parentRunId: "run_xyz",
+      userId: "user_xyz",
       brandId: "brand_1",
       campaignId: "campaign_1",
     });
   });
 
-  it("should default appId to mcpfactory when not provided", async () => {
+  it("should always create a run (orgId from header)", async () => {
     vi.mocked(createRun).mockResolvedValue({
       id: "run-1",
-      parentRunId: "run_xyz",
+      parentRunId: null,
       organizationId: "org-internal",
       userId: null,
-      appId: "mcpfactory",
       brandId: null,
       campaignId: null,
       serviceName: "postmark-service",
@@ -137,8 +141,6 @@ describe("runs-service BLOCKING behavior", () => {
       .post("/send")
       .set(getAuthHeaders())
       .send({
-        orgId: "org_abc",
-        runId: "run_xyz",
         from: "sender@test.com",
         to: "recipient@test.com",
         subject: "Test",
@@ -146,7 +148,7 @@ describe("runs-service BLOCKING behavior", () => {
       });
 
     expect(createRun).toHaveBeenCalledWith(
-      expect.objectContaining({ appId: "mcpfactory" })
+      expect.objectContaining({ orgId: "test-org-id" })
     );
   });
 
@@ -159,10 +161,8 @@ describe("runs-service BLOCKING behavior", () => {
       .post("/send")
       .set(getAuthHeaders())
       .send({
-        orgId: "org_abc",
-        runId: "run_xyz",
+        parentRunId: "run_xyz",
         brandId: "brand_1",
-        appId: "app_1",
         campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
