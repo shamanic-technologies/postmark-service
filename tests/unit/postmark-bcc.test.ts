@@ -40,6 +40,7 @@ describe("postmark-client BCC behavior", () => {
       to: "recipient@test.com",
       subject: "Test",
       textBody: "Hello",
+      messageStream: "broadcast",
     });
 
     expect(mockSendEmail).toHaveBeenCalledWith(
@@ -55,6 +56,7 @@ describe("postmark-client BCC behavior", () => {
       to: "recipient@test.com",
       subject: "Test",
       textBody: "Hello",
+      messageStream: "broadcast",
       bcc: "other@test.com",
     });
 

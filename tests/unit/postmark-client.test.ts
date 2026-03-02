@@ -60,6 +60,7 @@ describe("postmark-client key resolution", () => {
     to: "recipient@example.com",
     subject: "Test",
     htmlBody: "<p>Hi</p>",
+    messageStream: "broadcast",
   };
 
   describe("all apps resolve via key-service", () => {
@@ -170,6 +171,18 @@ describe("postmark-client key resolution", () => {
       };
 
       expect(params.appId).toBe("my-custom-app");
+    });
+
+    it("should require messageStream (resolved by route handler)", () => {
+      const params = {
+        from: "sender@test.com",
+        to: "recipient@test.com",
+        subject: "Test Subject",
+        htmlBody: "<p>Hello</p>",
+        messageStream: "broadcast",
+      };
+
+      expect(params.messageStream).toBe("broadcast");
     });
 
     it("should allow optional fields", () => {

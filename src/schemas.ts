@@ -46,10 +46,6 @@ export const SendEmailRequestSchema = z
     bcc: z.string().optional(),
     replyTo: z.string().optional(),
     tag: z.string().optional(),
-    messageStream: z
-      .string()
-      .optional()
-      .openapi({ description: "Postmark message stream (resolved from key-service when omitted)" }),
     headers: z.array(EmailHeaderSchema).optional(),
     metadata: z.record(z.string(), z.string()).optional(),
     trackOpens: z.boolean().optional().default(true),
@@ -99,7 +95,6 @@ export const BatchSendRequestSchema = z
           bcc: z.string().optional(),
           replyTo: z.string().optional(),
           tag: z.string().optional(),
-          messageStream: z.string().optional(),
           headers: z.array(EmailHeaderSchema).optional(),
           metadata: z.record(z.string(), z.string()).optional(),
           trackOpens: z.boolean().optional().default(true),

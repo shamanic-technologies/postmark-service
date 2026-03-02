@@ -67,7 +67,7 @@ describe("OpenAPI spec", () => {
     expect(schema.required).toContain("to");
     expect(schema.required).toContain("subject");
     expect(schema.properties.orgId.type).toBe("string");
-    expect(schema.properties.messageStream.default).toBe("broadcast");
+    expect(schema.properties).not.toHaveProperty("messageStream");
   });
 
   it("should include security scheme", () => {
