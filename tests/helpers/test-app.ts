@@ -40,9 +40,11 @@ export function createTestApp() {
 /**
  * Get auth headers for authenticated requests
  */
-export function getAuthHeaders() {
+export function getAuthHeaders(overrides?: { orgId?: string; userId?: string }) {
   return {
     "X-API-Key": process.env.POSTMARK_SERVICE_API_KEY || "test-secret-key",
     "Content-Type": "application/json",
+    "x-org-id": overrides?.orgId || "test-org-id",
+    "x-user-id": overrides?.userId || "test-user-id",
   };
 }

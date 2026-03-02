@@ -1,6 +1,6 @@
 /**
  * HTTP client for key-service
- * Fetches decrypted app keys for dynamic Postmark token resolution
+ * Fetches decrypted org/platform keys for dynamic Postmark token resolution
  */
 
 function getKeyServiceUrl(): string {
@@ -11,9 +11,10 @@ function getKeyServiceApiKey(): string {
   return process.env.KEY_SERVICE_API_KEY || "";
 }
 
-export interface DecryptedAppKey {
+export interface DecryptedKey {
   provider: string;
   key: string;
+  keySource: "platform" | "org";
 }
 
 export interface CallerContext {
@@ -21,14 +22,6 @@ export interface CallerContext {
   path: string;
 }
 
-/**
- * Fetch a decrypted app key from key-service
- * @param appId - The app identifier (e.g. "my-saas-app")
- * @param provider - The provider name (e.g. "postmark")
- * @param caller - The caller context (HTTP method + path of the originating endpoint)
- * @returns The decrypted key
- * @throws Error if key-service is unreachable or key not found
- */
 export type PostmarkStreamType = "broadcast" | "inbound" | "transactional";
 
 /**
@@ -36,21 +29,32 @@ export type PostmarkStreamType = "broadcast" | "inbound" | "transactional";
  * Providers: postmark-broadcast-stream, postmark-inbound-stream, postmark-transactional-stream
  */
 export async function getStreamId(
-  appId: string,
+  orgId: string,
+  userId: string,
   streamType: PostmarkStreamType,
   caller: CallerContext
 ): Promise<string> {
   const provider = `postmark-${streamType}-stream`;
-  const result = await getAppKey(appId, provider, caller);
+  const result = await getOrgKey(orgId, userId, provider, caller);
   return result.key;
 }
 
-export async function getAppKey(
-  appId: string,
+/**
+ * Fetch a decrypted key from key-service using org-based resolution
+ * @param orgId - The organization ID
+ * @param userId - The user ID (required for logging even if not used for resolution)
+ * @param provider - The provider name (e.g. "postmark")
+ * @param caller - The caller context (HTTP method + path of the originating endpoint)
+ * @returns The decrypted key with keySource
+ * @throws Error if key-service is unreachable or key not found
+ */
+export async function getOrgKey(
+  orgId: string,
+  userId: string,
   provider: string,
   caller: CallerContext
-): Promise<DecryptedAppKey> {
-  const url = `${getKeyServiceUrl()}/internal/app-keys/${encodeURIComponent(provider)}/decrypt?appId=${encodeURIComponent(appId)}`;
+): Promise<DecryptedKey> {
+  const url = `${getKeyServiceUrl()}/keys/${encodeURIComponent(provider)}/decrypt?orgId=${encodeURIComponent(orgId)}&userId=${encodeURIComponent(userId)}`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -66,13 +70,13 @@ export async function getAppKey(
     const errorText = await response.text();
     if (response.status === 404) {
       throw new Error(
-        `No Postmark key configured for appId "${appId}". Register it via key-service first.`
+        `No Postmark key configured for orgId "${orgId}". Register it via key-service first.`
       );
     }
     throw new Error(
-      `key-service GET /internal/app-keys/${provider}/decrypt failed: ${response.status} - ${errorText}`
+      `key-service GET /keys/${provider}/decrypt failed: ${response.status} - ${errorText}`
     );
   }
 
-  return response.json() as Promise<DecryptedAppKey>;
+  return response.json() as Promise<DecryptedKey>;
 }

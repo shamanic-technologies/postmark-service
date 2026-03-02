@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock key-client before importing postmark-client
 vi.mock("../../src/lib/key-client", () => ({
-  getAppKey: vi.fn(),
+  getOrgKey: vi.fn(),
 }));
 
 // Mock postmark SDK
@@ -18,8 +18,6 @@ vi.mock("postmark", () => {
     ServerClient: class MockServerClient {
       _token: string;
       sendEmail = mockSendEmail;
-      getOutboundMessageDetails = vi.fn();
-      getBounces = vi.fn();
       constructor(token: string) {
         this._token = token;
         MockServerClient._instances.push({ token });
@@ -33,10 +31,10 @@ vi.mock("postmark", () => {
 });
 
 import { sendEmail, clearClientCache } from "../../src/lib/postmark-client";
-import { getAppKey } from "../../src/lib/key-client";
+import { getOrgKey } from "../../src/lib/key-client";
 import { ServerClient } from "postmark";
 
-const mockedGetAppKey = vi.mocked(getAppKey);
+const mockedGetOrgKey = vi.mocked(getOrgKey);
 const MockedServerClient = ServerClient as any;
 
 function getCreatedTokens(): string[] {
@@ -49,9 +47,10 @@ describe("postmark-client key resolution", () => {
     vi.clearAllMocks();
     mockSendEmail.mockClear();
     MockedServerClient._instances = [];
-    mockedGetAppKey.mockResolvedValue({
+    mockedGetOrgKey.mockResolvedValue({
       provider: "postmark",
       key: "resolved-token",
+      keySource: "platform",
     });
   });
 
@@ -61,49 +60,35 @@ describe("postmark-client key resolution", () => {
     subject: "Test",
     htmlBody: "<p>Hi</p>",
     messageStream: "broadcast",
+    orgId: "test-org",
+    userId: "test-user",
   };
 
-  describe("all apps resolve via key-service", () => {
-    it("should fetch token from key-service for mcpfactory", async () => {
-      mockedGetAppKey.mockResolvedValue({
+  describe("all orgs resolve via key-service", () => {
+    it("should fetch token from key-service for an org", async () => {
+      mockedGetOrgKey.mockResolvedValue({
         provider: "postmark",
-        key: "mcpfactory-token-from-key-service",
+        key: "org-token-from-key-service",
+        keySource: "platform",
       });
 
-      await sendEmail({ ...baseSendParams, appId: "mcpfactory" });
+      await sendEmail({ ...baseSendParams, orgId: "org-1", userId: "user-1" });
 
-      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", expect.any(Object));
-      expect(getCreatedTokens()).toEqual(["mcpfactory-token-from-key-service"]);
+      expect(mockedGetOrgKey).toHaveBeenCalledWith("org-1", "user-1", "postmark", expect.any(Object));
+      expect(getCreatedTokens()).toEqual(["org-token-from-key-service"]);
     });
 
-    it("should fetch token from key-service for pressbeat", async () => {
-      mockedGetAppKey.mockResolvedValue({
+    it("should fetch token from key-service for a different org", async () => {
+      mockedGetOrgKey.mockResolvedValue({
         provider: "postmark",
-        key: "pressbeat-token-from-key-service",
+        key: "other-org-token",
+        keySource: "org",
       });
 
-      await sendEmail({ ...baseSendParams, appId: "pressbeat" });
+      await sendEmail({ ...baseSendParams, orgId: "org-2", userId: "user-2" });
 
-      expect(mockedGetAppKey).toHaveBeenCalledWith("pressbeat", "postmark", expect.any(Object));
-      expect(getCreatedTokens()).toEqual(["pressbeat-token-from-key-service"]);
-    });
-
-    it("should default to mcpfactory when no appId provided", async () => {
-      await sendEmail(baseSendParams);
-
-      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", expect.any(Object));
-    });
-
-    it("should fetch token from key-service for any custom appId", async () => {
-      mockedGetAppKey.mockResolvedValue({
-        provider: "postmark",
-        key: "dynamic-token",
-      });
-
-      await sendEmail({ ...baseSendParams, appId: "my-saas-app" });
-
-      expect(mockedGetAppKey).toHaveBeenCalledWith("my-saas-app", "postmark", expect.any(Object));
-      expect(getCreatedTokens()).toEqual(["dynamic-token"]);
+      expect(mockedGetOrgKey).toHaveBeenCalledWith("org-2", "user-2", "postmark", expect.any(Object));
+      expect(getCreatedTokens()).toEqual(["other-org-token"]);
     });
   });
 
@@ -112,65 +97,69 @@ describe("postmark-client key resolution", () => {
       const caller = { method: "POST", path: "/send" };
       await sendEmail({ ...baseSendParams, caller });
 
-      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", caller);
+      expect(mockedGetOrgKey).toHaveBeenCalledWith("test-org", "test-user", "postmark", caller);
     });
 
     it("should default caller to POST /send when not provided", async () => {
       await sendEmail(baseSendParams);
 
-      expect(mockedGetAppKey).toHaveBeenCalledWith("mcpfactory", "postmark", { method: "POST", path: "/send" });
+      expect(mockedGetOrgKey).toHaveBeenCalledWith("test-org", "test-user", "postmark", { method: "POST", path: "/send" });
     });
   });
 
   describe("error handling", () => {
     it("should propagate key-service 404 error", async () => {
-      mockedGetAppKey.mockRejectedValue(
-        new Error('No Postmark key configured for appId "unknown-app". Register it via key-service first.')
+      mockedGetOrgKey.mockRejectedValue(
+        new Error('No Postmark key configured for orgId "unknown-org". Register it via key-service first.')
       );
 
       await expect(
-        sendEmail({ ...baseSendParams, appId: "unknown-app" })
+        sendEmail({ ...baseSendParams, orgId: "unknown-org" })
       ).rejects.toThrow(
-        'No Postmark key configured for appId "unknown-app"'
+        'No Postmark key configured for orgId "unknown-org"'
       );
     });
 
     it("should propagate key-service connection errors", async () => {
-      mockedGetAppKey.mockRejectedValue(
-        new Error("key-service GET /internal/app-keys/postmark/decrypt failed: 500 - Internal server error")
+      mockedGetOrgKey.mockRejectedValue(
+        new Error("key-service GET /keys/postmark/decrypt failed: 500 - Internal server error")
       );
 
       await expect(
-        sendEmail({ ...baseSendParams, appId: "my-app" })
+        sendEmail(baseSendParams)
       ).rejects.toThrow("key-service GET");
     });
   });
 
   describe("caching", () => {
     it("should cache the client after first key-service call", async () => {
-      mockedGetAppKey.mockResolvedValue({
+      mockedGetOrgKey.mockResolvedValue({
         provider: "postmark",
         key: "cached-token",
+        keySource: "platform",
       });
 
-      await sendEmail({ ...baseSendParams, appId: "cached-app" });
-      await sendEmail({ ...baseSendParams, appId: "cached-app" });
+      await sendEmail({ ...baseSendParams, orgId: "cached-org" });
+      await sendEmail({ ...baseSendParams, orgId: "cached-org" });
 
-      expect(mockedGetAppKey).toHaveBeenCalledTimes(1);
+      expect(mockedGetOrgKey).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("SendEmailParams interface", () => {
-    it("should accept appId as a string", () => {
+    it("should accept orgId and userId", () => {
       const params = {
         from: "sender@test.com",
         to: "recipient@test.com",
         subject: "Test Subject",
         htmlBody: "<p>Hello</p>",
-        appId: "my-custom-app",
+        messageStream: "broadcast",
+        orgId: "my-org",
+        userId: "my-user",
       };
 
-      expect(params.appId).toBe("my-custom-app");
+      expect(params.orgId).toBe("my-org");
+      expect(params.userId).toBe("my-user");
     });
 
     it("should require messageStream (resolved by route handler)", () => {
@@ -180,6 +169,8 @@ describe("postmark-client key resolution", () => {
         subject: "Test Subject",
         htmlBody: "<p>Hello</p>",
         messageStream: "broadcast",
+        orgId: "my-org",
+        userId: "my-user",
       };
 
       expect(params.messageStream).toBe("broadcast");
@@ -199,6 +190,8 @@ describe("postmark-client key resolution", () => {
         metadata: { key: "value" },
         trackOpens: true,
         trackLinks: "HtmlAndText" as const,
+        orgId: "my-org",
+        userId: "my-user",
       };
 
       expect(params.replyTo).toBe("reply@test.com");

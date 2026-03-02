@@ -29,11 +29,8 @@ const EmailHeaderSchema = z.object({
 
 export const SendEmailRequestSchema = z
   .object({
-    orgId: z.string().optional().openapi({ description: "Organization ID (optional for admin/lifecycle emails)" }),
-    userId: z.string().optional().openapi({ description: "User ID (forwarded to runs-service for attribution)" }),
-    runId: z.string().openapi({ description: "Parent run ID" }),
+    parentRunId: z.string().optional().openapi({ description: "Parent run ID from caller" }),
     brandId: z.string().optional().openapi({ description: "Brand ID" }),
-    appId: z.string().optional().openapi({ description: "App ID" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     workflowName: z.string().optional().openapi({ description: "Workflow name for tracking/grouping" }),
     leadId: z.string().optional().openapi({ description: "Lead ID for tracking and dedup" }),
@@ -78,11 +75,8 @@ export const BatchSendRequestSchema = z
     emails: z
       .array(
         z.object({
-          orgId: z.string().optional(),
-          userId: z.string().optional(),
-          runId: z.string(),
+          parentRunId: z.string().optional(),
           brandId: z.string().optional(),
-          appId: z.string().optional(),
           campaignId: z.string().optional(),
           workflowName: z.string().optional(),
           leadId: z.string().optional(),
@@ -286,7 +280,6 @@ export const StatsRequestSchema = z
     runIds: z.array(z.string()).optional().openapi({ description: "Filter by run IDs" }),
     orgId: z.string().optional().openapi({ description: "Filter by organization ID" }),
     brandId: z.string().optional().openapi({ description: "Filter by brand ID" }),
-    appId: z.string().optional().openapi({ description: "Filter by app ID" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
     workflowName: z.string().optional().openapi({ description: "Filter by workflow name" }),
     groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
@@ -585,7 +578,7 @@ registry.registerPath({
   path: "/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, appId, campaignId, and/or workflowName. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowName. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
@@ -616,14 +609,9 @@ registry.registerPath({
   path: "/performance/leaderboard",
   summary: "Workflow performance leaderboard",
   description:
-    "Returns workflow performance stats. Global by default — auth headers are never used for filtering. Pass ?appId=xxx to filter by app.",
+    "Returns global workflow performance stats. Requires x-org-id and x-user-id headers.",
   tags: ["Performance"],
   security: [{ apiKey: [] }],
-  request: {
-    query: z.object({
-      appId: z.string().optional().openapi({ description: "Filter by application ID (omit for global)" }),
-    }),
-  },
   responses: {
     200: {
       description: "Workflow leaderboard",

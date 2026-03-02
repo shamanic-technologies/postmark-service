@@ -36,14 +36,41 @@ describe("Authentication", () => {
       expect(response.body.error).toBe("Invalid API key");
     });
 
-    it("should accept requests with valid X-API-Key", async () => {
+    it("should accept requests with valid X-API-Key and identity headers", async () => {
       const response = await request(app)
         .get("/status/by-org/test-org")
         .set(getAuthHeaders());
 
-      // Should not be 401 or 403 (may be 200 or 404 depending on data)
+      // Should not be 401, 403, or 400 (may be 200 or 404 depending on data)
       expect(response.status).not.toBe(401);
       expect(response.status).not.toBe(403);
+      expect(response.status).not.toBe(400);
+    });
+  });
+
+  describe("Identity headers", () => {
+    it("should reject requests without x-org-id header", async () => {
+      const response = await request(app)
+        .get("/status/by-org/test-org")
+        .set({
+          "X-API-Key": process.env.POSTMARK_SERVICE_API_KEY || "test-secret-key",
+          "x-user-id": "test-user-id",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Missing required header: x-org-id");
+    });
+
+    it("should reject requests without x-user-id header", async () => {
+      const response = await request(app)
+        .get("/status/by-org/test-org")
+        .set({
+          "X-API-Key": process.env.POSTMARK_SERVICE_API_KEY || "test-secret-key",
+          "x-org-id": "test-org-id",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Missing required header: x-user-id");
     });
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getAppKey, getStreamId } from "../../src/lib/key-client";
+import { getOrgKey, getStreamId } from "../../src/lib/key-client";
 
 describe("key-client", () => {
   const originalFetch = globalThis.fetch;
@@ -16,17 +16,17 @@ describe("key-client", () => {
     delete process.env.KEY_SERVICE_API_KEY;
   });
 
-  it("should fetch a decrypted app key from key-service", async () => {
+  it("should fetch a decrypted org key from key-service", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ provider: "postmark", key: "pm-token-123" }),
+      json: () => Promise.resolve({ provider: "postmark", key: "pm-token-123", keySource: "platform" }),
     });
 
-    const result = await getAppKey("my-app", "postmark", defaultCaller);
+    const result = await getOrgKey("org-1", "user-1", "postmark", defaultCaller);
 
-    expect(result).toEqual({ provider: "postmark", key: "pm-token-123" });
+    expect(result).toEqual({ provider: "postmark", key: "pm-token-123", keySource: "platform" });
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/internal/app-keys/postmark/decrypt?appId=my-app",
+      "http://key-service:3001/keys/postmark/decrypt?orgId=org-1&userId=user-1",
       {
         method: "GET",
         headers: {
@@ -42,10 +42,10 @@ describe("key-client", () => {
   it("should send caller headers from the originating endpoint", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ provider: "postmark", key: "token" }),
+      json: () => Promise.resolve({ provider: "postmark", key: "token", keySource: "org" }),
     });
 
-    await getAppKey("my-app", "postmark", { method: "POST", path: "/send/batch" });
+    await getOrgKey("org-1", "user-1", "postmark", { method: "POST", path: "/send/batch" });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.any(String),
@@ -66,8 +66,8 @@ describe("key-client", () => {
       text: () => Promise.resolve("Not found"),
     });
 
-    await expect(getAppKey("unknown-app", "postmark", defaultCaller)).rejects.toThrow(
-      'No Postmark key configured for appId "unknown-app". Register it via key-service first.'
+    await expect(getOrgKey("unknown-org", "user-1", "postmark", defaultCaller)).rejects.toThrow(
+      'No Postmark key configured for orgId "unknown-org". Register it via key-service first.'
     );
   });
 
@@ -78,23 +78,33 @@ describe("key-client", () => {
       text: () => Promise.resolve("Internal server error"),
     });
 
-    await expect(getAppKey("my-app", "postmark", defaultCaller)).rejects.toThrow(
-      "key-service GET /internal/app-keys/postmark/decrypt failed: 500 - Internal server error"
+    await expect(getOrgKey("org-1", "user-1", "postmark", defaultCaller)).rejects.toThrow(
+      "key-service GET /keys/postmark/decrypt failed: 500 - Internal server error"
     );
   });
 
-  it("should URL-encode appId and provider", async () => {
+  it("should URL-encode orgId, userId, and provider", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ provider: "postmark", key: "token" }),
+      json: () => Promise.resolve({ provider: "postmark", key: "token", keySource: "platform" }),
     });
 
-    await getAppKey("app with spaces", "post/mark", defaultCaller);
+    await getOrgKey("org with spaces", "user/slash", "post/mark", defaultCaller);
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/internal/app-keys/post%2Fmark/decrypt?appId=app%20with%20spaces",
+      "http://key-service:3001/keys/post%2Fmark/decrypt?orgId=org%20with%20spaces&userId=user%2Fslash",
       expect.any(Object)
     );
+  });
+
+  it("should return keySource from key-service response", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ provider: "postmark", key: "token", keySource: "org" }),
+    });
+
+    const result = await getOrgKey("org-1", "user-1", "postmark", defaultCaller);
+    expect(result.keySource).toBe("org");
   });
 });
 
@@ -116,14 +126,14 @@ describe("getStreamId", () => {
   it("should resolve broadcast stream ID from key-service", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ provider: "postmark-broadcast-stream", key: "broadcast" }),
+      json: () => Promise.resolve({ provider: "postmark-broadcast-stream", key: "broadcast", keySource: "platform" }),
     });
 
-    const streamId = await getStreamId("my-app", "broadcast", defaultCaller);
+    const streamId = await getStreamId("org-1", "user-1", "broadcast", defaultCaller);
 
     expect(streamId).toBe("broadcast");
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/internal/app-keys/postmark-broadcast-stream/decrypt?appId=my-app",
+      "http://key-service:3001/keys/postmark-broadcast-stream/decrypt?orgId=org-1&userId=user-1",
       expect.any(Object)
     );
   });
@@ -131,14 +141,14 @@ describe("getStreamId", () => {
   it("should resolve transactional stream ID from key-service", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ provider: "postmark-transactional-stream", key: "outbound" }),
+      json: () => Promise.resolve({ provider: "postmark-transactional-stream", key: "outbound", keySource: "platform" }),
     });
 
-    const streamId = await getStreamId("my-app", "transactional", defaultCaller);
+    const streamId = await getStreamId("org-1", "user-1", "transactional", defaultCaller);
 
     expect(streamId).toBe("outbound");
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/internal/app-keys/postmark-transactional-stream/decrypt?appId=my-app",
+      "http://key-service:3001/keys/postmark-transactional-stream/decrypt?orgId=org-1&userId=user-1",
       expect.any(Object)
     );
   });
@@ -146,14 +156,14 @@ describe("getStreamId", () => {
   it("should resolve inbound stream ID from key-service", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ provider: "postmark-inbound-stream", key: "inbound" }),
+      json: () => Promise.resolve({ provider: "postmark-inbound-stream", key: "inbound", keySource: "platform" }),
     });
 
-    const streamId = await getStreamId("my-app", "inbound", defaultCaller);
+    const streamId = await getStreamId("org-1", "user-1", "inbound", defaultCaller);
 
     expect(streamId).toBe("inbound");
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/internal/app-keys/postmark-inbound-stream/decrypt?appId=my-app",
+      "http://key-service:3001/keys/postmark-inbound-stream/decrypt?orgId=org-1&userId=user-1",
       expect.any(Object)
     );
   });
@@ -165,8 +175,8 @@ describe("getStreamId", () => {
       text: () => Promise.resolve("Not found"),
     });
 
-    await expect(getStreamId("unknown-app", "broadcast", defaultCaller)).rejects.toThrow(
-      'No Postmark key configured for appId "unknown-app"'
+    await expect(getStreamId("unknown-org", "user-1", "broadcast", defaultCaller)).rejects.toThrow(
+      'No Postmark key configured for orgId "unknown-org"'
     );
   });
 });

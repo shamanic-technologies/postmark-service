@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
-import { getStreamId } from "../lib/key-client";
+import { getOrgKey, getStreamId } from "../lib/key-client";
 import {
   createRun,
   updateRun,
@@ -15,7 +15,7 @@ const router = Router();
 /**
  * POST /send
  * Send an email via Postmark and record it in the database
- * BLOCKING: runs-service must succeed before email is sent (when orgId provided)
+ * BLOCKING: runs-service must succeed before email is sent
  */
 router.post("/send", async (req: Request, res: Response) => {
   const parsed = SendEmailRequestSchema.safeParse(req.body);
@@ -27,32 +27,32 @@ router.post("/send", async (req: Request, res: Response) => {
   }
 
   const body = parsed.data;
+  const orgId = req.headers["x-org-id"] as string;
+  const userId = req.headers["x-user-id"] as string;
 
   try {
-    // 1. Create run in runs-service if orgId provided (BLOCKING)
-    let sendRunId: string | undefined;
-    if (body.orgId) {
-      const sendRun = await createRun({
-        orgId: body.orgId,
-        appId: body.appId || "mcpfactory",
-        serviceName: "postmark-service",
-        taskName: "email-send",
-        parentRunId: body.runId,
-        userId: body.userId,
-        brandId: body.brandId,
-        campaignId: body.campaignId,
-        workflowName: body.workflowName,
-      });
-      sendRunId = sendRun.id;
-    }
+    // 1. Resolve key from key-service (get keySource for cost tracking)
+    const caller = { method: "POST" as const, path: "/send" };
+    const decryptedKey = await getOrgKey(orgId, userId, "postmark", caller);
+
+    // 2. Resolve message stream from key-service
+    const messageStream = await getStreamId(orgId, userId, "broadcast", caller);
+
+    // 3. Create run in runs-service (BLOCKING)
+    const sendRun = await createRun({
+      orgId,
+      serviceName: "postmark-service",
+      taskName: "email-send",
+      parentRunId: body.parentRunId,
+      userId,
+      brandId: body.brandId,
+      campaignId: body.campaignId,
+      workflowName: body.workflowName,
+    });
+    const sendRunId = sendRun.id;
 
     try {
-      // 2. Resolve message stream from key-service
-      const caller = { method: "POST" as const, path: "/send" };
-      const resolvedAppId = body.appId || "mcpfactory";
-      const messageStream = await getStreamId(resolvedAppId, "broadcast", caller);
-
-      // 3. Send email via Postmark
+      // 4. Send email via Postmark
       const sendParams: SendEmailParams = {
         from: body.from,
         to: body.to,
@@ -68,13 +68,14 @@ router.post("/send", async (req: Request, res: Response) => {
         metadata: body.metadata,
         trackOpens: body.trackOpens,
         trackLinks: body.trackLinks,
-        appId: body.appId,
+        orgId,
+        userId,
         caller,
       };
 
       const result = await sendEmail(sendParams);
 
-      // 4. Record in database
+      // 5. Record in database
       const [sending] = await db
         .insert(postmarkSendings)
         .values({
@@ -87,11 +88,10 @@ router.post("/send", async (req: Request, res: Response) => {
           errorCode: result.errorCode,
           message: result.message,
           submittedAt: result.submittedAt,
-          orgId: body.orgId,
-          userId: body.userId,
+          orgId,
+          userId,
           runId: sendRunId,
           brandId: body.brandId,
-          appId: body.appId,
           campaignId: body.campaignId,
           workflowName: body.workflowName,
           leadId: body.leadId,
@@ -99,14 +99,12 @@ router.post("/send", async (req: Request, res: Response) => {
         })
         .returning();
 
-      // 5. Log costs and complete run
+      // 6. Log costs and complete run
       if (result.success) {
-        if (sendRunId) {
-          await addCosts(sendRunId, [
-            { costName: "postmark-email-send", quantity: 1 },
-          ]);
-          await updateRun(sendRunId, "completed");
-        }
+        await addCosts(sendRunId, [
+          { costName: "postmark-email-send", quantity: 1, costSource: decryptedKey.keySource },
+        ]);
+        await updateRun(sendRunId, "completed");
 
         res.status(200).json({
           success: true,
@@ -115,9 +113,7 @@ router.post("/send", async (req: Request, res: Response) => {
           sendingId: sending.id,
         });
       } else {
-        if (sendRunId) {
-          await updateRun(sendRunId, "failed", result.message);
-        }
+        await updateRun(sendRunId, "failed", result.message);
 
         res.status(400).json({
           success: false,
@@ -128,9 +124,7 @@ router.post("/send", async (req: Request, res: Response) => {
       }
     } catch (error: any) {
       // Email send or DB failed — mark run as failed
-      if (sendRunId) {
-        await updateRun(sendRunId, "failed", error.message);
-      }
+      await updateRun(sendRunId, "failed", error.message);
       throw error;
     }
   } catch (error: any) {
@@ -147,7 +141,7 @@ router.post("/send", async (req: Request, res: Response) => {
 /**
  * POST /send/batch
  * Send multiple emails in a batch
- * BLOCKING: runs-service must succeed before each email is sent (when orgId provided)
+ * BLOCKING: runs-service must succeed before each email is sent
  */
 router.post("/send/batch", async (req: Request, res: Response) => {
   const parsed = BatchSendRequestSchema.safeParse(req.body);
@@ -159,34 +153,46 @@ router.post("/send/batch", async (req: Request, res: Response) => {
   }
 
   const { emails } = parsed.data;
+  const orgId = req.headers["x-org-id"] as string;
+  const userId = req.headers["x-user-id"] as string;
   const results = [];
+
+  // Resolve key and stream once for the batch (same org for all emails)
+  let keySource: "platform" | "org";
+  let messageStream: string;
+  try {
+    const batchCaller = { method: "POST" as const, path: "/send/batch" };
+    const decryptedKey = await getOrgKey(orgId, userId, "postmark", batchCaller);
+    keySource = decryptedKey.keySource;
+    messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller);
+  } catch (error: any) {
+    console.error(
+      `[send/batch] Failed to resolve keys — error="${error.message}"`
+    );
+    return res.status(500).json({
+      error: "Failed to resolve Postmark keys",
+      details: error.message,
+    });
+  }
 
   for (const email of emails) {
     try {
-      // 1. Create run in runs-service if orgId provided (BLOCKING)
-      let sendRunId: string | undefined;
-      if (email.orgId) {
-        const sendRun = await createRun({
-          orgId: email.orgId,
-          appId: email.appId || "mcpfactory",
-          serviceName: "postmark-service",
-          taskName: "email-send",
-          parentRunId: email.runId,
-          userId: email.userId,
-          brandId: email.brandId,
-          campaignId: email.campaignId,
-          workflowName: email.workflowName,
-        });
-        sendRunId = sendRun.id;
-      }
+      // 1. Create run in runs-service (BLOCKING)
+      const sendRun = await createRun({
+        orgId,
+        serviceName: "postmark-service",
+        taskName: "email-send",
+        parentRunId: email.parentRunId,
+        userId,
+        brandId: email.brandId,
+        campaignId: email.campaignId,
+        workflowName: email.workflowName,
+      });
+      const sendRunId = sendRun.id;
 
       try {
-        // 2. Resolve message stream from key-service
+        // 2. Send email via Postmark
         const batchCaller = { method: "POST" as const, path: "/send/batch" };
-        const resolvedAppId = email.appId || "mcpfactory";
-        const messageStream = await getStreamId(resolvedAppId, "broadcast", batchCaller);
-
-        // 3. Send email via Postmark
         const sendParams: SendEmailParams = {
           from: email.from,
           to: email.to,
@@ -202,13 +208,14 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           metadata: email.metadata,
           trackOpens: email.trackOpens,
           trackLinks: email.trackLinks,
-          appId: email.appId,
+          orgId,
+          userId,
           caller: batchCaller,
         };
 
         const result = await sendEmail(sendParams);
 
-        // 4. Record in database
+        // 3. Record in database
         const [sending] = await db
           .insert(postmarkSendings)
           .values({
@@ -221,11 +228,10 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             errorCode: result.errorCode,
             message: result.message,
             submittedAt: result.submittedAt,
-            orgId: email.orgId,
-            userId: email.userId,
+            orgId,
+            userId,
             runId: sendRunId,
             brandId: email.brandId,
-            appId: email.appId,
             campaignId: email.campaignId,
             workflowName: email.workflowName,
             leadId: email.leadId,
@@ -233,18 +239,14 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           })
           .returning();
 
-        // 5. Log costs and complete run
+        // 4. Log costs and complete run
         if (result.success) {
-          if (sendRunId) {
-            await addCosts(sendRunId, [
-              { costName: "postmark-email-send", quantity: 1 },
-            ]);
-            await updateRun(sendRunId, "completed");
-          }
+          await addCosts(sendRunId, [
+            { costName: "postmark-email-send", quantity: 1, costSource: keySource },
+          ]);
+          await updateRun(sendRunId, "completed");
         } else {
-          if (sendRunId) {
-            await updateRun(sendRunId, "failed", result.message);
-          }
+          await updateRun(sendRunId, "failed", result.message);
         }
 
         results.push({
@@ -257,9 +259,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         });
       } catch (error: any) {
         // Email send or DB failed — mark run as failed
-        if (sendRunId) {
-          await updateRun(sendRunId, "failed", error.message);
-        }
+        await updateRun(sendRunId, "failed", error.message);
         throw error;
       }
     } catch (error: any) {

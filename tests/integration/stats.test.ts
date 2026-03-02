@@ -24,8 +24,8 @@ describe("POST /stats", () => {
   });
 
   it("should return global stats when no filters provided", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-2", appId: "a2", campaignId: "c2" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-2", campaignId: "c2" });
 
     const response = await request(app)
       .post("/stats")
@@ -37,8 +37,8 @@ describe("POST /stats", () => {
   });
 
   it("should return grouped global stats when only groupBy is provided", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-global-a" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-global-b" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-global-a" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-global-b" });
 
     const response = await request(app)
       .post("/stats")
@@ -55,8 +55,8 @@ describe("POST /stats", () => {
 
   it("should filter by runIds (backward compat)", async () => {
     const runId = "run-stats-1";
-    await insertTestSending({ messageId: randomUUID(), runId, brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), runId: "other-run", brandId: "b2", appId: "a2", campaignId: "c2" });
+    await insertTestSending({ messageId: randomUUID(), runId, brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), runId: "other-run", brandId: "b2", campaignId: "c2" });
 
     const response = await request(app)
       .post("/stats")
@@ -68,8 +68,8 @@ describe("POST /stats", () => {
   });
 
   it("should filter by orgId", async () => {
-    await insertTestSending({ messageId: randomUUID(), orgId: "org-abc", brandId: "b1", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: "org-other", brandId: "b2", appId: "a2", campaignId: "c2" });
+    await insertTestSending({ messageId: randomUUID(), orgId: "org-abc", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: "org-other", brandId: "b2", campaignId: "c2" });
 
     const response = await request(app)
       .post("/stats")
@@ -81,8 +81,8 @@ describe("POST /stats", () => {
   });
 
   it("should filter by brandId", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-x", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-y", appId: "a2", campaignId: "c2" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "brand-x", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "brand-y", campaignId: "c2" });
 
     const response = await request(app)
       .post("/stats")
@@ -93,22 +93,9 @@ describe("POST /stats", () => {
     expect(response.body.stats.emailsSent).toBe(1);
   });
 
-  it("should filter by appId", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "app-1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b2", appId: "app-2", campaignId: "c2" });
-
-    const response = await request(app)
-      .post("/stats")
-      .set(getAuthHeaders())
-      .send({ appId: "app-1" });
-
-    expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
-  });
-
   it("should filter by campaignId", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "camp-1" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b2", appId: "a2", campaignId: "camp-2" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "camp-1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b2", campaignId: "camp-2" });
 
     const response = await request(app)
       .post("/stats")
@@ -120,9 +107,9 @@ describe("POST /stats", () => {
   });
 
   it("should AND multiple filters together", async () => {
-    await insertTestSending({ messageId: randomUUID(), orgId: "org-1", brandId: "brand-a", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: "org-1", brandId: "brand-b", appId: "a2", campaignId: "c2" });
-    await insertTestSending({ messageId: randomUUID(), orgId: "org-2", brandId: "brand-a", appId: "a3", campaignId: "c3" });
+    await insertTestSending({ messageId: randomUUID(), orgId: "org-1", brandId: "brand-a", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: "org-1", brandId: "brand-b", campaignId: "c2" });
+    await insertTestSending({ messageId: randomUUID(), orgId: "org-2", brandId: "brand-a", campaignId: "c3" });
 
     const response = await request(app)
       .post("/stats")
@@ -135,7 +122,7 @@ describe("POST /stats", () => {
 
   it("should include emailsDelivered in response", async () => {
     const msgId = randomUUID();
-    await insertTestSending({ messageId: msgId, brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msgId, brandId: "b1", campaignId: "c1" });
     await insertTestDelivery(msgId);
 
     const response = await request(app)
@@ -153,9 +140,9 @@ describe("POST /stats", () => {
     const msg3 = randomUUID();
     const brand = "brand-full-test";
 
-    await insertTestSending({ messageId: msg1, brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg3, brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg1, brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, brandId: brand, campaignId: "c1" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);
@@ -176,7 +163,7 @@ describe("POST /stats", () => {
   });
 
   it("should return hardcoded 0 for reply metrics", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" });
 
     const response = await request(app)
       .post("/stats")
@@ -209,9 +196,9 @@ describe("POST /stats", () => {
 
   it("should include recipients count in flat response", async () => {
     const brand = "brand-recipients";
-    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, campaignId: "c1" });
 
     const response = await request(app)
       .post("/stats")
@@ -224,9 +211,9 @@ describe("POST /stats", () => {
   });
 
   it("should filter by workflowName", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-alpha" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-beta" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-alpha" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-alpha" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-beta" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-alpha" });
 
     const response = await request(app)
       .post("/stats")
@@ -238,7 +225,7 @@ describe("POST /stats", () => {
   });
 
   it("should accept workflowName as the sole filter", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-solo" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-solo" });
 
     const response = await request(app)
       .post("/stats")
@@ -257,9 +244,9 @@ describe("POST /stats", () => {
     const msg2 = randomUUID();
     const msg3 = randomUUID();
 
-    await insertTestSending({ messageId: msg1, brandId: brand, appId: "a1", campaignId: "camp-a" });
-    await insertTestSending({ messageId: msg2, brandId: brand, appId: "a1", campaignId: "camp-a" });
-    await insertTestSending({ messageId: msg3, brandId: brand, appId: "a1", campaignId: "camp-b" });
+    await insertTestSending({ messageId: msg1, brandId: brand, campaignId: "camp-a" });
+    await insertTestSending({ messageId: msg2, brandId: brand, campaignId: "camp-a" });
+    await insertTestSending({ messageId: msg3, brandId: brand, campaignId: "camp-b" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);
@@ -289,9 +276,9 @@ describe("POST /stats", () => {
 
   it("should group by brandId", async () => {
     const org = "org-group-brand";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-x", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-x", appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-y", appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-x", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-x", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-y", campaignId: "c1" });
 
     const response = await request(app)
       .post("/stats")
@@ -309,9 +296,9 @@ describe("POST /stats", () => {
 
   it("should group by workflowName", async () => {
     const org = "org-group-wf";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-2" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-2" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-1" });
 
     const response = await request(app)
       .post("/stats")
@@ -329,9 +316,9 @@ describe("POST /stats", () => {
 
   it("should group by leadEmail", async () => {
     const brand = "brand-group-lead";
-    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, campaignId: "c1" });
 
     const response = await request(app)
       .post("/stats")
@@ -350,9 +337,9 @@ describe("POST /stats", () => {
 
   it("should include recipients per group", async () => {
     const brand = "brand-group-recip";
-    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: brand, appId: "a1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, appId: "a1", campaignId: "c2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: brand, campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, campaignId: "c2" });
 
     const response = await request(app)
       .post("/stats")
@@ -368,8 +355,8 @@ describe("POST /stats", () => {
 
   it("should handle null group keys", async () => {
     const org = "org-null-wf";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1", workflowName: "wf-1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", appId: "a1", campaignId: "c1" }); // no workflowName
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1" }); // no workflowName
 
     const response = await request(app)
       .post("/stats")
