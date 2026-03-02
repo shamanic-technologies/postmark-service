@@ -71,7 +71,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     TextBody: params.textBody,
     ReplyTo: params.replyTo,
     Tag: params.tag,
-    MessageStream: params.messageStream || "broadcast",
+    MessageStream: params.messageStream,
     Headers: params.headers?.map(h => ({ Name: h.name, Value: h.value })),
     Metadata: params.metadata,
     TrackOpens: params.trackOpens ?? true,

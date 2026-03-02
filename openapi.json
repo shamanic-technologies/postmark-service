@@ -177,8 +177,7 @@
           },
           "messageStream": {
             "type": "string",
-            "default": "broadcast",
-            "description": "Postmark message stream"
+            "description": "Postmark message stream (resolved from key-service when omitted)"
           },
           "headers": {
             "type": "array",
@@ -338,8 +337,7 @@
                   "type": "string"
                 },
                 "messageStream": {
-                  "type": "string",
-                  "default": "broadcast"
+                  "type": "string"
                 },
                 "headers": {
                   "type": "array",
