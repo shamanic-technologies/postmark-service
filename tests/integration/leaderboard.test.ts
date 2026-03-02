@@ -161,6 +161,48 @@ describe("GET /performance/leaderboard", () => {
     expect(wf.bounceRate).toBe(0.25);     // 1/4
   });
 
+  it("should filter by appId query param when provided", async () => {
+    const msg1 = randomUUID();
+    const msg2 = randomUUID();
+    const msg3 = randomUUID();
+
+    await insertTestSending({ messageId: msg1, appId: "app-alpha", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, appId: "app-alpha", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, appId: "app-beta", workflowName: "Pharaoh", brandId: "b2", campaignId: "c2" });
+
+    await insertTestDelivery(msg1);
+    await insertTestOpening(msg1);
+
+    // Without appId — all 3 sendings
+    const global = await request(app)
+      .get("/performance/leaderboard")
+      .set(getAuthHeaders());
+
+    expect(global.body.workflows[0].emailsSent).toBe(3);
+
+    // With appId=app-alpha — only 2 sendings
+    const filtered = await request(app)
+      .get("/performance/leaderboard?appId=app-alpha")
+      .set(getAuthHeaders());
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.body.workflows).toHaveLength(1);
+    expect(filtered.body.workflows[0].emailsSent).toBe(2);
+    expect(filtered.body.workflows[0].emailsDelivered).toBe(1);
+    expect(filtered.body.workflows[0].emailsOpened).toBe(1);
+  });
+
+  it("should return empty when appId matches no sendings", async () => {
+    await insertTestSending({ messageId: randomUUID(), appId: "app-alpha", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
+
+    const response = await request(app)
+      .get("/performance/leaderboard?appId=nonexistent")
+      .set(getAuthHeaders());
+
+    expect(response.status).toBe(200);
+    expect(response.body.workflows).toEqual([]);
+  });
+
   it("should aggregate across multiple orgs for the same workflow", async () => {
     const msg1 = randomUUID();
     const msg2 = randomUUID();

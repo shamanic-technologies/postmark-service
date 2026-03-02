@@ -115,6 +115,10 @@
             "type": "string",
             "description": "Organization ID (optional for admin/lifecycle emails)"
           },
+          "userId": {
+            "type": "string",
+            "description": "User ID (forwarded to runs-service for attribution)"
+          },
           "runId": {
             "type": "string",
             "description": "Parent run ID"
@@ -283,6 +287,9 @@
               "type": "object",
               "properties": {
                 "orgId": {
+                  "type": "string"
+                },
+                "userId": {
                   "type": "string"
                 },
                 "runId": {
@@ -1565,13 +1572,25 @@
     "/performance/leaderboard": {
       "get": {
         "summary": "Workflow performance leaderboard",
-        "description": "Returns global workflow performance stats across ALL sendings. This is a global view — auth headers (x-org-id, x-user-id) are ignored for data filtering. If org-scoped stats are needed, use POST /stats with orgId in the body.",
+        "description": "Returns workflow performance stats. Global by default — auth headers are never used for filtering. Pass ?appId=xxx to filter by app.",
         "tags": [
           "Performance"
         ],
         "security": [
           {
             "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by application ID (omit for global)"
+            },
+            "required": false,
+            "description": "Filter by application ID (omit for global)",
+            "name": "appId",
+            "in": "query"
           }
         ],
         "responses": {

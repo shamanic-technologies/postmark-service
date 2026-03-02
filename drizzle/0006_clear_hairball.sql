@@ -1,0 +1,1 @@
+ALTER TABLE "postmark_sendings" ADD COLUMN "user_id" text;

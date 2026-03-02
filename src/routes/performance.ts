@@ -7,27 +7,35 @@ import {
   postmarkOpenings,
   postmarkLinkClicks,
 } from "../db/schema";
-import { inArray } from "drizzle-orm";
+import { inArray, eq, and, SQL } from "drizzle-orm";
 
 const router = Router();
 
 /**
  * GET /performance/leaderboard
  *
- * Returns global workflow performance stats across ALL sendings.
- * This is a global view — it intentionally ignores x-org-id / x-user-id headers.
- * Those headers are for auth only, never for data filtering.
- * If org-scoped stats are needed, use POST /stats with orgId in the body.
+ * Returns workflow performance stats. Global by default.
+ * Auth headers (x-org-id, x-user-id) are NEVER used for filtering.
+ * Optional query params for explicit filtering:
+ *   ?appId=xxx — filter by application ID
  */
-router.get("/performance/leaderboard", async (_req: Request, res: Response) => {
+router.get("/performance/leaderboard", async (req: Request, res: Response) => {
   try {
-    // Fetch ALL sendings — no org/user filter
+    const appId = req.query.appId as string | undefined;
+
+    // Build optional filters from query params only (never from headers)
+    const conditions: SQL[] = [];
+    if (appId) {
+      conditions.push(eq(postmarkSendings.appId, appId));
+    }
+
     const sendings = await db
       .select({
         messageId: postmarkSendings.messageId,
         workflowName: postmarkSendings.workflowName,
       })
-      .from(postmarkSendings);
+      .from(postmarkSendings)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
 
     // Group by workflowName
     const grouped = new Map<string, { messageIds: string[]; count: number }>();
