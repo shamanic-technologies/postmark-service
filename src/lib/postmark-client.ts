@@ -33,7 +33,7 @@ export interface SendEmailParams {
   textBody?: string;
   replyTo?: string;
   tag?: string;
-  messageStream?: string;
+  messageStream: string; // Resolved by route handler via key-service
   headers?: { name: string; value: string }[];
   metadata?: Record<string, string>;
   trackOpens?: boolean;

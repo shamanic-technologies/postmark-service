@@ -175,10 +175,6 @@
           "tag": {
             "type": "string"
           },
-          "messageStream": {
-            "type": "string",
-            "description": "Postmark message stream (resolved from key-service when omitted)"
-          },
           "headers": {
             "type": "array",
             "items": {
@@ -334,9 +330,6 @@
                   "type": "string"
                 },
                 "tag": {
-                  "type": "string"
-                },
-                "messageStream": {
                   "type": "string"
                 },
                 "headers": {

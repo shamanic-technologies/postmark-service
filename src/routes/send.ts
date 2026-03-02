@@ -47,10 +47,10 @@ router.post("/send", async (req: Request, res: Response) => {
     }
 
     try {
-      // 2. Resolve message stream from key-service when not provided
+      // 2. Resolve message stream from key-service
       const caller = { method: "POST" as const, path: "/send" };
       const resolvedAppId = body.appId || "mcpfactory";
-      const messageStream = body.messageStream || await getStreamId(resolvedAppId, "broadcast", caller);
+      const messageStream = await getStreamId(resolvedAppId, "broadcast", caller);
 
       // 3. Send email via Postmark
       const sendParams: SendEmailParams = {
@@ -181,10 +181,10 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       }
 
       try {
-        // 2. Resolve message stream from key-service when not provided
+        // 2. Resolve message stream from key-service
         const batchCaller = { method: "POST" as const, path: "/send/batch" };
         const resolvedAppId = email.appId || "mcpfactory";
-        const messageStream = email.messageStream || await getStreamId(resolvedAppId, "broadcast", batchCaller);
+        const messageStream = await getStreamId(resolvedAppId, "broadcast", batchCaller);
 
         // 3. Send email via Postmark
         const sendParams: SendEmailParams = {
