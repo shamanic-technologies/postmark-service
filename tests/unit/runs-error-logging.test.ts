@@ -60,9 +60,8 @@ describe("runs-service BLOCKING behavior", () => {
 
     const res = await request(app)
       .post("/send")
-      .set(getAuthHeaders())
+      .set(getAuthHeaders({ runId: "run_xyz" }))
       .send({
-        parentRunId: "run_xyz",
         brandId: "brand_1",
         campaignId: "campaign_1",
         from: "sender@test.com",
@@ -79,7 +78,7 @@ describe("runs-service BLOCKING behavior", () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("should pass orgId from header to createRun", async () => {
+  it("should pass orgId from header and parentRunId from x-run-id header to createRun", async () => {
     vi.mocked(createRun).mockResolvedValue({
       id: "run-1",
       parentRunId: "run_xyz",
@@ -98,9 +97,8 @@ describe("runs-service BLOCKING behavior", () => {
 
     await request(app)
       .post("/send")
-      .set(getAuthHeaders({ orgId: "org_abc", userId: "user_xyz" }))
+      .set(getAuthHeaders({ orgId: "org_abc", userId: "user_xyz", runId: "run_xyz" }))
       .send({
-        parentRunId: "run_xyz",
         brandId: "brand_1",
         campaignId: "campaign_1",
         from: "sender@test.com",
@@ -120,10 +118,10 @@ describe("runs-service BLOCKING behavior", () => {
     });
   });
 
-  it("should always create a run (orgId from header)", async () => {
+  it("should always create a run (orgId and parentRunId from headers)", async () => {
     vi.mocked(createRun).mockResolvedValue({
       id: "run-1",
-      parentRunId: null,
+      parentRunId: "test-run-id",
       organizationId: "org-internal",
       userId: null,
       brandId: null,
@@ -159,9 +157,8 @@ describe("runs-service BLOCKING behavior", () => {
 
     await request(app)
       .post("/send")
-      .set(getAuthHeaders())
+      .set(getAuthHeaders({ runId: "run_xyz" }))
       .send({
-        parentRunId: "run_xyz",
         brandId: "brand_1",
         campaignId: "campaign_1",
         from: "sender@test.com",

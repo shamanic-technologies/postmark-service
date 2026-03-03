@@ -29,6 +29,7 @@ router.post("/send", async (req: Request, res: Response) => {
   const body = parsed.data;
   const orgId = req.headers["x-org-id"] as string;
   const userId = req.headers["x-user-id"] as string;
+  const parentRunId = req.headers["x-run-id"] as string;
 
   try {
     // 1. Resolve key from key-service (get keySource for cost tracking)
@@ -43,7 +44,7 @@ router.post("/send", async (req: Request, res: Response) => {
       orgId,
       serviceName: "postmark-service",
       taskName: "email-send",
-      parentRunId: body.parentRunId,
+      parentRunId,
       userId,
       brandId: body.brandId,
       campaignId: body.campaignId,
@@ -155,6 +156,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
   const { emails } = parsed.data;
   const orgId = req.headers["x-org-id"] as string;
   const userId = req.headers["x-user-id"] as string;
+  const parentRunId = req.headers["x-run-id"] as string;
   const results = [];
 
   // Resolve key and stream once for the batch (same org for all emails)
@@ -182,7 +184,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         orgId,
         serviceName: "postmark-service",
         taskName: "email-send",
-        parentRunId: email.parentRunId,
+        parentRunId,
         userId,
         brandId: email.brandId,
         campaignId: email.campaignId,

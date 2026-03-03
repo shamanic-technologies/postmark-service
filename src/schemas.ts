@@ -29,7 +29,6 @@ const EmailHeaderSchema = z.object({
 
 export const SendEmailRequestSchema = z
   .object({
-    parentRunId: z.string().optional().openapi({ description: "Parent run ID from caller" }),
     brandId: z.string().optional().openapi({ description: "Brand ID" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     workflowName: z.string().optional().openapi({ description: "Workflow name for tracking/grouping" }),
@@ -75,7 +74,6 @@ export const BatchSendRequestSchema = z
     emails: z
       .array(
         z.object({
-          parentRunId: z.string().optional(),
           brandId: z.string().optional(),
           campaignId: z.string().optional(),
           workflowName: z.string().optional(),
