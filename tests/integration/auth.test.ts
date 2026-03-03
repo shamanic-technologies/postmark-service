@@ -72,6 +72,19 @@ describe("Authentication", () => {
       expect(response.status).toBe(400);
       expect(response.body.error).toBe("Missing required header: x-user-id");
     });
+
+    it("should reject requests without x-run-id header", async () => {
+      const response = await request(app)
+        .get("/status/by-org/test-org")
+        .set({
+          "X-API-Key": process.env.POSTMARK_SERVICE_API_KEY || "test-secret-key",
+          "x-org-id": "test-org-id",
+          "x-user-id": "test-user-id",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Missing required header: x-run-id");
+    });
   });
 
   describe("OpenAPI endpoint", () => {

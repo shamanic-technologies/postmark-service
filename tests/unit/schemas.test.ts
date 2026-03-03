@@ -9,7 +9,6 @@ import {
 describe("Zod schemas", () => {
   describe("SendEmailRequestSchema", () => {
     const validRequest = {
-      parentRunId: "run_456",
       brandId: "brand_789",
       campaignId: "camp_345",
       from: "sender@example.com",
@@ -80,19 +79,20 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should accept request without parentRunId", () => {
-      const { parentRunId, ...noRunId } = validRequest;
-      const result = SendEmailRequestSchema.safeParse(noRunId);
+    it("should not accept parentRunId in body (comes from x-run-id header)", () => {
+      const result = SendEmailRequestSchema.safeParse({
+        ...validRequest,
+        parentRunId: "run_456",
+      });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.parentRunId).toBeUndefined();
+        expect(result.data).not.toHaveProperty("parentRunId");
       }
     });
   });
 
   describe("BatchSendRequestSchema", () => {
     const validEmail = {
-      parentRunId: "run_456",
       brandId: "brand_789",
       campaignId: "camp_345",
       from: "sender@example.com",
@@ -124,12 +124,14 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(false);
     });
 
-    it("should accept emails without parentRunId", () => {
-      const { parentRunId, ...noRunId } = validEmail;
+    it("should not accept parentRunId in batch email body (comes from x-run-id header)", () => {
       const result = BatchSendRequestSchema.safeParse({
-        emails: [noRunId],
+        emails: [{ ...validEmail, parentRunId: "run_456" }],
       });
       expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.emails[0]).not.toHaveProperty("parentRunId");
+      }
     });
   });
 

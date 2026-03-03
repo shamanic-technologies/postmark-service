@@ -111,10 +111,6 @@
       "SendEmailRequest": {
         "type": "object",
         "properties": {
-          "parentRunId": {
-            "type": "string",
-            "description": "Parent run ID from caller"
-          },
           "brandId": {
             "type": "string",
             "description": "Brand ID"
@@ -268,9 +264,6 @@
             "items": {
               "type": "object",
               "properties": {
-                "parentRunId": {
-                  "type": "string"
-                },
                 "brandId": {
                   "type": "string"
                 },

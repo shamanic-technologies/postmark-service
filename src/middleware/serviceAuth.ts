@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 
 /**
  * Service-to-service authentication middleware
- * Validates X-API-Key header and requires x-org-id + x-user-id identity headers
+ * Validates X-API-Key header and requires x-org-id, x-user-id, and x-run-id headers
  */
 export function serviceAuth(req: Request, res: Response, next: NextFunction) {
   // Skip auth for health check and OpenAPI spec
@@ -51,6 +51,13 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
   if (!userId || typeof userId !== "string") {
     return res.status(400).json({
       error: "Missing required header: x-user-id",
+    });
+  }
+
+  const runId = req.headers["x-run-id"];
+  if (!runId || typeof runId !== "string") {
+    return res.status(400).json({
+      error: "Missing required header: x-run-id",
     });
   }
 
