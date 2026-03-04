@@ -104,8 +104,8 @@ router.post("/send", async (req: Request, res: Response) => {
       if (result.success) {
         await addCosts(sendRunId, [
           { costName: "postmark-email-send", quantity: 1, costSource: decryptedKey.keySource },
-        ]);
-        await updateRun(sendRunId, "completed");
+        ], orgId, userId);
+        await updateRun(sendRunId, "completed", orgId, userId);
 
         res.status(200).json({
           success: true,
@@ -114,7 +114,7 @@ router.post("/send", async (req: Request, res: Response) => {
           sendingId: sending.id,
         });
       } else {
-        await updateRun(sendRunId, "failed", result.message);
+        await updateRun(sendRunId, "failed", orgId, userId, result.message);
 
         res.status(400).json({
           success: false,
@@ -125,7 +125,7 @@ router.post("/send", async (req: Request, res: Response) => {
       }
     } catch (error: any) {
       // Email send or DB failed — mark run as failed
-      await updateRun(sendRunId, "failed", error.message);
+      await updateRun(sendRunId, "failed", orgId, userId, error.message);
       throw error;
     }
   } catch (error: any) {
@@ -245,10 +245,10 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         if (result.success) {
           await addCosts(sendRunId, [
             { costName: "postmark-email-send", quantity: 1, costSource: keySource },
-          ]);
-          await updateRun(sendRunId, "completed");
+          ], orgId, userId);
+          await updateRun(sendRunId, "completed", orgId, userId);
         } else {
-          await updateRun(sendRunId, "failed", result.message);
+          await updateRun(sendRunId, "failed", orgId, userId, result.message);
         }
 
         results.push({
@@ -261,7 +261,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         });
       } catch (error: any) {
         // Email send or DB failed — mark run as failed
-        await updateRun(sendRunId, "failed", error.message);
+        await updateRun(sendRunId, "failed", orgId, userId, error.message);
         throw error;
       }
     } catch (error: any) {

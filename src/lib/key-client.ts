@@ -54,12 +54,14 @@ export async function getOrgKey(
   provider: string,
   caller: CallerContext
 ): Promise<DecryptedKey> {
-  const url = `${getKeyServiceUrl()}/keys/${encodeURIComponent(provider)}/decrypt?orgId=${encodeURIComponent(orgId)}&userId=${encodeURIComponent(userId)}`;
+  const url = `${getKeyServiceUrl()}/keys/${encodeURIComponent(provider)}/decrypt`;
 
   const response = await fetch(url, {
     method: "GET",
     headers: {
       "x-api-key": getKeyServiceApiKey(),
+      "x-org-id": orgId,
+      "x-user-id": userId,
       "X-Caller-Service": "postmark-service",
       "X-Caller-Method": caller.method,
       "X-Caller-Path": caller.path,
