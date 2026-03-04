@@ -37,10 +37,10 @@ export interface RunCost {
 
 export interface CreateRunParams {
   orgId: string;
+  userId: string;
   serviceName: string;
   taskName: string;
   parentRunId?: string;
-  userId?: string;
   brandId?: string;
   campaignId?: string;
   workflowName?: string;
@@ -56,13 +56,18 @@ export interface CostItem {
 
 async function runsRequest<T>(
   path: string,
-  options: { method?: string; body?: unknown } = {}
+  options: {
+    method?: string;
+    body?: unknown;
+    identityHeaders?: Record<string, string>;
+  } = {}
 ): Promise<T> {
-  const { method = "GET", body } = options;
+  const { method = "GET", body, identityHeaders = {} } = options;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-API-Key": RUNS_SERVICE_API_KEY,
+    ...identityHeaders,
   };
 
   const response = await fetch(`${RUNS_SERVICE_URL}${path}`, {
@@ -84,29 +89,52 @@ async function runsRequest<T>(
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export async function createRun(params: CreateRunParams): Promise<Run> {
+  const { orgId, userId, parentRunId, ...body } = params;
+  const identityHeaders: Record<string, string> = {
+    "x-org-id": orgId,
+    "x-user-id": userId,
+  };
+  if (parentRunId) {
+    identityHeaders["x-run-id"] = parentRunId;
+  }
   return runsRequest<Run>("/v1/runs", {
     method: "POST",
-    body: params,
+    body,
+    identityHeaders,
   });
 }
 
 export async function updateRun(
   runId: string,
   status: "completed" | "failed",
+  orgId: string,
+  userId: string,
   error?: string
 ): Promise<Run> {
   return runsRequest<Run>(`/v1/runs/${runId}`, {
     method: "PATCH",
     body: { status, error },
+    identityHeaders: {
+      "x-org-id": orgId,
+      "x-user-id": userId,
+      "x-run-id": runId,
+    },
   });
 }
 
 export async function addCosts(
   runId: string,
-  items: CostItem[]
+  items: CostItem[],
+  orgId: string,
+  userId: string
 ): Promise<{ costs: RunCost[] }> {
   return runsRequest<{ costs: RunCost[] }>(`/v1/runs/${runId}/costs`, {
     method: "POST",
     body: { items },
+    identityHeaders: {
+      "x-org-id": orgId,
+      "x-user-id": userId,
+      "x-run-id": runId,
+    },
   });
 }

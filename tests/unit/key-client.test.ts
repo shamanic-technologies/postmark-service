@@ -26,11 +26,13 @@ describe("key-client", () => {
 
     expect(result).toEqual({ provider: "postmark", key: "pm-token-123", keySource: "platform" });
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/keys/postmark/decrypt?orgId=org-1&userId=user-1",
+      "http://key-service:3001/keys/postmark/decrypt",
       {
         method: "GET",
         headers: {
           "x-api-key": "test-key-service-api-key",
+          "x-org-id": "org-1",
+          "x-user-id": "user-1",
           "X-Caller-Service": "postmark-service",
           "X-Caller-Method": "POST",
           "X-Caller-Path": "/send",
@@ -83,7 +85,7 @@ describe("key-client", () => {
     );
   });
 
-  it("should URL-encode orgId, userId, and provider", async () => {
+  it("should URL-encode provider and send identity as headers", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ provider: "postmark", key: "token", keySource: "platform" }),
@@ -92,8 +94,13 @@ describe("key-client", () => {
     await getOrgKey("org with spaces", "user/slash", "post/mark", defaultCaller);
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/keys/post%2Fmark/decrypt?orgId=org%20with%20spaces&userId=user%2Fslash",
-      expect.any(Object)
+      "http://key-service:3001/keys/post%2Fmark/decrypt",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-org-id": "org with spaces",
+          "x-user-id": "user/slash",
+        }),
+      })
     );
   });
 
@@ -133,8 +140,13 @@ describe("getStreamId", () => {
 
     expect(streamId).toBe("broadcast");
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/keys/postmark-broadcast-stream/decrypt?orgId=org-1&userId=user-1",
-      expect.any(Object)
+      "http://key-service:3001/keys/postmark-broadcast-stream/decrypt",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-org-id": "org-1",
+          "x-user-id": "user-1",
+        }),
+      })
     );
   });
 
@@ -148,8 +160,13 @@ describe("getStreamId", () => {
 
     expect(streamId).toBe("outbound");
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/keys/postmark-transactional-stream/decrypt?orgId=org-1&userId=user-1",
-      expect.any(Object)
+      "http://key-service:3001/keys/postmark-transactional-stream/decrypt",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-org-id": "org-1",
+          "x-user-id": "user-1",
+        }),
+      })
     );
   });
 
@@ -163,8 +180,13 @@ describe("getStreamId", () => {
 
     expect(streamId).toBe("inbound");
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://key-service:3001/keys/postmark-inbound-stream/decrypt?orgId=org-1&userId=user-1",
-      expect.any(Object)
+      "http://key-service:3001/keys/postmark-inbound-stream/decrypt",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-org-id": "org-1",
+          "x-user-id": "user-1",
+        }),
+      })
     );
   });
 
