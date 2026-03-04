@@ -38,28 +38,15 @@ jobs:
           branch_name: pr-${{ github.event.number }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
-      - name: Set database URL
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "DB_URL=${{ steps.neon.outputs.db_url_pooled }}" >> "$GITHUB_ENV"
-          else
-            echo "DB_URL=${{ secrets.POSTMARK_SERVICE_DATABASE_URL_DEV }}" >> "$GITHUB_ENV"
-          fi
-
       - name: Push schema to database
+        if: github.event_name == 'pull_request'
         run: npx drizzle-kit push --force
         env:
-          POSTMARK_SERVICE_DATABASE_URL: ${{ env.DB_URL }}
+          POSTMARK_SERVICE_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
 
       - name: Run integration tests
+        if: github.event_name == 'pull_request'
         run: npm run test:integration
         env:
-          POSTMARK_SERVICE_DATABASE_URL: ${{ env.DB_URL }}
+          POSTMARK_SERVICE_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
           POSTMARK_SERVICE_API_KEY: test-secret-key
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          files: ./coverage/coverage-final.json
-          fail_ci_if_error: false
