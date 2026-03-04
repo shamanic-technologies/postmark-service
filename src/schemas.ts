@@ -600,6 +600,35 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: "post",
+  path: "/stats/public",
+  summary: "Get aggregated stats (service auth only)",
+  description:
+    "Same as POST /stats but only requires X-API-Key (no x-org-id, x-user-id, x-run-id headers). Used by email-gateway for transactional stats aggregation.",
+  tags: ["Email Status"],
+  security: [{ apiKey: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: StatsRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Aggregated stats (flat or grouped depending on groupBy parameter)",
+      content: {
+        "application/json": {
+          schema: z.union([StatsResponseSchema, GroupedStatsResponseSchema]),
+        },
+      },
+    },
+    400: {
+      description: "Invalid request",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
 // --- Performance ---
 
 registry.registerPath({

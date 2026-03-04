@@ -477,13 +477,9 @@ function buildStatsObject(emailsSent: number, eventStats: Awaited<ReturnType<typ
   };
 }
 
-// ─── POST /stats ──────────────────────────────────────────────────────────────
+// ─── POST /stats handler ──────────────────────────────────────────────────────
 
-/**
- * POST /stats
- * Get aggregated email stats with flexible filtering and optional groupBy
- */
-router.post("/stats", async (req: Request, res: Response) => {
+async function handleStats(req: Request, res: Response) {
   const parsed = StatsRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -597,6 +593,19 @@ router.post("/stats", async (req: Request, res: Response) => {
       details: error.message,
     });
   }
-});
+}
+
+/**
+ * POST /stats
+ * Get aggregated email stats (requires identity headers)
+ */
+router.post("/stats", handleStats);
+
+/**
+ * POST /stats/public
+ * Same as /stats but only requires service API key (no identity headers).
+ * Used by email-gateway for transactional stats aggregation.
+ */
+router.post("/stats/public", handleStats);
 
 export default router;

@@ -15,6 +15,10 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
     return next();
   }
 
+  // Paths that require API key but NOT identity headers
+  const serviceAuthOnlyPaths = ["/stats/public"];
+  const skipIdentity = serviceAuthOnlyPaths.includes(req.path);
+
   const apiKey = req.headers["x-api-key"];
   const validSecret = process.env.POSTMARK_SERVICE_API_KEY || process.env.SERVICE_SECRET_KEY;
 
@@ -36,6 +40,11 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({
       error: "Invalid API key",
     });
+  }
+
+  // Skip identity headers for service-auth-only paths
+  if (skipIdentity) {
+    return next();
   }
 
   // Require identity headers
