@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
-import { getOrgKey, getStreamId } from "../lib/key-client";
+import { getOrgKey, getStreamId, getFromAddress } from "../lib/key-client";
 import {
   createRun,
   updateRun,
@@ -39,7 +39,10 @@ router.post("/send", async (req: Request, res: Response) => {
     // 2. Resolve message stream from key-service
     const messageStream = await getStreamId(orgId, userId, "broadcast", caller);
 
-    // 3. Create run in runs-service (BLOCKING)
+    // 3. Resolve "from" address: use caller-provided value, or fall back to key-service
+    const fromAddress = body.from ?? await getFromAddress(orgId, userId, caller);
+
+    // 5. Create run in runs-service (BLOCKING)
     const sendRun = await createRun({
       orgId,
       serviceName: "postmark-service",
@@ -53,9 +56,9 @@ router.post("/send", async (req: Request, res: Response) => {
     const sendRunId = sendRun.id;
 
     try {
-      // 4. Send email via Postmark
+      // 6. Send email via Postmark
       const sendParams: SendEmailParams = {
-        from: body.from,
+        from: fromAddress,
         to: body.to,
         cc: body.cc,
         bcc: body.bcc,
@@ -76,13 +79,13 @@ router.post("/send", async (req: Request, res: Response) => {
 
       const result = await sendEmail(sendParams);
 
-      // 5. Record in database
+      // 7. Record in database
       const [sending] = await db
         .insert(postmarkSendings)
         .values({
           messageId: result.messageId,
           toEmail: body.to,
-          fromEmail: body.from,
+          fromEmail: fromAddress,
           subject: body.subject,
           tag: body.tag,
           messageStream,
@@ -100,7 +103,7 @@ router.post("/send", async (req: Request, res: Response) => {
         })
         .returning();
 
-      // 6. Log costs and complete run
+      // 8. Log costs and complete run
       if (result.success) {
         await addCosts(sendRunId, [
           { costName: "postmark-email-send", quantity: 1, costSource: decryptedKey.keySource },
@@ -159,14 +162,16 @@ router.post("/send/batch", async (req: Request, res: Response) => {
   const parentRunId = req.headers["x-run-id"] as string;
   const results = [];
 
-  // Resolve key and stream once for the batch (same org for all emails)
+  // Resolve key, stream, and default from once for the batch (same org for all emails)
   let keySource: "platform" | "org";
   let messageStream: string;
+  let defaultFrom: string;
   try {
     const batchCaller = { method: "POST" as const, path: "/send/batch" };
     const decryptedKey = await getOrgKey(orgId, userId, "postmark", batchCaller);
     keySource = decryptedKey.keySource;
     messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller);
+    defaultFrom = await getFromAddress(orgId, userId, batchCaller);
   } catch (error: any) {
     console.error(
       `[send/batch] Failed to resolve keys — error="${error.message}"`
@@ -195,8 +200,9 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       try {
         // 2. Send email via Postmark
         const batchCaller = { method: "POST" as const, path: "/send/batch" };
+        const fromAddress = email.from ?? defaultFrom;
         const sendParams: SendEmailParams = {
-          from: email.from,
+          from: fromAddress,
           to: email.to,
           cc: email.cc,
           bcc: email.bcc,
@@ -223,7 +229,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
           .values({
             messageId: result.messageId,
             toEmail: email.to,
-            fromEmail: email.from,
+            fromEmail: fromAddress,
             subject: email.subject,
             tag: email.tag,
             messageStream,

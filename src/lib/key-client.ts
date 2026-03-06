@@ -40,6 +40,20 @@ export async function getStreamId(
 }
 
 /**
+ * Resolve the default "from" address from key-service.
+ * Provider: postmark-from-address
+ * Platform registers a default; orgs can override via BYOK.
+ */
+export async function getFromAddress(
+  orgId: string,
+  userId: string,
+  caller: CallerContext
+): Promise<string> {
+  const result = await getOrgKey(orgId, userId, "postmark-from-address", caller);
+  return result.key;
+}
+
+/**
  * Fetch a decrypted key from key-service using org-based resolution
  * @param orgId - The organization ID
  * @param userId - The user ID (required for logging even if not used for resolution)

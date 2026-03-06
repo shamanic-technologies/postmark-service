@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getOrgKey, getStreamId } from "../../src/lib/key-client";
+import { getOrgKey, getStreamId, getFromAddress } from "../../src/lib/key-client";
 
 describe("key-client", () => {
   const originalFetch = globalThis.fetch;
@@ -198,6 +198,64 @@ describe("getStreamId", () => {
     });
 
     await expect(getStreamId("unknown-org", "user-1", "broadcast", defaultCaller)).rejects.toThrow(
+      'No Postmark key configured for orgId "unknown-org"'
+    );
+  });
+});
+
+describe("getFromAddress", () => {
+  const originalFetch = globalThis.fetch;
+  const defaultCaller = { method: "POST", path: "/send" };
+
+  beforeEach(() => {
+    process.env.KEY_SERVICE_URL = "http://key-service:3001";
+    process.env.KEY_SERVICE_API_KEY = "test-key-service-api-key";
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    delete process.env.KEY_SERVICE_URL;
+    delete process.env.KEY_SERVICE_API_KEY;
+  });
+
+  it("should resolve from address from key-service", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ provider: "postmark-from-address", key: "noreply@example.com", keySource: "platform" }),
+    });
+
+    const from = await getFromAddress("org-1", "user-1", defaultCaller);
+
+    expect(from).toBe("noreply@example.com");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://key-service:3001/keys/postmark-from-address/decrypt",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-org-id": "org-1",
+          "x-user-id": "user-1",
+        }),
+      })
+    );
+  });
+
+  it("should return org-level override when available", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ provider: "postmark-from-address", key: "custom@orgdomain.com", keySource: "org" }),
+    });
+
+    const from = await getFromAddress("org-1", "user-1", defaultCaller);
+    expect(from).toBe("custom@orgdomain.com");
+  });
+
+  it("should propagate key-service errors", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve("Not found"),
+    });
+
+    await expect(getFromAddress("unknown-org", "user-1", defaultCaller)).rejects.toThrow(
       'No Postmark key configured for orgId "unknown-org"'
     );
   });
