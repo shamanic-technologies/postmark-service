@@ -79,6 +79,15 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
+    it("should accept request without from (resolved from key-service)", () => {
+      const { from, ...noFrom } = validRequest;
+      const result = SendEmailRequestSchema.safeParse(noFrom);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.from).toBeUndefined();
+      }
+    });
+
     it("should not accept parentRunId in body (comes from x-run-id header)", () => {
       const result = SendEmailRequestSchema.safeParse({
         ...validRequest,
@@ -122,6 +131,17 @@ describe("Zod schemas", () => {
       const emails = Array(501).fill(validEmail);
       const result = BatchSendRequestSchema.safeParse({ emails });
       expect(result.success).toBe(false);
+    });
+
+    it("should accept batch email without from (resolved from key-service)", () => {
+      const { from, ...noFrom } = validEmail;
+      const result = BatchSendRequestSchema.safeParse({
+        emails: [{ ...noFrom }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.emails[0].from).toBeUndefined();
+      }
     });
 
     it("should not accept parentRunId in batch email body (comes from x-run-id header)", () => {
