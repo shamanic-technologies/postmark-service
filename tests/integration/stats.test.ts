@@ -11,7 +11,7 @@ import {
   randomUUID,
 } from "../helpers/test-db";
 
-describe("POST /stats", () => {
+describe("GET /stats", () => {
   const app = createTestApp();
 
   beforeEach(async () => {
@@ -28,9 +28,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b-global-2", campaignId: "c2" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({});
+      .query({});
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(2);
@@ -41,9 +41,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-global-b" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ groupBy: "workflowName" });
+      .query({ groupBy: "workflowName" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toBeDefined();
@@ -53,18 +53,34 @@ describe("POST /stats", () => {
     expect(wfB).toBeDefined();
   });
 
-  it("should filter by runIds (backward compat)", async () => {
+  it("should filter by runIds (comma-separated)", async () => {
     const runId = "run-stats-1";
     await insertTestSending({ messageId: randomUUID(), runId, brandId: "b1", campaignId: "c1" });
     await insertTestSending({ messageId: randomUUID(), runId: "other-run", brandId: "b2", campaignId: "c2" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ runIds: [runId] });
+      .query({ runIds: runId });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
+  });
+
+  it("should filter by multiple runIds (comma-separated)", async () => {
+    const runId1 = "run-multi-1";
+    const runId2 = "run-multi-2";
+    await insertTestSending({ messageId: randomUUID(), runId: runId1, brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), runId: runId2, brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), runId: "other-run", brandId: "b2", campaignId: "c2" });
+
+    const response = await request(app)
+      .get("/stats")
+      .set(getAuthHeaders())
+      .query({ runIds: `${runId1},${runId2}` });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBe(2);
   });
 
   it("should filter by orgId", async () => {
@@ -72,9 +88,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: "org-other", brandId: "b2", campaignId: "c2" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ orgId: "org-abc" });
+      .query({ orgId: "org-abc" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -85,9 +101,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "brand-y", campaignId: "c2" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: "brand-x" });
+      .query({ brandId: "brand-x" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -98,9 +114,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b2", campaignId: "camp-2" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ campaignId: "camp-1" });
+      .query({ campaignId: "camp-1" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -112,9 +128,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: "org-2", brandId: "brand-a", campaignId: "c3" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ orgId: "org-1", brandId: "brand-a" });
+      .query({ orgId: "org-1", brandId: "brand-a" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -126,9 +142,9 @@ describe("POST /stats", () => {
     await insertTestDelivery(msgId);
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: "b1" });
+      .query({ brandId: "b1" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsDelivered).toBe(1);
@@ -150,9 +166,9 @@ describe("POST /stats", () => {
     await insertTestBounce(msg3);
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: brand });
+      .query({ brandId: brand });
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
@@ -166,9 +182,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: "b1" });
+      .query({ brandId: "b1" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsReplied).toBe(0);
@@ -181,9 +197,9 @@ describe("POST /stats", () => {
 
   it("should return all zeros when filter matches no sendings", async () => {
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: "non-existent-brand" });
+      .query({ brandId: "non-existent-brand" });
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
@@ -201,9 +217,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, campaignId: "c1" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: brand });
+      .query({ brandId: brand });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(3);
@@ -216,9 +232,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-alpha" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: "b1", workflowName: "wf-alpha" });
+      .query({ brandId: "b1", workflowName: "wf-alpha" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(2);
@@ -228,9 +244,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-solo" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ workflowName: "wf-solo" });
+      .query({ workflowName: "wf-solo" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -253,9 +269,9 @@ describe("POST /stats", () => {
     await insertTestOpening(msg1);
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: brand, groupBy: "campaignId" });
+      .query({ brandId: brand, groupBy: "campaignId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toBeDefined();
@@ -281,9 +297,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-y", campaignId: "c1" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ orgId: org, groupBy: "brandId" });
+      .query({ orgId: org, groupBy: "brandId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -301,9 +317,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-1" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ orgId: org, groupBy: "workflowName" });
+      .query({ orgId: org, groupBy: "workflowName" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -321,9 +337,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, campaignId: "c1" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: brand, groupBy: "leadEmail" });
+      .query({ brandId: brand, groupBy: "leadEmail" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -342,9 +358,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, campaignId: "c2" });
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: brand, groupBy: "campaignId" });
+      .query({ brandId: brand, groupBy: "campaignId" });
 
     expect(response.status).toBe(200);
     const c1 = response.body.groups.find((g: any) => g.key === "c1");
@@ -359,9 +375,9 @@ describe("POST /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1" }); // no workflowName
 
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ orgId: org, groupBy: "workflowName" });
+      .query({ orgId: org, groupBy: "workflowName" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -374,9 +390,9 @@ describe("POST /stats", () => {
 
   it("should reject invalid groupBy value", async () => {
     const response = await request(app)
-      .post("/stats")
+      .get("/stats")
       .set(getAuthHeaders())
-      .send({ brandId: "b1", groupBy: "invalidField" });
+      .query({ brandId: "b1", groupBy: "invalidField" });
 
     expect(response.status).toBe(400);
   });

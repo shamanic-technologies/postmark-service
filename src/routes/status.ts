@@ -9,7 +9,7 @@ import {
   postmarkSubscriptionChanges,
 } from "../db/schema";
 import { eq, inArray, and, or, SQL } from "drizzle-orm";
-import { StatsRequestSchema, StatusRequestSchema } from "../schemas";
+import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
 
 const router = Router();
 
@@ -480,7 +480,7 @@ function buildStatsObject(emailsSent: number, eventStats: Awaited<ReturnType<typ
 // ─── POST /stats handler ──────────────────────────────────────────────────────
 
 async function handleStats(req: Request, res: Response) {
-  const parsed = StatsRequestSchema.safeParse(req.body);
+  const parsed = StatsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({
       error: "Invalid request",
@@ -488,8 +488,9 @@ async function handleStats(req: Request, res: Response) {
     });
   }
 
-  const { groupBy, ...filters } = parsed.data;
-  const conditions = buildStatsConditions(filters);
+  const { groupBy, runIds: runIdsRaw, ...filters } = parsed.data;
+  const runIds = runIdsRaw ? runIdsRaw.split(",").filter(Boolean) : undefined;
+  const conditions = buildStatsConditions({ ...filters, runIds });
 
   try {
     if (!groupBy) {
@@ -596,16 +597,16 @@ async function handleStats(req: Request, res: Response) {
 }
 
 /**
- * POST /stats
+ * GET /stats
  * Get aggregated email stats (requires identity headers)
  */
-router.post("/stats", handleStats);
+router.get("/stats", handleStats);
 
 /**
- * POST /stats/public
+ * GET /stats/public
  * Same as /stats but only requires service API key (no identity headers).
  * Used by email-gateway for transactional stats aggregation.
  */
-router.post("/stats/public", handleStats);
+router.get("/stats/public", handleStats);
 
 export default router;

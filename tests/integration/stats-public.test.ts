@@ -21,7 +21,7 @@ function getServiceAuthHeaders() {
   };
 }
 
-describe("POST /stats/public", () => {
+describe("GET /stats/public", () => {
   const app = createTestApp();
 
   beforeEach(async () => {
@@ -37,9 +37,9 @@ describe("POST /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" });
 
     const response = await request(app)
-      .post("/stats/public")
+      .get("/stats/public")
       .set(getServiceAuthHeaders())
-      .send({});
+      .query({});
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(1);
@@ -47,9 +47,9 @@ describe("POST /stats/public", () => {
 
   it("should reject requests without API key", async () => {
     const response = await request(app)
-      .post("/stats/public")
+      .get("/stats/public")
       .set({ "Content-Type": "application/json" })
-      .send({});
+      .query({});
 
     expect(response.status).toBe(401);
   });
@@ -59,9 +59,9 @@ describe("POST /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "brand-pub-y", campaignId: "c2" });
 
     const response = await request(app)
-      .post("/stats/public")
+      .get("/stats/public")
       .set(getServiceAuthHeaders())
-      .send({ brandId: "brand-pub-x" });
+      .query({ brandId: "brand-pub-x" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -73,9 +73,9 @@ describe("POST /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "camp-b" });
 
     const response = await request(app)
-      .post("/stats/public")
+      .get("/stats/public")
       .set(getServiceAuthHeaders())
-      .send({ brandId: brand, groupBy: "campaignId" });
+      .query({ brandId: brand, groupBy: "campaignId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -94,9 +94,9 @@ describe("POST /stats/public", () => {
     await insertTestBounce(msg2);
 
     const response = await request(app)
-      .post("/stats/public")
+      .get("/stats/public")
       .set(getServiceAuthHeaders())
-      .send({ brandId: brand });
+      .query({ brandId: brand });
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
@@ -108,9 +108,9 @@ describe("POST /stats/public", () => {
 
   it("should reject invalid groupBy", async () => {
     const response = await request(app)
-      .post("/stats/public")
+      .get("/stats/public")
       .set(getServiceAuthHeaders())
-      .send({ groupBy: "invalidField" });
+      .query({ groupBy: "invalidField" });
 
     expect(response.status).toBe(400);
   });
