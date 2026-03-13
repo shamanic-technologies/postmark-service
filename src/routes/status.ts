@@ -477,7 +477,7 @@ function buildStatsObject(emailsSent: number, eventStats: Awaited<ReturnType<typ
   };
 }
 
-// ─── POST /stats handler ──────────────────────────────────────────────────────
+// ─── GET /stats handler ───────────────────────────────────────────────────────
 
 async function handleStats(req: Request, res: Response) {
   const parsed = StatsQuerySchema.safeParse(req.query);
