@@ -51,7 +51,7 @@ describe("OpenAPI spec", () => {
     expect(schemas).toContain("BatchSendRequest");
     expect(schemas).toContain("BatchSendResponse");
     expect(schemas).toContain("EmailStatus");
-    expect(schemas).toContain("StatsRequest");
+    // StatsQuery is now a query schema, not a body component
     expect(schemas).toContain("StatsResponse");
     expect(schemas).toContain("StatusRequest");
     expect(schemas).toContain("StatusResponse");

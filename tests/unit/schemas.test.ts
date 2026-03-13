@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   SendEmailRequestSchema,
   BatchSendRequestSchema,
-  StatsRequestSchema,
+  StatsQuerySchema,
   StatusRequestSchema,
 } from "../../src/schemas";
 
@@ -155,29 +155,29 @@ describe("Zod schemas", () => {
     });
   });
 
-  describe("StatsRequestSchema", () => {
-    it("should accept runIds filter", () => {
-      const result = StatsRequestSchema.safeParse({
-        runIds: ["run_1", "run_2"],
+  describe("StatsQuerySchema", () => {
+    it("should accept runIds as comma-separated string", () => {
+      const result = StatsQuerySchema.safeParse({
+        runIds: "run_1,run_2",
       });
       expect(result.success).toBe(true);
     });
 
     it("should accept orgId filter", () => {
-      const result = StatsRequestSchema.safeParse({
+      const result = StatsQuerySchema.safeParse({
         orgId: "org_123",
       });
       expect(result.success).toBe(true);
     });
 
     it("should accept empty object (no filters = global stats)", () => {
-      const result = StatsRequestSchema.safeParse({});
+      const result = StatsQuerySchema.safeParse({});
       expect(result.success).toBe(true);
     });
 
     it("should accept multiple filters", () => {
-      const result = StatsRequestSchema.safeParse({
-        runIds: ["run_1"],
+      const result = StatsQuerySchema.safeParse({
+        runIds: "run_1",
         brandId: "brand_123",
         campaignId: "camp_456",
       });
@@ -185,7 +185,7 @@ describe("Zod schemas", () => {
     });
 
     it("should accept workflowName filter", () => {
-      const result = StatsRequestSchema.safeParse({
+      const result = StatsQuerySchema.safeParse({
         orgId: "org_123",
         workflowName: "outbound-v2",
       });
@@ -197,7 +197,7 @@ describe("Zod schemas", () => {
 
     it("should accept groupBy with valid enum values", () => {
       for (const value of ["brandId", "campaignId", "workflowName", "leadEmail"]) {
-        const result = StatsRequestSchema.safeParse({
+        const result = StatsQuerySchema.safeParse({
           orgId: "org_123",
           groupBy: value,
         });
@@ -206,7 +206,7 @@ describe("Zod schemas", () => {
     });
 
     it("should reject invalid groupBy value", () => {
-      const result = StatsRequestSchema.safeParse({
+      const result = StatsQuerySchema.safeParse({
         orgId: "org_123",
         groupBy: "invalidDimension",
       });

@@ -273,18 +273,18 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowName", "leadEmail"]);
 
-export const StatsRequestSchema = z
+export const StatsQuerySchema = z
   .object({
-    runIds: z.array(z.string()).optional().openapi({ description: "Filter by run IDs" }),
+    runIds: z.string().optional().openapi({ description: "Comma-separated run IDs" }),
     orgId: z.string().optional().openapi({ description: "Filter by organization ID" }),
     brandId: z.string().optional().openapi({ description: "Filter by brand ID" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
     workflowName: z.string().optional().openapi({ description: "Filter by workflow name" }),
     groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
   })
-  .openapi("StatsRequest");
+  .openapi("StatsQuery");
 
-export type StatsRequest = z.infer<typeof StatsRequestSchema>;
+export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
 const StatsObjectSchema = z.object({
   emailsSent: z.number(),
@@ -584,7 +584,7 @@ registry.registerPath({
 });
 
 registry.registerPath({
-  method: "post",
+  method: "get",
   path: "/stats",
   summary: "Get aggregated stats",
   description:
@@ -592,9 +592,7 @@ registry.registerPath({
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
-    body: {
-      content: { "application/json": { schema: StatsRequestSchema } },
-    },
+    query: StatsQuerySchema,
   },
   responses: {
     200: {
@@ -613,17 +611,15 @@ registry.registerPath({
 });
 
 registry.registerPath({
-  method: "post",
+  method: "get",
   path: "/stats/public",
   summary: "Get aggregated stats (service auth only)",
   description:
-    "Same as POST /stats but only requires X-API-Key (no x-org-id, x-user-id, x-run-id headers). Used by email-gateway for transactional stats aggregation.",
+    "Same as GET /stats but only requires X-API-Key (no x-org-id, x-user-id, x-run-id headers). Used by email-gateway for transactional stats aggregation.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
-    body: {
-      content: { "application/json": { schema: StatsRequestSchema } },
-    },
+    query: StatsQuerySchema,
   },
   responses: {
     200: {
