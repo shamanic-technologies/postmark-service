@@ -88,11 +88,12 @@ async function runsRequest<T>(
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export async function createRun(params: CreateRunParams): Promise<Run> {
+export async function createRun(params: CreateRunParams, trackingHeaders: Record<string, string> = {}): Promise<Run> {
   const { orgId, userId, parentRunId, ...body } = params;
   const identityHeaders: Record<string, string> = {
     "x-org-id": orgId,
     "x-user-id": userId,
+    ...trackingHeaders,
   };
   if (parentRunId) {
     identityHeaders["x-run-id"] = parentRunId;
@@ -109,7 +110,8 @@ export async function updateRun(
   status: "completed" | "failed",
   orgId: string,
   userId: string,
-  error?: string
+  error?: string,
+  trackingHeaders: Record<string, string> = {}
 ): Promise<Run> {
   return runsRequest<Run>(`/v1/runs/${runId}`, {
     method: "PATCH",
@@ -118,6 +120,7 @@ export async function updateRun(
       "x-org-id": orgId,
       "x-user-id": userId,
       "x-run-id": runId,
+      ...trackingHeaders,
     },
   });
 }
@@ -126,7 +129,8 @@ export async function addCosts(
   runId: string,
   items: CostItem[],
   orgId: string,
-  userId: string
+  userId: string,
+  trackingHeaders: Record<string, string> = {}
 ): Promise<{ costs: RunCost[] }> {
   return runsRequest<{ costs: RunCost[] }>(`/v1/runs/${runId}/costs`, {
     method: "POST",
@@ -135,6 +139,7 @@ export async function addCosts(
       "x-org-id": orgId,
       "x-user-id": userId,
       "x-run-id": runId,
+      ...trackingHeaders,
     },
   });
 }

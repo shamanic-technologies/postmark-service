@@ -1205,6 +1205,38 @@
             "apiKey": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Campaign ID (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Campaign ID (injected by workflow-service)",
+            "name": "x-campaign-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Brand ID (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Brand ID (injected by workflow-service)",
+            "name": "x-brand-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Workflow name (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Workflow name (injected by workflow-service)",
+            "name": "x-workflow-name",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1258,6 +1290,38 @@
         "security": [
           {
             "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Campaign ID (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Campaign ID (injected by workflow-service)",
+            "name": "x-campaign-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Brand ID (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Brand ID (injected by workflow-service)",
+            "name": "x-brand-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Workflow name (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Workflow name (injected by workflow-service)",
+            "name": "x-workflow-name",
+            "in": "header"
           }
         ],
         "requestBody": {
