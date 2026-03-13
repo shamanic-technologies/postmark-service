@@ -115,7 +115,8 @@ describe("runs-service BLOCKING behavior", () => {
       userId: "user_xyz",
       brandId: "brand_1",
       campaignId: "campaign_1",
-    });
+      workflowName: undefined,
+    }, { "x-brand-id": "brand_1", "x-campaign-id": "campaign_1" });
   });
 
   it("should always create a run (orgId and parentRunId from headers)", async () => {
@@ -146,7 +147,8 @@ describe("runs-service BLOCKING behavior", () => {
       });
 
     expect(createRun).toHaveBeenCalledWith(
-      expect.objectContaining({ orgId: "test-org-id" })
+      expect.objectContaining({ orgId: "test-org-id" }),
+      expect.any(Object)
     );
   });
 

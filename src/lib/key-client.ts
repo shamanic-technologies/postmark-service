@@ -32,10 +32,11 @@ export async function getStreamId(
   orgId: string,
   userId: string,
   streamType: PostmarkStreamType,
-  caller: CallerContext
+  caller: CallerContext,
+  trackingHeaders: Record<string, string> = {}
 ): Promise<string> {
   const provider = `postmark-${streamType}-stream`;
-  const result = await getOrgKey(orgId, userId, provider, caller);
+  const result = await getOrgKey(orgId, userId, provider, caller, trackingHeaders);
   return result.key;
 }
 
@@ -47,9 +48,10 @@ export async function getStreamId(
 export async function getFromAddress(
   orgId: string,
   userId: string,
-  caller: CallerContext
+  caller: CallerContext,
+  trackingHeaders: Record<string, string> = {}
 ): Promise<string> {
-  const result = await getOrgKey(orgId, userId, "postmark-from-address", caller);
+  const result = await getOrgKey(orgId, userId, "postmark-from-address", caller, trackingHeaders);
   return result.key;
 }
 
@@ -66,7 +68,8 @@ export async function getOrgKey(
   orgId: string,
   userId: string,
   provider: string,
-  caller: CallerContext
+  caller: CallerContext,
+  trackingHeaders: Record<string, string> = {}
 ): Promise<DecryptedKey> {
   const url = `${getKeyServiceUrl()}/keys/${encodeURIComponent(provider)}/decrypt`;
 
@@ -79,6 +82,7 @@ export async function getOrgKey(
       "X-Caller-Service": "postmark-service",
       "X-Caller-Method": caller.method,
       "X-Caller-Path": caller.path,
+      ...trackingHeaders,
     },
   });
 

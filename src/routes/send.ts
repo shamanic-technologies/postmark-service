@@ -31,16 +31,25 @@ router.post("/send", async (req: Request, res: Response) => {
   const userId = req.headers["x-user-id"] as string;
   const parentRunId = req.headers["x-run-id"] as string;
 
+  // Workflow tracking headers (body takes priority, headers are fallback)
+  const campaignId = body.campaignId ?? (req.headers["x-campaign-id"] as string | undefined);
+  const brandId = body.brandId ?? (req.headers["x-brand-id"] as string | undefined);
+  const workflowName = body.workflowName ?? (req.headers["x-workflow-name"] as string | undefined);
+  const trackingHeaders: Record<string, string> = {};
+  if (campaignId) trackingHeaders["x-campaign-id"] = campaignId;
+  if (brandId) trackingHeaders["x-brand-id"] = brandId;
+  if (workflowName) trackingHeaders["x-workflow-name"] = workflowName;
+
   try {
     // 1. Resolve key from key-service (get keySource for cost tracking)
     const caller = { method: "POST" as const, path: "/send" };
-    const decryptedKey = await getOrgKey(orgId, userId, "postmark", caller);
+    const decryptedKey = await getOrgKey(orgId, userId, "postmark", caller, trackingHeaders);
 
     // 2. Resolve message stream from key-service
-    const messageStream = await getStreamId(orgId, userId, "broadcast", caller);
+    const messageStream = await getStreamId(orgId, userId, "broadcast", caller, trackingHeaders);
 
     // 3. Resolve "from" address: use caller-provided value, or fall back to key-service
-    const fromAddress = body.from ?? await getFromAddress(orgId, userId, caller);
+    const fromAddress = body.from ?? await getFromAddress(orgId, userId, caller, trackingHeaders);
 
     // 5. Create run in runs-service (BLOCKING)
     const sendRun = await createRun({
@@ -49,10 +58,10 @@ router.post("/send", async (req: Request, res: Response) => {
       taskName: "email-send",
       parentRunId,
       userId,
-      brandId: body.brandId,
-      campaignId: body.campaignId,
-      workflowName: body.workflowName,
-    });
+      brandId: brandId,
+      campaignId: campaignId,
+      workflowName: workflowName,
+    }, trackingHeaders);
     const sendRunId = sendRun.id;
 
     try {
@@ -95,9 +104,9 @@ router.post("/send", async (req: Request, res: Response) => {
           orgId,
           userId,
           runId: sendRunId,
-          brandId: body.brandId,
-          campaignId: body.campaignId,
-          workflowName: body.workflowName,
+          brandId,
+          campaignId,
+          workflowName,
           leadId: body.leadId,
           metadata: body.metadata,
         })
@@ -107,8 +116,8 @@ router.post("/send", async (req: Request, res: Response) => {
       if (result.success) {
         await addCosts(sendRunId, [
           { costName: "postmark-email-send", quantity: 1, costSource: decryptedKey.keySource },
-        ], orgId, userId);
-        await updateRun(sendRunId, "completed", orgId, userId);
+        ], orgId, userId, trackingHeaders);
+        await updateRun(sendRunId, "completed", orgId, userId, undefined, trackingHeaders);
 
         res.status(200).json({
           success: true,
@@ -117,7 +126,7 @@ router.post("/send", async (req: Request, res: Response) => {
           sendingId: sending.id,
         });
       } else {
-        await updateRun(sendRunId, "failed", orgId, userId, result.message);
+        await updateRun(sendRunId, "failed", orgId, userId, result.message, trackingHeaders);
 
         res.status(400).json({
           success: false,
@@ -128,7 +137,7 @@ router.post("/send", async (req: Request, res: Response) => {
       }
     } catch (error: any) {
       // Email send or DB failed — mark run as failed
-      await updateRun(sendRunId, "failed", orgId, userId, error.message);
+      await updateRun(sendRunId, "failed", orgId, userId, error.message, trackingHeaders);
       throw error;
     }
   } catch (error: any) {
@@ -160,6 +169,16 @@ router.post("/send/batch", async (req: Request, res: Response) => {
   const orgId = req.headers["x-org-id"] as string;
   const userId = req.headers["x-user-id"] as string;
   const parentRunId = req.headers["x-run-id"] as string;
+
+  // Workflow tracking headers from request (used as fallback for per-email values)
+  const headerCampaignId = req.headers["x-campaign-id"] as string | undefined;
+  const headerBrandId = req.headers["x-brand-id"] as string | undefined;
+  const headerWorkflowName = req.headers["x-workflow-name"] as string | undefined;
+  const trackingHeaders: Record<string, string> = {};
+  if (headerCampaignId) trackingHeaders["x-campaign-id"] = headerCampaignId;
+  if (headerBrandId) trackingHeaders["x-brand-id"] = headerBrandId;
+  if (headerWorkflowName) trackingHeaders["x-workflow-name"] = headerWorkflowName;
+
   const results = [];
 
   // Resolve key, stream, and default from once for the batch (same org for all emails)
@@ -168,10 +187,10 @@ router.post("/send/batch", async (req: Request, res: Response) => {
   let defaultFrom: string;
   try {
     const batchCaller = { method: "POST" as const, path: "/send/batch" };
-    const decryptedKey = await getOrgKey(orgId, userId, "postmark", batchCaller);
+    const decryptedKey = await getOrgKey(orgId, userId, "postmark", batchCaller, trackingHeaders);
     keySource = decryptedKey.keySource;
-    messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller);
-    defaultFrom = await getFromAddress(orgId, userId, batchCaller);
+    messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller, trackingHeaders);
+    defaultFrom = await getFromAddress(orgId, userId, batchCaller, trackingHeaders);
   } catch (error: any) {
     console.error(
       `[send/batch] Failed to resolve keys — error="${error.message}"`
@@ -184,6 +203,11 @@ router.post("/send/batch", async (req: Request, res: Response) => {
 
   for (const email of emails) {
     try {
+      // Per-email tracking: body takes priority, headers are fallback
+      const emailCampaignId = email.campaignId ?? headerCampaignId;
+      const emailBrandId = email.brandId ?? headerBrandId;
+      const emailWorkflowName = email.workflowName ?? headerWorkflowName;
+
       // 1. Create run in runs-service (BLOCKING)
       const sendRun = await createRun({
         orgId,
@@ -191,10 +215,10 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         taskName: "email-send",
         parentRunId,
         userId,
-        brandId: email.brandId,
-        campaignId: email.campaignId,
-        workflowName: email.workflowName,
-      });
+        brandId: emailBrandId,
+        campaignId: emailCampaignId,
+        workflowName: emailWorkflowName,
+      }, trackingHeaders);
       const sendRunId = sendRun.id;
 
       try {
@@ -239,9 +263,9 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             orgId,
             userId,
             runId: sendRunId,
-            brandId: email.brandId,
-            campaignId: email.campaignId,
-            workflowName: email.workflowName,
+            brandId: emailBrandId,
+            campaignId: emailCampaignId,
+            workflowName: emailWorkflowName,
             leadId: email.leadId,
             metadata: email.metadata,
           })
@@ -251,10 +275,10 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         if (result.success) {
           await addCosts(sendRunId, [
             { costName: "postmark-email-send", quantity: 1, costSource: keySource },
-          ], orgId, userId);
-          await updateRun(sendRunId, "completed", orgId, userId);
+          ], orgId, userId, trackingHeaders);
+          await updateRun(sendRunId, "completed", orgId, userId, undefined, trackingHeaders);
         } else {
-          await updateRun(sendRunId, "failed", orgId, userId, result.message);
+          await updateRun(sendRunId, "failed", orgId, userId, result.message, trackingHeaders);
         }
 
         results.push({
@@ -267,7 +291,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         });
       } catch (error: any) {
         // Email send or DB failed — mark run as failed
-        await updateRun(sendRunId, "failed", orgId, userId, error.message);
+        await updateRun(sendRunId, "failed", orgId, userId, error.message, trackingHeaders);
         throw error;
       }
     } catch (error: any) {

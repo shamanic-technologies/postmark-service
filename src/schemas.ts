@@ -428,6 +428,12 @@ registry.registerPath({
   tags: ["Email Sending"],
   security: [{ apiKey: [] }],
   request: {
+    params: z.object({}),
+    headers: z.object({
+      "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
+      "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
+      "x-workflow-name": z.string().optional().openapi({ description: "Workflow name (injected by workflow-service)" }),
+    }),
     body: {
       content: { "application/json": { schema: SendEmailRequestSchema } },
     },
@@ -457,6 +463,12 @@ registry.registerPath({
   tags: ["Email Sending"],
   security: [{ apiKey: [] }],
   request: {
+    params: z.object({}),
+    headers: z.object({
+      "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
+      "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
+      "x-workflow-name": z.string().optional().openapi({ description: "Workflow name (injected by workflow-service)" }),
+    }),
     body: {
       content: { "application/json": { schema: BatchSendRequestSchema } },
     },

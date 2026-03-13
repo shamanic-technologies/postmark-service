@@ -62,7 +62,7 @@ describe("OpenAPI spec", () => {
     const schema = spec.components.schemas.SendEmailRequest;
 
     expect(schema.type).toBe("object");
-    expect(schema.required).toContain("from");
+    expect(schema.required).not.toContain("from"); // from is optional (resolved from key-service)
     expect(schema.required).toContain("to");
     expect(schema.required).toContain("subject");
     expect(schema.properties).not.toHaveProperty("orgId");
