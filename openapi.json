@@ -874,6 +874,9 @@
           "stats": {
             "type": "object",
             "properties": {
+              "emailsContacted": {
+                "type": "number"
+              },
               "emailsSent": {
                 "type": "number"
               },
@@ -909,6 +912,7 @@
               }
             },
             "required": [
+              "emailsContacted",
               "emailsSent",
               "emailsDelivered",
               "emailsOpened",
@@ -945,6 +949,9 @@
                 "stats": {
                   "type": "object",
                   "properties": {
+                    "emailsContacted": {
+                      "type": "number"
+                    },
                     "emailsSent": {
                       "type": "number"
                     },
@@ -980,6 +987,7 @@
                     }
                   },
                   "required": [
+                    "emailsContacted",
                     "emailsSent",
                     "emailsDelivered",
                     "emailsOpened",

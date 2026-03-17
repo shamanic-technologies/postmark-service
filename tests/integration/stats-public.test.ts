@@ -42,6 +42,7 @@ describe("GET /stats/public", () => {
       .query({});
 
     expect(response.status).toBe(200);
+    expect(response.body.stats.emailsContacted).toBeGreaterThanOrEqual(1);
     expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(1);
   });
 
@@ -100,6 +101,7 @@ describe("GET /stats/public", () => {
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
+    expect(stats.emailsContacted).toBe(2);
     expect(stats.emailsSent).toBe(2);
     expect(stats.emailsDelivered).toBe(1);
     expect(stats.emailsOpened).toBe(1);

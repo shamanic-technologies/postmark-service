@@ -463,6 +463,7 @@ async function computeStats(messageIds: string[]) {
 
 function buildStatsObject(emailsSent: number, eventStats: Awaited<ReturnType<typeof computeStats>>) {
   return {
+    emailsContacted: emailsSent,
     emailsSent,
     emailsDelivered: eventStats.emailsDelivered,
     emailsOpened: eventStats.emailsOpened,

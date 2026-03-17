@@ -287,6 +287,7 @@ export const StatsQuerySchema = z
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
 const StatsObjectSchema = z.object({
+  emailsContacted: z.number(),
   emailsSent: z.number(),
   emailsDelivered: z.number(),
   emailsOpened: z.number(),

@@ -33,6 +33,7 @@ describe("GET /stats", () => {
       .query({});
 
     expect(response.status).toBe(200);
+    expect(response.body.stats.emailsContacted).toBeGreaterThanOrEqual(2);
     expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(2);
   });
 
@@ -172,6 +173,7 @@ describe("GET /stats", () => {
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
+    expect(stats.emailsContacted).toBe(3);
     expect(stats.emailsSent).toBe(3);
     expect(stats.emailsDelivered).toBe(2);
     expect(stats.emailsOpened).toBe(1);
@@ -203,6 +205,7 @@ describe("GET /stats", () => {
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
+    expect(stats.emailsContacted).toBe(0);
     expect(stats.emailsSent).toBe(0);
     expect(stats.emailsDelivered).toBe(0);
     expect(stats.emailsOpened).toBe(0);
