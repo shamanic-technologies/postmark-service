@@ -96,8 +96,6 @@ async function handleDelivery(payload: any) {
     metadata: payload.Metadata,
     headers: payload.Headers,
   }).onConflictDoNothing();
-
-  console.log(`Delivery recorded for ${payload.Recipient}`);
 }
 
 async function handleBounce(payload: any) {
@@ -123,8 +121,6 @@ async function handleBounce(payload: any) {
     messageStream: payload.MessageStream,
     metadata: payload.Metadata,
   }).onConflictDoNothing();
-
-  console.log(`Bounce (${payload.Type}) recorded for ${payload.Email}`);
 }
 
 async function handleOpen(payload: any) {
@@ -144,8 +140,6 @@ async function handleOpen(payload: any) {
     client: payload.Client,
     geo: payload.Geo,
   });
-
-  console.log(`Open recorded for ${payload.Recipient}`);
 }
 
 async function handleClick(payload: any) {
@@ -165,8 +159,6 @@ async function handleClick(payload: any) {
     client: payload.Client,
     geo: payload.Geo,
   });
-
-  console.log(`Click recorded for ${payload.Recipient}: ${payload.OriginalLink}`);
 }
 
 async function handleSpamComplaint(payload: any) {
@@ -182,8 +174,6 @@ async function handleSpamComplaint(payload: any) {
     bouncedAt: payload.BouncedAt ? new Date(payload.BouncedAt) : null,
     subject: payload.Subject,
   }).onConflictDoNothing();
-
-  console.log(`Spam complaint recorded for ${payload.Email}`);
 }
 
 async function handleSubscriptionChange(payload: any) {
@@ -199,8 +189,6 @@ async function handleSubscriptionChange(payload: any) {
     suppressSending: payload.SuppressSending,
     changedAt: payload.ChangedAt ? new Date(payload.ChangedAt) : null,
   }).onConflictDoNothing();
-
-  console.log(`Subscription change recorded for ${payload.Recipient}`);
 }
 
 export default router;
