@@ -72,7 +72,7 @@ describe("billing credit authorization gate", () => {
       vi.mocked(authorizeCredits).mockResolvedValue({
         sufficient: false,
         balance_cents: 0,
-        billing_mode: "trial",
+        required_cents: 1,
       });
 
       const res = await request(app)
@@ -95,7 +95,7 @@ describe("billing credit authorization gate", () => {
       vi.mocked(authorizeCredits).mockResolvedValue({
         sufficient: true,
         balance_cents: 500,
-        billing_mode: "payg",
+        required_cents: 1,
       });
 
       const res = await request(app)
@@ -107,7 +107,9 @@ describe("billing credit authorization gate", () => {
       expect(res.body.success).toBe(true);
       expect(sendEmail).toHaveBeenCalled();
       expect(authorizeCredits).toHaveBeenCalledWith(
-        expect.objectContaining({ emailCount: 1 })
+        expect.objectContaining({
+          items: [{ costName: "postmark-email-send", quantity: 1 }],
+        })
       );
     });
 
@@ -156,7 +158,7 @@ describe("billing credit authorization gate", () => {
       vi.mocked(authorizeCredits).mockResolvedValue({
         sufficient: true,
         balance_cents: 100,
-        billing_mode: "payg",
+        required_cents: 1,
       });
 
       await request(app)
@@ -199,7 +201,7 @@ describe("billing credit authorization gate", () => {
       vi.mocked(authorizeCredits).mockResolvedValue({
         sufficient: false,
         balance_cents: 1,
-        billing_mode: "trial",
+        required_cents: 3,
       });
 
       const res = await request(app)
@@ -221,7 +223,7 @@ describe("billing credit authorization gate", () => {
       vi.mocked(authorizeCredits).mockResolvedValue({
         sufficient: true,
         balance_cents: 500,
-        billing_mode: "payg",
+        required_cents: 1,
       });
 
       const res = await request(app)
@@ -231,7 +233,9 @@ describe("billing credit authorization gate", () => {
 
       expect(res.status).toBe(200);
       expect(authorizeCredits).toHaveBeenCalledWith(
-        expect.objectContaining({ emailCount: 3 })
+        expect.objectContaining({
+          items: [{ costName: "postmark-email-send", quantity: 3 }],
+        })
       );
     });
 
