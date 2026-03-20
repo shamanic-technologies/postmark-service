@@ -8,6 +8,7 @@ import {
   updateRun,
   addCosts,
 } from "../lib/runs-client";
+import { authorizeCredits } from "../lib/billing-client";
 import { SendEmailRequestSchema, BatchSendRequestSchema } from "../schemas";
 
 const router = Router();
@@ -50,6 +51,24 @@ router.post("/send", async (req: Request, res: Response) => {
 
     // 3. Resolve "from" address: use caller-provided value, or fall back to key-service
     const fromAddress = body.from ?? await getFromAddress(orgId, userId, caller, trackingHeaders);
+
+    // 4. Credit authorization (platform keys only)
+    if (decryptedKey.keySource === "platform") {
+      const auth = await authorizeCredits({
+        orgId,
+        userId,
+        runId: parentRunId,
+        emailCount: 1,
+        trackingHeaders,
+      });
+      if (!auth.sufficient) {
+        return res.status(402).json({
+          error: "Insufficient credits",
+          balance_cents: auth.balance_cents,
+          required_cents: 1,
+        });
+      }
+    }
 
     // 5. Create run in runs-service (BLOCKING)
     const sendRun = await createRun({
@@ -191,6 +210,24 @@ router.post("/send/batch", async (req: Request, res: Response) => {
     keySource = decryptedKey.keySource;
     messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller, trackingHeaders);
     defaultFrom = await getFromAddress(orgId, userId, batchCaller, trackingHeaders);
+
+    // Credit authorization for entire batch (platform keys only)
+    if (keySource === "platform") {
+      const auth = await authorizeCredits({
+        orgId,
+        userId,
+        runId: parentRunId,
+        emailCount: emails.length,
+        trackingHeaders,
+      });
+      if (!auth.sufficient) {
+        return res.status(402).json({
+          error: "Insufficient credits",
+          balance_cents: auth.balance_cents,
+          required_cents: emails.length,
+        });
+      }
+    }
   } catch (error: any) {
     console.error(
       `[send/batch] Failed to resolve keys — error="${error.message}"`
