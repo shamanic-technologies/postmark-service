@@ -9,83 +9,13 @@ function getBillingServiceUrl(): string {
 function getBillingServiceApiKey(): string {
   return process.env.BILLING_SERVICE_API_KEY || "";
 }
-function getCostsServiceUrl(): string {
-  return process.env.COSTS_SERVICE_URL || "http://localhost:3011";
-}
-function getCostsServiceApiKey(): string {
-  return process.env.COSTS_SERVICE_API_KEY || "";
-}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface AuthorizeResult {
   sufficient: boolean;
   balance_cents: number | null;
-  billing_mode: string;
-}
-
-interface PlatformPrice {
-  name: string;
-  pricePerUnitInUsdCents: string;
-  provider: string;
-  effectiveFrom: string;
-}
-
-// ─── Cost estimation ────────────────────────────────────────────────────────
-
-let cachedUnitCostCents: number | null = null;
-let cacheExpiresAt = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const FALLBACK_COST_CENTS = 1; // 1 cent fallback if costs-service is unavailable
-
-export function _clearCostCache(): void {
-  cachedUnitCostCents = null;
-  cacheExpiresAt = 0;
-}
-
-async function getUnitCostCents(
-  orgId: string,
-  userId: string,
-  runId: string,
-  trackingHeaders: Record<string, string> = {}
-): Promise<number> {
-  if (cachedUnitCostCents !== null && Date.now() < cacheExpiresAt) {
-    return cachedUnitCostCents;
-  }
-
-  try {
-    const response = await fetch(
-      `${getCostsServiceUrl()}/v1/platform-prices/postmark-email-send`,
-      {
-        method: "GET",
-        headers: {
-          "X-API-Key": getCostsServiceApiKey(),
-          "x-org-id": orgId,
-          "x-user-id": userId,
-          "x-run-id": runId,
-          ...trackingHeaders,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      console.warn(
-        `[billing] Failed to fetch unit cost from costs-service: ${response.status} — using fallback ${FALLBACK_COST_CENTS}c`
-      );
-      return FALLBACK_COST_CENTS;
-    }
-
-    const price = (await response.json()) as PlatformPrice;
-    cachedUnitCostCents = Math.ceil(parseFloat(price.pricePerUnitInUsdCents));
-    if (cachedUnitCostCents < 1) cachedUnitCostCents = 1;
-    cacheExpiresAt = Date.now() + CACHE_TTL_MS;
-    return cachedUnitCostCents;
-  } catch (error: any) {
-    console.warn(
-      `[billing] costs-service unreachable: ${error.message} — using fallback ${FALLBACK_COST_CENTS}c`
-    );
-    return FALLBACK_COST_CENTS;
-  }
+  required_cents: number;
 }
 
 // ─── Authorization ──────────────────────────────────────────────────────────
@@ -94,13 +24,10 @@ export async function authorizeCredits(params: {
   orgId: string;
   userId: string;
   runId: string;
-  emailCount: number;
+  items: { costName: string; quantity: number }[];
   trackingHeaders?: Record<string, string>;
 }): Promise<AuthorizeResult> {
-  const { orgId, userId, runId, emailCount, trackingHeaders = {} } = params;
-
-  const unitCost = await getUnitCostCents(orgId, userId, runId, trackingHeaders);
-  const requiredCents = unitCost * emailCount;
+  const { orgId, userId, runId, items, trackingHeaders = {} } = params;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -115,8 +42,8 @@ export async function authorizeCredits(params: {
     method: "POST",
     headers,
     body: JSON.stringify({
-      required_cents: requiredCents,
-      description: `postmark-email-send × ${emailCount}`,
+      items,
+      description: `postmark-email-send × ${items.reduce((sum, i) => sum + i.quantity, 0)}`,
     }),
   });
 

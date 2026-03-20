@@ -58,14 +58,14 @@ router.post("/send", async (req: Request, res: Response) => {
         orgId,
         userId,
         runId: parentRunId,
-        emailCount: 1,
+        items: [{ costName: "postmark-email-send", quantity: 1 }],
         trackingHeaders,
       });
       if (!auth.sufficient) {
         return res.status(402).json({
           error: "Insufficient credits",
           balance_cents: auth.balance_cents,
-          required_cents: 1,
+          required_cents: auth.required_cents,
         });
       }
     }
@@ -217,14 +217,14 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         orgId,
         userId,
         runId: parentRunId,
-        emailCount: emails.length,
+        items: [{ costName: "postmark-email-send", quantity: emails.length }],
         trackingHeaders,
       });
       if (!auth.sufficient) {
         return res.status(402).json({
           error: "Insufficient credits",
           balance_cents: auth.balance_cents,
-          required_cents: emails.length,
+          required_cents: auth.required_cents,
         });
       }
     }
