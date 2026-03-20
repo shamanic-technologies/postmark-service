@@ -108,6 +108,29 @@
           "error"
         ]
       },
+      "InsufficientCreditsResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "Insufficient credits"
+            ]
+          },
+          "balance_cents": {
+            "type": "number",
+            "nullable": true
+          },
+          "required_cents": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "error",
+          "balance_cents",
+          "required_cents"
+        ]
+      },
       "SendEmailRequest": {
         "type": "object",
         "properties": {
@@ -1237,6 +1260,16 @@
               }
             }
           },
+          "402": {
+            "description": "Insufficient credits (platform key only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientCreditsResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Server error",
             "content": {
@@ -1320,6 +1353,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits (platform key only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientCreditsResponse"
                 }
               }
             }

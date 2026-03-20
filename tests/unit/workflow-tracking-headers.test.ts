@@ -23,6 +23,15 @@ vi.mock("../../src/lib/key-client", () => ({
   getFromAddress: vi.fn().mockResolvedValue("default@test.com"),
 }));
 
+// Mock billing-client
+vi.mock("../../src/lib/billing-client", () => ({
+  authorizeCredits: vi.fn().mockResolvedValue({
+    sufficient: true,
+    balance_cents: 1000,
+    billing_mode: "payg",
+  }),
+}));
+
 // Mock database
 vi.mock("../../src/db", () => ({
   db: {

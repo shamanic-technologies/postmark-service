@@ -384,6 +384,14 @@ const ErrorResponseSchema = z
   })
   .openapi("ErrorResponse");
 
+const InsufficientCreditsResponseSchema = z
+  .object({
+    error: z.literal("Insufficient credits"),
+    balance_cents: z.number().nullable(),
+    required_cents: z.number(),
+  })
+  .openapi("InsufficientCreditsResponse");
+
 // ================================================================
 // Register all API paths
 // ================================================================
@@ -448,6 +456,10 @@ registry.registerPath({
       description: "Invalid request",
       content: { "application/json": { schema: ErrorResponseSchema } },
     },
+    402: {
+      description: "Insufficient credits (platform key only)",
+      content: { "application/json": { schema: InsufficientCreditsResponseSchema } },
+    },
     500: {
       description: "Server error",
       content: { "application/json": { schema: ErrorResponseSchema } },
@@ -482,6 +494,10 @@ registry.registerPath({
     400: {
       description: "Invalid request",
       content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+    402: {
+      description: "Insufficient credits (platform key only)",
+      content: { "application/json": { schema: InsufficientCreditsResponseSchema } },
     },
   },
 });
