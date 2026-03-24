@@ -34,6 +34,7 @@ export const postmarkSendings = pgTable(
     runId: text("run_id"), // Child run ID created in runs-service
     brandId: text("brand_id"),
     campaignId: text("campaign_id"),
+    featureSlug: text("feature_slug"),
     workflowName: text("workflow_name"),
     leadId: text("lead_id"),
     metadata: jsonb("metadata"), // Additional context

@@ -142,6 +142,10 @@
             "type": "string",
             "description": "Campaign ID"
           },
+          "featureSlug": {
+            "type": "string",
+            "description": "Feature slug for tracking"
+          },
           "workflowName": {
             "type": "string",
             "description": "Workflow name for tracking/grouping"
@@ -290,6 +294,9 @@
                   "type": "string"
                 },
                 "campaignId": {
+                  "type": "string"
+                },
+                "featureSlug": {
                   "type": "string"
                 },
                 "workflowName": {
@@ -1222,6 +1229,16 @@
           {
             "schema": {
               "type": "string",
+              "description": "Feature slug (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Feature slug (injected by workflow-service)",
+            "name": "x-feature-slug",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Workflow name (injected by workflow-service)"
             },
             "required": false,
@@ -1314,6 +1331,16 @@
             "required": false,
             "description": "Brand ID (injected by workflow-service)",
             "name": "x-brand-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature slug (injected by workflow-service)"
+            },
+            "required": false,
+            "description": "Feature slug (injected by workflow-service)",
+            "name": "x-feature-slug",
             "in": "header"
           },
           {

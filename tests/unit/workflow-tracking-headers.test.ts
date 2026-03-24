@@ -66,7 +66,7 @@ const mockRun = {
   updatedAt: new Date().toISOString(),
 };
 
-describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)", () => {
+describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, x-workflow-name)", () => {
   const app = createTestApp();
 
   beforeEach(() => {
@@ -91,6 +91,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
           ...getAuthHeaders(),
           "x-campaign-id": "camp-from-header",
           "x-brand-id": "brand-from-header",
+          "x-feature-slug": "feat-from-header",
           "x-workflow-name": "wf-from-header",
         })
         .send({
@@ -104,11 +105,13 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
         expect.objectContaining({
           campaignId: "camp-from-header",
           brandId: "brand-from-header",
+          featureSlug: "feat-from-header",
           workflowName: "wf-from-header",
         }),
         expect.objectContaining({
           "x-campaign-id": "camp-from-header",
           "x-brand-id": "brand-from-header",
+          "x-feature-slug": "feat-from-header",
           "x-workflow-name": "wf-from-header",
         })
       );
@@ -119,6 +122,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
       const valuesCall = insertCall.values.mock.calls[0][0];
       expect(valuesCall.campaignId).toBe("camp-from-header");
       expect(valuesCall.brandId).toBe("brand-from-header");
+      expect(valuesCall.featureSlug).toBe("feat-from-header");
       expect(valuesCall.workflowName).toBe("wf-from-header");
     });
 
@@ -129,6 +133,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
           ...getAuthHeaders(),
           "x-campaign-id": "camp-from-header",
           "x-brand-id": "brand-from-header",
+          "x-feature-slug": "feat-from-header",
           "x-workflow-name": "wf-from-header",
         })
         .send({
@@ -137,6 +142,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
           textBody: "Hello",
           campaignId: "camp-from-body",
           brandId: "brand-from-body",
+          featureSlug: "feat-from-body",
           workflowName: "wf-from-body",
         });
 
@@ -145,6 +151,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
         expect.objectContaining({
           campaignId: "camp-from-body",
           brandId: "brand-from-body",
+          featureSlug: "feat-from-body",
           workflowName: "wf-from-body",
         }),
         expect.any(Object)
@@ -155,6 +162,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
       const valuesCall = insertCall.values.mock.calls[0][0];
       expect(valuesCall.campaignId).toBe("camp-from-body");
       expect(valuesCall.brandId).toBe("brand-from-body");
+      expect(valuesCall.featureSlug).toBe("feat-from-body");
       expect(valuesCall.workflowName).toBe("wf-from-body");
     });
 
@@ -173,6 +181,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
         expect.objectContaining({
           campaignId: undefined,
           brandId: undefined,
+          featureSlug: undefined,
           workflowName: undefined,
         }),
         {} // empty tracking headers
@@ -186,6 +195,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
           ...getAuthHeaders(),
           "x-campaign-id": "camp-1",
           "x-brand-id": "brand-1",
+          "x-feature-slug": "feat-1",
           "x-workflow-name": "wf-1",
         })
         .send({
@@ -197,6 +207,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
       const expectedTracking = {
         "x-campaign-id": "camp-1",
         "x-brand-id": "brand-1",
+        "x-feature-slug": "feat-1",
         "x-workflow-name": "wf-1",
       };
 
@@ -224,6 +235,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
           ...getAuthHeaders(),
           "x-campaign-id": "camp-1",
           "x-brand-id": "brand-1",
+          "x-feature-slug": "feat-1",
           "x-workflow-name": "wf-1",
         })
         .send({
@@ -235,6 +247,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
       const expectedTracking = {
         "x-campaign-id": "camp-1",
         "x-brand-id": "brand-1",
+        "x-feature-slug": "feat-1",
         "x-workflow-name": "wf-1",
       };
 
@@ -263,6 +276,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
           ...getAuthHeaders(),
           "x-campaign-id": "camp-from-header",
           "x-brand-id": "brand-from-header",
+          "x-feature-slug": "feat-from-header",
           "x-workflow-name": "wf-from-header",
         })
         .send({
@@ -288,6 +302,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-workflow-name)
         expect.objectContaining({
           campaignId: "camp-from-header",
           brandId: "brand-from-header",
+          featureSlug: "feat-from-header",
           workflowName: "wf-from-header",
         }),
         expect.any(Object)
