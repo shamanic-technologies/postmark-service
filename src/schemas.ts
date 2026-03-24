@@ -31,6 +31,7 @@ export const SendEmailRequestSchema = z
   .object({
     brandId: z.string().optional().openapi({ description: "Brand ID" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
+    featureSlug: z.string().optional().openapi({ description: "Feature slug for tracking" }),
     workflowName: z.string().optional().openapi({ description: "Workflow name for tracking/grouping" }),
     leadId: z.string().optional().openapi({ description: "Lead ID for tracking and dedup" }),
     from: z.string().optional().openapi({ description: "Sender email address. If omitted, resolved from key-service (provider: postmark-from-address)." }),
@@ -76,6 +77,7 @@ export const BatchSendRequestSchema = z
         z.object({
           brandId: z.string().optional(),
           campaignId: z.string().optional(),
+          featureSlug: z.string().optional(),
           workflowName: z.string().optional(),
           leadId: z.string().optional(),
           from: z.string().optional(),
@@ -441,6 +443,7 @@ registry.registerPath({
     headers: z.object({
       "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
       "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
+      "x-feature-slug": z.string().optional().openapi({ description: "Feature slug (injected by workflow-service)" }),
       "x-workflow-name": z.string().optional().openapi({ description: "Workflow name (injected by workflow-service)" }),
     }),
     body: {
@@ -480,6 +483,7 @@ registry.registerPath({
     headers: z.object({
       "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
       "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
+      "x-feature-slug": z.string().optional().openapi({ description: "Feature slug (injected by workflow-service)" }),
       "x-workflow-name": z.string().optional().openapi({ description: "Workflow name (injected by workflow-service)" }),
     }),
     body: {

@@ -35,10 +35,12 @@ router.post("/send", async (req: Request, res: Response) => {
   // Workflow tracking headers (body takes priority, headers are fallback)
   const campaignId = body.campaignId ?? (req.headers["x-campaign-id"] as string | undefined);
   const brandId = body.brandId ?? (req.headers["x-brand-id"] as string | undefined);
+  const featureSlug = body.featureSlug ?? (req.headers["x-feature-slug"] as string | undefined);
   const workflowName = body.workflowName ?? (req.headers["x-workflow-name"] as string | undefined);
   const trackingHeaders: Record<string, string> = {};
   if (campaignId) trackingHeaders["x-campaign-id"] = campaignId;
   if (brandId) trackingHeaders["x-brand-id"] = brandId;
+  if (featureSlug) trackingHeaders["x-feature-slug"] = featureSlug;
   if (workflowName) trackingHeaders["x-workflow-name"] = workflowName;
 
   try {
@@ -79,6 +81,7 @@ router.post("/send", async (req: Request, res: Response) => {
       userId,
       brandId: brandId,
       campaignId: campaignId,
+      featureSlug: featureSlug,
       workflowName: workflowName,
     }, trackingHeaders);
     const sendRunId = sendRun.id;
@@ -125,6 +128,7 @@ router.post("/send", async (req: Request, res: Response) => {
           runId: sendRunId,
           brandId,
           campaignId,
+          featureSlug,
           workflowName,
           leadId: body.leadId,
           metadata: body.metadata,
@@ -192,10 +196,12 @@ router.post("/send/batch", async (req: Request, res: Response) => {
   // Workflow tracking headers from request (used as fallback for per-email values)
   const headerCampaignId = req.headers["x-campaign-id"] as string | undefined;
   const headerBrandId = req.headers["x-brand-id"] as string | undefined;
+  const headerFeatureSlug = req.headers["x-feature-slug"] as string | undefined;
   const headerWorkflowName = req.headers["x-workflow-name"] as string | undefined;
   const trackingHeaders: Record<string, string> = {};
   if (headerCampaignId) trackingHeaders["x-campaign-id"] = headerCampaignId;
   if (headerBrandId) trackingHeaders["x-brand-id"] = headerBrandId;
+  if (headerFeatureSlug) trackingHeaders["x-feature-slug"] = headerFeatureSlug;
   if (headerWorkflowName) trackingHeaders["x-workflow-name"] = headerWorkflowName;
 
   const results = [];
@@ -243,6 +249,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       // Per-email tracking: body takes priority, headers are fallback
       const emailCampaignId = email.campaignId ?? headerCampaignId;
       const emailBrandId = email.brandId ?? headerBrandId;
+      const emailFeatureSlug = email.featureSlug ?? headerFeatureSlug;
       const emailWorkflowName = email.workflowName ?? headerWorkflowName;
 
       // 1. Create run in runs-service (BLOCKING)
@@ -254,6 +261,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         userId,
         brandId: emailBrandId,
         campaignId: emailCampaignId,
+        featureSlug: emailFeatureSlug,
         workflowName: emailWorkflowName,
       }, trackingHeaders);
       const sendRunId = sendRun.id;
@@ -302,6 +310,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             runId: sendRunId,
             brandId: emailBrandId,
             campaignId: emailCampaignId,
+            featureSlug: emailFeatureSlug,
             workflowName: emailWorkflowName,
             leadId: email.leadId,
             metadata: email.metadata,
