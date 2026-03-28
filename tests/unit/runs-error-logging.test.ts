@@ -124,7 +124,7 @@ describe("runs-service BLOCKING behavior", () => {
       userId: "user_xyz",
       brandId: "brand_1",
       campaignId: "campaign_1",
-      workflowName: undefined,
+      workflowSlug: undefined,
     }, { "x-brand-id": "brand_1", "x-campaign-id": "campaign_1" });
   });
 

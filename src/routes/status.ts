@@ -398,7 +398,7 @@ router.post("/status", async (req: Request, res: Response) => {
 const GROUP_BY_COLUMN_MAP = {
   brandId: postmarkSendings.brandId,
   campaignId: postmarkSendings.campaignId,
-  workflowName: postmarkSendings.workflowName,
+  workflowSlug: postmarkSendings.workflowSlug,
   leadEmail: postmarkSendings.toEmail,
 } as const;
 
@@ -407,7 +407,7 @@ function buildStatsConditions(data: {
   orgId?: string;
   brandId?: string;
   campaignId?: string;
-  workflowName?: string;
+  workflowSlug?: string;
 }): SQL[] {
   const conditions: SQL[] = [];
   if (Array.isArray(data.runIds) && data.runIds.length > 0) {
@@ -422,8 +422,8 @@ function buildStatsConditions(data: {
   if (data.campaignId) {
     conditions.push(eq(postmarkSendings.campaignId, data.campaignId));
   }
-  if (data.workflowName) {
-    conditions.push(eq(postmarkSendings.workflowName, data.workflowName));
+  if (data.workflowSlug) {
+    conditions.push(eq(postmarkSendings.workflowSlug, data.workflowSlug));
   }
   return conditions;
 }

@@ -36,12 +36,12 @@ router.post("/send", async (req: Request, res: Response) => {
   const campaignId = body.campaignId ?? (req.headers["x-campaign-id"] as string | undefined);
   const brandId = body.brandId ?? (req.headers["x-brand-id"] as string | undefined);
   const featureSlug = body.featureSlug ?? (req.headers["x-feature-slug"] as string | undefined);
-  const workflowName = body.workflowName ?? (req.headers["x-workflow-name"] as string | undefined);
+  const workflowSlug = body.workflowSlug ?? (req.headers["x-workflow-slug"] as string | undefined);
   const trackingHeaders: Record<string, string> = {};
   if (campaignId) trackingHeaders["x-campaign-id"] = campaignId;
   if (brandId) trackingHeaders["x-brand-id"] = brandId;
   if (featureSlug) trackingHeaders["x-feature-slug"] = featureSlug;
-  if (workflowName) trackingHeaders["x-workflow-name"] = workflowName;
+  if (workflowSlug) trackingHeaders["x-workflow-slug"] = workflowSlug;
 
   try {
     // 1. Resolve key from key-service (get keySource for cost tracking)
@@ -82,7 +82,7 @@ router.post("/send", async (req: Request, res: Response) => {
       brandId: brandId,
       campaignId: campaignId,
       featureSlug: featureSlug,
-      workflowName: workflowName,
+      workflowSlug: workflowSlug,
     }, trackingHeaders);
     const sendRunId = sendRun.id;
 
@@ -129,7 +129,7 @@ router.post("/send", async (req: Request, res: Response) => {
           brandId,
           campaignId,
           featureSlug,
-          workflowName,
+          workflowSlug,
           leadId: body.leadId,
           metadata: body.metadata,
         })
@@ -197,12 +197,12 @@ router.post("/send/batch", async (req: Request, res: Response) => {
   const headerCampaignId = req.headers["x-campaign-id"] as string | undefined;
   const headerBrandId = req.headers["x-brand-id"] as string | undefined;
   const headerFeatureSlug = req.headers["x-feature-slug"] as string | undefined;
-  const headerWorkflowName = req.headers["x-workflow-name"] as string | undefined;
+  const headerWorkflowSlug = req.headers["x-workflow-slug"] as string | undefined;
   const trackingHeaders: Record<string, string> = {};
   if (headerCampaignId) trackingHeaders["x-campaign-id"] = headerCampaignId;
   if (headerBrandId) trackingHeaders["x-brand-id"] = headerBrandId;
   if (headerFeatureSlug) trackingHeaders["x-feature-slug"] = headerFeatureSlug;
-  if (headerWorkflowName) trackingHeaders["x-workflow-name"] = headerWorkflowName;
+  if (headerWorkflowSlug) trackingHeaders["x-workflow-slug"] = headerWorkflowSlug;
 
   const results = [];
 
@@ -250,7 +250,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
       const emailCampaignId = email.campaignId ?? headerCampaignId;
       const emailBrandId = email.brandId ?? headerBrandId;
       const emailFeatureSlug = email.featureSlug ?? headerFeatureSlug;
-      const emailWorkflowName = email.workflowName ?? headerWorkflowName;
+      const emailWorkflowSlug = email.workflowSlug ?? headerWorkflowSlug;
 
       // 1. Create run in runs-service (BLOCKING)
       const sendRun = await createRun({
@@ -262,7 +262,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         brandId: emailBrandId,
         campaignId: emailCampaignId,
         featureSlug: emailFeatureSlug,
-        workflowName: emailWorkflowName,
+        workflowSlug: emailWorkflowSlug,
       }, trackingHeaders);
       const sendRunId = sendRun.id;
 
@@ -311,7 +311,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             brandId: emailBrandId,
             campaignId: emailCampaignId,
             featureSlug: emailFeatureSlug,
-            workflowName: emailWorkflowName,
+            workflowSlug: emailWorkflowSlug,
             leadId: email.leadId,
             metadata: email.metadata,
           })

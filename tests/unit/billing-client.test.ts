@@ -78,14 +78,14 @@ describe("billing-client", () => {
         trackingHeaders: {
           "x-campaign-id": "camp-1",
           "x-brand-id": "brand-1",
-          "x-workflow-name": "wf-1",
+          "x-workflow-slug": "wf-1",
         },
       });
 
       const billingHeaders = mockFetch.mock.calls[0][1].headers;
       expect(billingHeaders["x-campaign-id"]).toBe("camp-1");
       expect(billingHeaders["x-brand-id"]).toBe("brand-1");
-      expect(billingHeaders["x-workflow-name"]).toBe("wf-1");
+      expect(billingHeaders["x-workflow-slug"]).toBe("wf-1");
     });
 
     it("should throw when billing-service returns non-OK", async () => {

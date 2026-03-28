@@ -38,13 +38,13 @@ describe("GET /stats", () => {
   });
 
   it("should return grouped global stats when only groupBy is provided", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-global-a" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-global-b" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-global-a" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-global-b" });
 
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ groupBy: "workflowName" });
+      .query({ groupBy: "workflowSlug" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toBeDefined();
@@ -229,27 +229,27 @@ describe("GET /stats", () => {
     expect(response.body.recipients).toBe(2); // alice + bob
   });
 
-  it("should filter by workflowName", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-alpha" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-beta" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-alpha" });
+  it("should filter by workflowSlug", async () => {
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-alpha" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-beta" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-alpha" });
 
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ brandId: "b1", workflowName: "wf-alpha" });
+      .query({ brandId: "b1", workflowSlug: "wf-alpha" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(2);
   });
 
-  it("should accept workflowName as the sole filter", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowName: "wf-solo" });
+  it("should accept workflowSlug as the sole filter", async () => {
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-solo" });
 
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ workflowName: "wf-solo" });
+      .query({ workflowSlug: "wf-solo" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -313,16 +313,16 @@ describe("GET /stats", () => {
     expect(brandY.stats.emailsSent).toBe(1);
   });
 
-  it("should group by workflowName", async () => {
+  it("should group by workflowSlug", async () => {
     const org = "org-group-wf";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-2" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "wf-2" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "wf-1" });
 
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ orgId: org, groupBy: "workflowName" });
+      .query({ orgId: org, groupBy: "workflowSlug" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -374,13 +374,13 @@ describe("GET /stats", () => {
 
   it("should handle null group keys", async () => {
     const org = "org-null-wf";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowName: "wf-1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1" }); // no workflowName
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1" }); // no workflowSlug
 
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ orgId: org, groupBy: "workflowName" });
+      .query({ orgId: org, groupBy: "workflowSlug" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
