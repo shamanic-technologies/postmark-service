@@ -32,7 +32,7 @@ export const SendEmailRequestSchema = z
     brandId: z.string().optional().openapi({ description: "Brand ID" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     featureSlug: z.string().optional().openapi({ description: "Feature slug for tracking" }),
-    workflowName: z.string().optional().openapi({ description: "Workflow name for tracking/grouping" }),
+    workflowSlug: z.string().optional().openapi({ description: "Workflow slug for tracking/grouping" }),
     leadId: z.string().optional().openapi({ description: "Lead ID for tracking and dedup" }),
     from: z.string().optional().openapi({ description: "Sender email address. If omitted, resolved from key-service (provider: postmark-from-address)." }),
     to: z.string().openapi({ description: "Recipient email address" }),
@@ -78,7 +78,7 @@ export const BatchSendRequestSchema = z
           brandId: z.string().optional(),
           campaignId: z.string().optional(),
           featureSlug: z.string().optional(),
-          workflowName: z.string().optional(),
+          workflowSlug: z.string().optional(),
           leadId: z.string().optional(),
           from: z.string().optional(),
           to: z.string(),
@@ -273,7 +273,7 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 // ===== Stats =====
 
-export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowName", "leadEmail"]);
+export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "leadEmail"]);
 
 export const StatsQuerySchema = z
   .object({
@@ -281,7 +281,7 @@ export const StatsQuerySchema = z
     orgId: z.string().optional().openapi({ description: "Filter by organization ID" }),
     brandId: z.string().optional().openapi({ description: "Filter by brand ID" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
-    workflowName: z.string().optional().openapi({ description: "Filter by workflow name" }),
+    workflowSlug: z.string().optional().openapi({ description: "Filter by workflow slug" }),
     groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
   })
   .openapi("StatsQuery");
@@ -329,7 +329,7 @@ export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 // ===== Performance Leaderboard =====
 
 const WorkflowStatsSchema = z.object({
-  workflowName: z.string(),
+  workflowSlug: z.string(),
   emailsSent: z.number(),
   emailsDelivered: z.number(),
   emailsOpened: z.number(),
@@ -444,7 +444,7 @@ registry.registerPath({
       "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
       "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
       "x-feature-slug": z.string().optional().openapi({ description: "Feature slug (injected by workflow-service)" }),
-      "x-workflow-name": z.string().optional().openapi({ description: "Workflow name (injected by workflow-service)" }),
+      "x-workflow-slug": z.string().optional().openapi({ description: "Workflow slug (injected by workflow-service)" }),
     }),
     body: {
       content: { "application/json": { schema: SendEmailRequestSchema } },
@@ -484,7 +484,7 @@ registry.registerPath({
       "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
       "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
       "x-feature-slug": z.string().optional().openapi({ description: "Feature slug (injected by workflow-service)" }),
-      "x-workflow-name": z.string().optional().openapi({ description: "Workflow name (injected by workflow-service)" }),
+      "x-workflow-slug": z.string().optional().openapi({ description: "Workflow slug (injected by workflow-service)" }),
     }),
     body: {
       content: { "application/json": { schema: BatchSendRequestSchema } },
@@ -609,7 +609,7 @@ registry.registerPath({
   path: "/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowName. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowSlug. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {

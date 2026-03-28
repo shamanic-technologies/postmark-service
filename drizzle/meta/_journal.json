@@ -64,6 +64,13 @@
       "when": 1774318031720,
       "tag": "0008_clammy_ogun",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774915200000,
+      "tag": "0009_rename_workflow_name_to_slug",
+      "breakpoints": true
     }
   ]
 }

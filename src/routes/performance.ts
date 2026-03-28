@@ -22,14 +22,14 @@ router.get("/performance/leaderboard", async (req: Request, res: Response) => {
     const sendings = await db
       .select({
         messageId: postmarkSendings.messageId,
-        workflowName: postmarkSendings.workflowName,
+        workflowSlug: postmarkSendings.workflowSlug,
       })
       .from(postmarkSendings);
 
-    // Group by workflowName
+    // Group by workflowSlug
     const grouped = new Map<string, { messageIds: string[]; count: number }>();
     for (const s of sendings) {
-      const key = s.workflowName ?? "";
+      const key = s.workflowSlug ?? "";
       let group = grouped.get(key);
       if (!group) {
         group = { messageIds: [], count: 0 };
@@ -73,7 +73,7 @@ router.get("/performance/leaderboard", async (req: Request, res: Response) => {
     const bouncedSet = new Set(allBounces.map((b) => b.messageId));
 
     const workflows = Array.from(grouped.entries())
-      .filter(([key]) => key !== "") // exclude sendings with no workflowName
+      .filter(([key]) => key !== "") // exclude sendings with no workflowSlug
       .map(([key, group]) => {
         const delivered = group.messageIds.filter((id) => deliveredSet.has(id)).length;
         const opened = group.messageIds.filter((id) => openedSet.has(id)).length;
@@ -81,7 +81,7 @@ router.get("/performance/leaderboard", async (req: Request, res: Response) => {
         const bounced = group.messageIds.filter((id) => bouncedSet.has(id)).length;
 
         return {
-          workflowName: key,
+          workflowSlug: key,
           emailsSent: group.count,
           emailsDelivered: delivered,
           emailsOpened: opened,

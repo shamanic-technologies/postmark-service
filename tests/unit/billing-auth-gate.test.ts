@@ -167,7 +167,7 @@ describe("billing credit authorization gate", () => {
           ...getAuthHeaders(),
           "x-campaign-id": "camp-1",
           "x-brand-id": "brand-1",
-          "x-workflow-name": "wf-1",
+          "x-workflow-slug": "wf-1",
         })
         .send(validBody);
 
@@ -176,7 +176,7 @@ describe("billing credit authorization gate", () => {
           trackingHeaders: expect.objectContaining({
             "x-campaign-id": "camp-1",
             "x-brand-id": "brand-1",
-            "x-workflow-name": "wf-1",
+            "x-workflow-slug": "wf-1",
           }),
         })
       );

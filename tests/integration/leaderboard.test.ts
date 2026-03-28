@@ -32,14 +32,14 @@ describe("GET /performance/leaderboard", () => {
     expect(response.body.workflows).toEqual([]);
   });
 
-  it("should return global stats grouped by workflowName", async () => {
+  it("should return global stats grouped by workflowSlug", async () => {
     const msg1 = randomUUID();
     const msg2 = randomUUID();
     const msg3 = randomUUID();
 
-    await insertTestSending({ messageId: msg1, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, orgId: "org-1", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg3, orgId: "org-2", workflowName: "Darmstadt", brandId: "b2", campaignId: "c2" });
+    await insertTestSending({ messageId: msg1, orgId: "org-1", workflowSlug: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, orgId: "org-1", workflowSlug: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, orgId: "org-2", workflowSlug: "Darmstadt", brandId: "b2", campaignId: "c2" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);
@@ -52,8 +52,8 @@ describe("GET /performance/leaderboard", () => {
     expect(response.status).toBe(200);
     expect(response.body.workflows).toHaveLength(2);
 
-    const pharaoh = response.body.workflows.find((w: any) => w.workflowName === "Pharaoh");
-    const darmstadt = response.body.workflows.find((w: any) => w.workflowName === "Darmstadt");
+    const pharaoh = response.body.workflows.find((w: any) => w.workflowSlug === "Pharaoh");
+    const darmstadt = response.body.workflows.find((w: any) => w.workflowSlug === "Darmstadt");
 
     expect(pharaoh).toBeDefined();
     expect(pharaoh.emailsSent).toBe(2);
@@ -66,9 +66,9 @@ describe("GET /performance/leaderboard", () => {
     expect(darmstadt.emailsDelivered).toBe(0);
   });
 
-  it("should exclude sendings with no workflowName", async () => {
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" }); // no workflowName
+  it("should exclude sendings with no workflowSlug", async () => {
+    await insertTestSending({ messageId: randomUUID(), workflowSlug: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" }); // no workflowSlug
 
     const response = await request(app)
       .get("/performance/leaderboard")
@@ -76,23 +76,23 @@ describe("GET /performance/leaderboard", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.workflows).toHaveLength(1);
-    expect(response.body.workflows[0].workflowName).toBe("Pharaoh");
+    expect(response.body.workflows[0].workflowSlug).toBe("Pharaoh");
   });
 
   it("should sort workflows by emailsSent descending", async () => {
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Small", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), workflowName: "Big", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowSlug: "Small", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowSlug: "Big", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowSlug: "Big", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: randomUUID(), workflowSlug: "Big", brandId: "b1", campaignId: "c1" });
 
     const response = await request(app)
       .get("/performance/leaderboard")
       .set(getAuthHeaders());
 
     expect(response.status).toBe(200);
-    expect(response.body.workflows[0].workflowName).toBe("Big");
+    expect(response.body.workflows[0].workflowSlug).toBe("Big");
     expect(response.body.workflows[0].emailsSent).toBe(3);
-    expect(response.body.workflows[1].workflowName).toBe("Small");
+    expect(response.body.workflows[1].workflowSlug).toBe("Small");
     expect(response.body.workflows[1].emailsSent).toBe(1);
   });
 
@@ -102,10 +102,10 @@ describe("GET /performance/leaderboard", () => {
     const msg3 = randomUUID();
     const msg4 = randomUUID();
 
-    await insertTestSending({ messageId: msg1, workflowName: "Test", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, workflowName: "Test", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg3, workflowName: "Test", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg4, workflowName: "Test", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg1, workflowSlug: "Test", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, workflowSlug: "Test", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg3, workflowSlug: "Test", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg4, workflowSlug: "Test", brandId: "b1", campaignId: "c1" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);
@@ -134,9 +134,9 @@ describe("GET /performance/leaderboard", () => {
     const msg2 = randomUUID();
     const msg3 = randomUUID();
 
-    await insertTestSending({ messageId: msg1, orgId: "org-X", workflowName: "Pharaoh", brandId: "b1", campaignId: "c1" });
-    await insertTestSending({ messageId: msg2, orgId: "org-Y", workflowName: "Pharaoh", brandId: "b2", campaignId: "c2" });
-    await insertTestSending({ messageId: msg3, orgId: "org-Z", workflowName: "Pharaoh", brandId: "b3", campaignId: "c3" });
+    await insertTestSending({ messageId: msg1, orgId: "org-X", workflowSlug: "Pharaoh", brandId: "b1", campaignId: "c1" });
+    await insertTestSending({ messageId: msg2, orgId: "org-Y", workflowSlug: "Pharaoh", brandId: "b2", campaignId: "c2" });
+    await insertTestSending({ messageId: msg3, orgId: "org-Z", workflowSlug: "Pharaoh", brandId: "b3", campaignId: "c3" });
 
     await insertTestDelivery(msg1);
     await insertTestDelivery(msg2);

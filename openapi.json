@@ -146,9 +146,9 @@
             "type": "string",
             "description": "Feature slug for tracking"
           },
-          "workflowName": {
+          "workflowSlug": {
             "type": "string",
-            "description": "Workflow name for tracking/grouping"
+            "description": "Workflow slug for tracking/grouping"
           },
           "leadId": {
             "type": "string",
@@ -299,7 +299,7 @@
                 "featureSlug": {
                   "type": "string"
                 },
-                "workflowName": {
+                "workflowSlug": {
                   "type": "string"
                 },
                 "leadId": {
@@ -1055,7 +1055,7 @@
             "items": {
               "type": "object",
               "properties": {
-                "workflowName": {
+                "workflowSlug": {
                   "type": "string"
                 },
                 "emailsSent": {
@@ -1091,7 +1091,7 @@
                 }
               },
               "required": [
-                "workflowName",
+                "workflowSlug",
                 "emailsSent",
                 "emailsDelivered",
                 "emailsOpened",
@@ -1239,11 +1239,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Workflow name (injected by workflow-service)"
+              "description": "Workflow slug (injected by workflow-service)"
             },
             "required": false,
-            "description": "Workflow name (injected by workflow-service)",
-            "name": "x-workflow-name",
+            "description": "Workflow slug (injected by workflow-service)",
+            "name": "x-workflow-slug",
             "in": "header"
           }
         ],
@@ -1346,11 +1346,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Workflow name (injected by workflow-service)"
+              "description": "Workflow slug (injected by workflow-service)"
             },
             "required": false,
-            "description": "Workflow name (injected by workflow-service)",
-            "name": "x-workflow-name",
+            "description": "Workflow slug (injected by workflow-service)",
+            "name": "x-workflow-slug",
             "in": "header"
           }
         ],
@@ -1579,7 +1579,7 @@
     "/stats": {
       "get": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowName. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowSlug. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
         "tags": [
           "Email Status"
         ],
@@ -1632,11 +1632,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by workflow name"
+              "description": "Filter by workflow slug"
             },
             "required": false,
-            "description": "Filter by workflow name",
-            "name": "workflowName",
+            "description": "Filter by workflow slug",
+            "name": "workflowSlug",
             "in": "query"
           },
           {
@@ -1645,7 +1645,7 @@
               "enum": [
                 "brandId",
                 "campaignId",
-                "workflowName",
+                "workflowSlug",
                 "leadEmail"
               ],
               "description": "Group results by dimension"
@@ -1743,11 +1743,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by workflow name"
+              "description": "Filter by workflow slug"
             },
             "required": false,
-            "description": "Filter by workflow name",
-            "name": "workflowName",
+            "description": "Filter by workflow slug",
+            "name": "workflowSlug",
             "in": "query"
           },
           {
@@ -1756,7 +1756,7 @@
               "enum": [
                 "brandId",
                 "campaignId",
-                "workflowName",
+                "workflowSlug",
                 "leadEmail"
               ],
               "description": "Group results by dimension"

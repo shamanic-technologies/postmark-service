@@ -184,19 +184,19 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should accept workflowName filter", () => {
+    it("should accept workflowSlug filter", () => {
       const result = StatsQuerySchema.safeParse({
         orgId: "org_123",
-        workflowName: "outbound-v2",
+        workflowSlug: "outbound-v2",
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.workflowName).toBe("outbound-v2");
+        expect(result.data.workflowSlug).toBe("outbound-v2");
       }
     });
 
     it("should accept groupBy with valid enum values", () => {
-      for (const value of ["brandId", "campaignId", "workflowName", "leadEmail"]) {
+      for (const value of ["brandId", "campaignId", "workflowSlug", "leadEmail"]) {
         const result = StatsQuerySchema.safeParse({
           orgId: "org_123",
           groupBy: value,
@@ -292,7 +292,7 @@ describe("Zod schemas", () => {
     });
   });
 
-  describe("SendEmailRequestSchema - workflowName", () => {
+  describe("SendEmailRequestSchema - workflowSlug", () => {
     const validRequest = {
       from: "sender@example.com",
       to: "recipient@example.com",
@@ -300,22 +300,22 @@ describe("Zod schemas", () => {
       htmlBody: "<p>Hello</p>",
     };
 
-    it("should accept workflowName as optional field", () => {
+    it("should accept workflowSlug as optional field", () => {
       const result = SendEmailRequestSchema.safeParse({
         ...validRequest,
-        workflowName: "outbound-v2",
+        workflowSlug: "outbound-v2",
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.workflowName).toBe("outbound-v2");
+        expect(result.data.workflowSlug).toBe("outbound-v2");
       }
     });
 
-    it("should accept request without workflowName", () => {
+    it("should accept request without workflowSlug", () => {
       const result = SendEmailRequestSchema.safeParse(validRequest);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.workflowName).toBeUndefined();
+        expect(result.data.workflowSlug).toBeUndefined();
       }
     });
   });
