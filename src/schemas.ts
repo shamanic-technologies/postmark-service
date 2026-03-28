@@ -273,7 +273,7 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 // ===== Stats =====
 
-export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "leadEmail"]);
+export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "workflowDynastySlug", "featureDynastySlug", "leadEmail"]);
 
 export const StatsQuerySchema = z
   .object({

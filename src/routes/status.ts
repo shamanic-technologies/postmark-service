@@ -13,6 +13,9 @@ import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
 import {
   resolveFeatureDynastySlugs,
   resolveWorkflowDynastySlugs,
+  fetchAllFeatureDynasties,
+  fetchAllWorkflowDynasties,
+  buildSlugToDynastyMap,
 } from "../lib/dynasty-client";
 
 const router = Router();
@@ -565,21 +568,35 @@ async function handleStats(req: Request, res: Response) {
     }
 
     // ─── Grouped response ────────────────────────────────────────────
-    const groupColumn = GROUP_BY_COLUMN_MAP[groupBy];
+    const isDynastyGroupBy = groupBy === "workflowDynastySlug" || groupBy === "featureDynastySlug";
+    const dbColumn = isDynastyGroupBy
+      ? (groupBy === "workflowDynastySlug" ? postmarkSendings.workflowSlug : postmarkSendings.featureSlug)
+      : GROUP_BY_COLUMN_MAP[groupBy];
+
+    // For dynasty groupBy, fetch all dynasties and build reverse map
+    let slugToDynastyMap: Map<string, string> | undefined;
+    if (groupBy === "workflowDynastySlug") {
+      const dynasties = await fetchAllWorkflowDynasties(identityHeaders);
+      slugToDynastyMap = buildSlugToDynastyMap(dynasties);
+    } else if (groupBy === "featureDynastySlug") {
+      const dynasties = await fetchAllFeatureDynasties(identityHeaders);
+      slugToDynastyMap = buildSlugToDynastyMap(dynasties);
+    }
 
     const sendings = await db
       .select({
         messageId: postmarkSendings.messageId,
         toEmail: postmarkSendings.toEmail,
-        groupKey: groupColumn,
+        groupKey: dbColumn,
       })
       .from(postmarkSendings)
       .where(and(...conditions));
 
-    // Group sendings by dimension key
+    // Group sendings by dimension key (resolving to dynasty slug when needed)
     const grouped = new Map<string, { messageIds: string[]; toEmails: Set<string>; count: number }>();
     for (const s of sendings) {
-      const key = s.groupKey ?? "";
+      const rawKey = s.groupKey ?? "";
+      const key = slugToDynastyMap ? (slugToDynastyMap.get(rawKey) ?? rawKey) : rawKey;
       let group = grouped.get(key);
       if (!group) {
         group = { messageIds: [], toEmails: new Set(), count: 0 };
