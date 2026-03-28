@@ -273,7 +273,7 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 // ===== Stats =====
 
-export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "leadEmail"]);
+export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "leadEmail"]);
 
 export const StatsQuerySchema = z
   .object({
@@ -282,6 +282,9 @@ export const StatsQuerySchema = z
     brandId: z.string().optional().openapi({ description: "Filter by brand ID" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
     workflowSlug: z.string().optional().openapi({ description: "Filter by workflow slug" }),
+    featureSlug: z.string().optional().openapi({ description: "Filter by feature slug" }),
+    workflowDynastySlug: z.string().optional().openapi({ description: "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)" }),
+    featureDynastySlug: z.string().optional().openapi({ description: "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)" }),
     groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
   })
   .openapi("StatsQuery");
@@ -609,7 +612,7 @@ registry.registerPath({
   path: "/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowSlug. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {

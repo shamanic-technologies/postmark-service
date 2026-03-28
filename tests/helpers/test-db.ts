@@ -37,6 +37,7 @@ export async function insertTestSending(data: {
   brandId?: string;
   campaignId?: string;
   workflowSlug?: string;
+  featureSlug?: string;
   leadId?: string;
 }) {
   const [sending] = await db
@@ -51,6 +52,7 @@ export async function insertTestSending(data: {
       brandId: data.brandId,
       campaignId: data.campaignId,
       workflowSlug: data.workflowSlug,
+      featureSlug: data.featureSlug,
       leadId: data.leadId,
       errorCode: 0,
       message: "OK",

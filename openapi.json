@@ -1579,7 +1579,7 @@
     "/stats": {
       "get": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, and/or workflowSlug. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
         "tags": [
           "Email Status"
         ],
@@ -1642,10 +1642,41 @@
           {
             "schema": {
               "type": "string",
+              "description": "Filter by feature slug"
+            },
+            "required": false,
+            "description": "Filter by feature slug",
+            "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)"
+            },
+            "required": false,
+            "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)",
+            "name": "workflowDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)"
+            },
+            "required": false,
+            "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)",
+            "name": "featureDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "brandId",
                 "campaignId",
                 "workflowSlug",
+                "featureSlug",
                 "leadEmail"
               ],
               "description": "Group results by dimension"
@@ -1753,10 +1784,41 @@
           {
             "schema": {
               "type": "string",
+              "description": "Filter by feature slug"
+            },
+            "required": false,
+            "description": "Filter by feature slug",
+            "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)"
+            },
+            "required": false,
+            "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)",
+            "name": "workflowDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)"
+            },
+            "required": false,
+            "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)",
+            "name": "featureDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "brandId",
                 "campaignId",
                 "workflowSlug",
+                "featureSlug",
                 "leadEmail"
               ],
               "description": "Group results by dimension"
