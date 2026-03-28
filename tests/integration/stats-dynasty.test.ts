@@ -12,15 +12,24 @@ import {
 vi.mock("../../src/lib/dynasty-client", () => ({
   resolveFeatureDynastySlugs: vi.fn(),
   resolveWorkflowDynastySlugs: vi.fn(),
+  fetchAllFeatureDynasties: vi.fn(),
+  fetchAllWorkflowDynasties: vi.fn(),
+  buildSlugToDynastyMap: vi.fn(),
 }));
 
 import {
   resolveFeatureDynastySlugs,
   resolveWorkflowDynastySlugs,
+  fetchAllFeatureDynasties,
+  fetchAllWorkflowDynasties,
+  buildSlugToDynastyMap,
 } from "../../src/lib/dynasty-client";
 
 const mockResolveFeature = vi.mocked(resolveFeatureDynastySlugs);
 const mockResolveWorkflow = vi.mocked(resolveWorkflowDynastySlugs);
+const mockFetchAllFeatureDynasties = vi.mocked(fetchAllFeatureDynasties);
+const mockFetchAllWorkflowDynasties = vi.mocked(fetchAllWorkflowDynasties);
+const mockBuildSlugToDynastyMap = vi.mocked(buildSlugToDynastyMap);
 
 describe("GET /stats — featureSlug and dynasty slug filters", () => {
   const app = createTestApp();
@@ -187,5 +196,109 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     expect(response.status).toBe(200);
     // Dynasty takes precedence — resolves to wf-a + wf-a-v2
     expect(response.body.stats.emailsSent).toBe(2);
+  });
+
+  // ─── groupBy workflowDynastySlug ──────────────────────────────────────────
+
+  it("should group by workflowDynastySlug using reverse map", async () => {
+    // buildSlugToDynastyMap is a pure function — mock it to return a real map
+    mockFetchAllWorkflowDynasties.mockResolvedValue([
+      { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+      { dynastySlug: "warm-intro", slugs: ["warm-intro", "warm-intro-v2"] },
+    ]);
+    mockBuildSlugToDynastyMap.mockReturnValue(
+      new Map([
+        ["cold-email", "cold-email"],
+        ["cold-email-v2", "cold-email"],
+        ["warm-intro", "warm-intro"],
+        ["warm-intro-v2", "warm-intro"],
+      ]),
+    );
+
+    const org = "org-dynasty-group";
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email-v2" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "warm-intro" });
+
+    const response = await request(app)
+      .get("/stats")
+      .set(getAuthHeaders())
+      .query({ orgId: org, groupBy: "workflowDynastySlug" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+
+    const coldEmail = response.body.groups.find((g: any) => g.key === "cold-email");
+    const warmIntro = response.body.groups.find((g: any) => g.key === "warm-intro");
+    expect(coldEmail.stats.emailsSent).toBe(2);
+    expect(warmIntro.stats.emailsSent).toBe(1);
+
+    expect(mockFetchAllWorkflowDynasties).toHaveBeenCalledOnce();
+    expect(mockBuildSlugToDynastyMap).toHaveBeenCalledOnce();
+  });
+
+  // ─── groupBy featureDynastySlug ───────────────────────────────────────────
+
+  it("should group by featureDynastySlug using reverse map", async () => {
+    mockFetchAllFeatureDynasties.mockResolvedValue([
+      { dynastySlug: "feat-alpha", slugs: ["feat-alpha", "feat-alpha-v2"] },
+      { dynastySlug: "feat-beta", slugs: ["feat-beta"] },
+    ]);
+    mockBuildSlugToDynastyMap.mockReturnValue(
+      new Map([
+        ["feat-alpha", "feat-alpha"],
+        ["feat-alpha-v2", "feat-alpha"],
+        ["feat-beta", "feat-beta"],
+      ]),
+    );
+
+    const org = "org-feat-dynasty-group";
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha-v2" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
+
+    const response = await request(app)
+      .get("/stats")
+      .set(getAuthHeaders())
+      .query({ orgId: org, groupBy: "featureDynastySlug" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+
+    const alpha = response.body.groups.find((g: any) => g.key === "feat-alpha");
+    const beta = response.body.groups.find((g: any) => g.key === "feat-beta");
+    expect(alpha.stats.emailsSent).toBe(2);
+    expect(beta.stats.emailsSent).toBe(1);
+
+    expect(mockFetchAllFeatureDynasties).toHaveBeenCalledOnce();
+  });
+
+  it("should fall back to raw slug when slug not in dynasty map", async () => {
+    mockFetchAllWorkflowDynasties.mockResolvedValue([
+      { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+    ]);
+    mockBuildSlugToDynastyMap.mockReturnValue(
+      new Map([
+        ["cold-email", "cold-email"],
+        ["cold-email-v2", "cold-email"],
+      ]),
+    );
+
+    const org = "org-orphan-slug";
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email" });
+    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "orphan-wf" });
+
+    const response = await request(app)
+      .get("/stats")
+      .set(getAuthHeaders())
+      .query({ orgId: org, groupBy: "workflowDynastySlug" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+
+    const coldEmail = response.body.groups.find((g: any) => g.key === "cold-email");
+    const orphan = response.body.groups.find((g: any) => g.key === "orphan-wf");
+    expect(coldEmail.stats.emailsSent).toBe(1);
+    expect(orphan.stats.emailsSent).toBe(1);
   });
 });

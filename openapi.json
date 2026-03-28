@@ -1677,6 +1677,8 @@
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
+                "workflowDynastySlug",
+                "featureDynastySlug",
                 "leadEmail"
               ],
               "description": "Group results by dimension"
@@ -1819,6 +1821,8 @@
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
+                "workflowDynastySlug",
+                "featureDynastySlug",
                 "leadEmail"
               ],
               "description": "Group results by dimension"
