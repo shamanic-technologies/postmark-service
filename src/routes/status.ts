@@ -10,6 +10,10 @@ import {
 } from "../db/schema";
 import { eq, inArray, and, or, SQL } from "drizzle-orm";
 import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
+import {
+  resolveFeatureDynastySlugs,
+  resolveWorkflowDynastySlugs,
+} from "../lib/dynasty-client";
 
 const router = Router();
 
@@ -399,6 +403,7 @@ const GROUP_BY_COLUMN_MAP = {
   brandId: postmarkSendings.brandId,
   campaignId: postmarkSendings.campaignId,
   workflowSlug: postmarkSendings.workflowSlug,
+  featureSlug: postmarkSendings.featureSlug,
   leadEmail: postmarkSendings.toEmail,
 } as const;
 
@@ -408,6 +413,9 @@ function buildStatsConditions(data: {
   brandId?: string;
   campaignId?: string;
   workflowSlug?: string;
+  featureSlug?: string;
+  workflowSlugs?: string[];
+  featureSlugs?: string[];
 }): SQL[] {
   const conditions: SQL[] = [];
   if (Array.isArray(data.runIds) && data.runIds.length > 0) {
@@ -422,8 +430,15 @@ function buildStatsConditions(data: {
   if (data.campaignId) {
     conditions.push(eq(postmarkSendings.campaignId, data.campaignId));
   }
-  if (data.workflowSlug) {
+  if (data.workflowSlugs && data.workflowSlugs.length > 0) {
+    conditions.push(inArray(postmarkSendings.workflowSlug, data.workflowSlugs));
+  } else if (data.workflowSlug) {
     conditions.push(eq(postmarkSendings.workflowSlug, data.workflowSlug));
+  }
+  if (data.featureSlugs && data.featureSlugs.length > 0) {
+    conditions.push(inArray(postmarkSendings.featureSlug, data.featureSlugs));
+  } else if (data.featureSlug) {
+    conditions.push(eq(postmarkSendings.featureSlug, data.featureSlug));
   }
   return conditions;
 }
@@ -489,9 +504,41 @@ async function handleStats(req: Request, res: Response) {
     });
   }
 
-  const { groupBy, runIds: runIdsRaw, ...filters } = parsed.data;
+  const {
+    groupBy,
+    runIds: runIdsRaw,
+    workflowDynastySlug,
+    featureDynastySlug,
+    ...filters
+  } = parsed.data;
   const runIds = runIdsRaw ? runIdsRaw.split(",").filter(Boolean) : undefined;
-  const conditions = buildStatsConditions({ ...filters, runIds });
+
+  // Resolve dynasty slugs → versioned slug lists via external services
+  const identityHeaders = {
+    orgId: (req.headers["x-org-id"] as string) || "",
+    userId: (req.headers["x-user-id"] as string) || "",
+    runId: (req.headers["x-run-id"] as string) || "",
+  };
+
+  let workflowSlugs: string[] | undefined;
+  let featureSlugs: string[] | undefined;
+
+  if (workflowDynastySlug) {
+    workflowSlugs = await resolveWorkflowDynastySlugs(workflowDynastySlug, identityHeaders);
+    if (workflowSlugs.length === 0) {
+      // Dynasty exists but has no slugs — return empty stats
+      return res.json(groupBy ? { groups: [] } : { stats: buildStatsObject(0, { emailsDelivered: 0, emailsOpened: 0, emailsClicked: 0, emailsBounced: 0 }), recipients: 0 });
+    }
+  }
+
+  if (featureDynastySlug) {
+    featureSlugs = await resolveFeatureDynastySlugs(featureDynastySlug, identityHeaders);
+    if (featureSlugs.length === 0) {
+      return res.json(groupBy ? { groups: [] } : { stats: buildStatsObject(0, { emailsDelivered: 0, emailsOpened: 0, emailsClicked: 0, emailsBounced: 0 }), recipients: 0 });
+    }
+  }
+
+  const conditions = buildStatsConditions({ ...filters, runIds, workflowSlugs, featureSlugs });
 
   try {
     if (!groupBy) {
