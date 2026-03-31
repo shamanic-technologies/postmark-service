@@ -242,7 +242,6 @@ const GlobalStatusSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandId: z.string().openapi({ description: "Brand ID — primary dedup scope" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID — optional scope" }),
     items: z.array(
       z.object({
@@ -587,10 +586,13 @@ registry.registerPath({
   path: "/status",
   summary: "Batch status lookup by lead and email",
   description:
-    "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results.",
+    "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results. Brand ID is read from x-brand-id header.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
+    headers: z.object({
+      "x-brand-id": z.string().openapi({ description: "Brand ID — primary dedup scope" }),
+    }),
     body: {
       content: { "application/json": { schema: StatusRequestSchema } },
     },

@@ -243,9 +243,8 @@ describe("Zod schemas", () => {
   });
 
   describe("StatusRequestSchema", () => {
-    it("should accept valid request with brandId, campaignId, and items", () => {
+    it("should accept valid request with campaignId and items (brandId now from header)", () => {
       const result = StatusRequestSchema.safeParse({
-        brandId: "brand_123",
         campaignId: "camp_456",
         items: [{ leadId: "lead_1", email: "a@test.com" }],
       });
@@ -254,7 +253,6 @@ describe("Zod schemas", () => {
 
     it("should accept valid request without campaignId", () => {
       const result = StatusRequestSchema.safeParse({
-        brandId: "brand_123",
         items: [{ leadId: "lead_1", email: "a@test.com" }],
       });
       expect(result.success).toBe(true);
@@ -262,22 +260,13 @@ describe("Zod schemas", () => {
 
     it("should reject empty items array", () => {
       const result = StatusRequestSchema.safeParse({
-        brandId: "brand_123",
         items: [],
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it("should reject missing brandId", () => {
-      const result = StatusRequestSchema.safeParse({
-        items: [{ leadId: "lead_1", email: "a@test.com" }],
       });
       expect(result.success).toBe(false);
     });
 
     it("should reject invalid email format in items", () => {
       const result = StatusRequestSchema.safeParse({
-        brandId: "brand_123",
         items: [{ leadId: "lead_1", email: "not-an-email" }],
       });
       expect(result.success).toBe(false);
@@ -285,7 +274,6 @@ describe("Zod schemas", () => {
 
     it("should reject item missing leadId", () => {
       const result = StatusRequestSchema.safeParse({
-        brandId: "brand_123",
         items: [{ email: "a@test.com" }],
       });
       expect(result.success).toBe(false);
