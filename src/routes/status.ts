@@ -220,6 +220,13 @@ router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
  * Batch status lookup by lead+email pairs with campaign/brand/global scopes
  */
 router.post("/status", async (req: Request, res: Response) => {
+  const brandId = req.headers["x-brand-id"] as string | undefined;
+  if (!brandId) {
+    return res.status(400).json({
+      error: "Missing required header: x-brand-id",
+    });
+  }
+
   const parsed = StatusRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -228,7 +235,7 @@ router.post("/status", async (req: Request, res: Response) => {
     });
   }
 
-  const { brandId, campaignId, items } = parsed.data;
+  const { campaignId, items } = parsed.data;
 
   try {
     // 1. Collect unique leadIds and emails

@@ -860,10 +860,6 @@
       "StatusRequest": {
         "type": "object",
         "properties": {
-          "brandId": {
-            "type": "string",
-            "description": "Brand ID — primary dedup scope"
-          },
           "campaignId": {
             "type": "string",
             "description": "Campaign ID — optional scope"
@@ -894,7 +890,6 @@
           }
         },
         "required": [
-          "brandId",
           "items"
         ]
       },
@@ -1534,13 +1529,25 @@
     "/status": {
       "post": {
         "summary": "Batch status lookup by lead and email",
-        "description": "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results.",
+        "description": "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results. Brand ID is read from x-brand-id header.",
         "tags": [
           "Email Status"
         ],
         "security": [
           {
             "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Brand ID — primary dedup scope"
+            },
+            "required": true,
+            "description": "Brand ID — primary dedup scope",
+            "name": "x-brand-id",
+            "in": "header"
           }
         ],
         "requestBody": {

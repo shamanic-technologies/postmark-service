@@ -155,10 +155,26 @@ describe("Status Endpoints Integration", () => {
   describe("POST /status", () => {
     const brandId = "brand-test";
 
-    it("should return 400 for invalid request", async () => {
+    function statusHeaders() {
+      return { ...getAuthHeaders(), "x-brand-id": brandId };
+    }
+
+    it("should return 400 when x-brand-id header is missing", async () => {
       const response = await request(app)
         .post("/status")
         .set(getAuthHeaders())
+        .send({
+          items: [{ leadId: "lead-1", email: "test@test.com" }],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Missing required header: x-brand-id");
+    });
+
+    it("should return 400 for invalid request body", async () => {
+      const response = await request(app)
+        .post("/status")
+        .set(statusHeaders())
         .send({});
 
       expect(response.status).toBe(400);
@@ -167,9 +183,8 @@ describe("Status Endpoints Integration", () => {
     it("should return all-false for unknown lead/email", async () => {
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId: "camp-empty",
           items: [{ leadId: "unknown-lead", email: "nobody@test.com" }],
         });
@@ -205,9 +220,8 @@ describe("Status Endpoints Integration", () => {
 
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId,
           items: [{ leadId: "lead-alice", email: "alice@test.com" }],
         });
@@ -241,9 +255,8 @@ describe("Status Endpoints Integration", () => {
 
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId,
           items: [{ leadId: "lead-bounce", email: "bounced@test.com" }],
         });
@@ -269,9 +282,8 @@ describe("Status Endpoints Integration", () => {
 
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId,
           items: [{ leadId: "lead-unsub", email: "unsub@test.com" }],
         });
@@ -306,9 +318,8 @@ describe("Status Endpoints Integration", () => {
       // Query for camp-B: campaign should NOT show delivered, brand SHOULD
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId: "camp-B",
           items: [{ leadId: "lead-shared", email: "shared@test.com" }],
         });
@@ -342,9 +353,8 @@ describe("Status Endpoints Integration", () => {
 
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId: "camp-multi",
           items: [{ leadId: "lead-multi", email: "email1@test.com" }],
         });
@@ -382,9 +392,8 @@ describe("Status Endpoints Integration", () => {
 
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId,
           items: [
             { leadId: "lead-a", email: "a@test.com" },
@@ -419,9 +428,8 @@ describe("Status Endpoints Integration", () => {
 
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           items: [{ leadId: "lead-nocamp", email: "nocampaign@test.com" }],
         });
 
@@ -445,9 +453,8 @@ describe("Status Endpoints Integration", () => {
 
       const response = await request(app)
         .post("/status")
-        .set(getAuthHeaders())
+        .set(statusHeaders())
         .send({
-          brandId,
           campaignId,
           items: [{ leadId: "lead-reply", email: "reply@test.com" }],
         });
