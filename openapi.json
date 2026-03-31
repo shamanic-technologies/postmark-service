@@ -1219,10 +1219,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Brand ID (injected by workflow-service)"
+              "description": "Brand ID(s), comma-separated for multi-brand campaigns (injected by workflow-service). Example: uuid1,uuid2,uuid3"
             },
             "required": false,
-            "description": "Brand ID (injected by workflow-service)",
+            "description": "Brand ID(s), comma-separated for multi-brand campaigns (injected by workflow-service). Example: uuid1,uuid2,uuid3",
             "name": "x-brand-id",
             "in": "header"
           },
@@ -1326,10 +1326,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Brand ID (injected by workflow-service)"
+              "description": "Brand ID(s), comma-separated for multi-brand campaigns (injected by workflow-service). Example: uuid1,uuid2,uuid3"
             },
             "required": false,
-            "description": "Brand ID (injected by workflow-service)",
+            "description": "Brand ID(s), comma-separated for multi-brand campaigns (injected by workflow-service). Example: uuid1,uuid2,uuid3",
             "name": "x-brand-id",
             "in": "header"
           },

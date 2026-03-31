@@ -32,7 +32,7 @@ export const postmarkSendings = pgTable(
     orgId: text("org_id"), // Organization ID
     userId: text("user_id"), // User ID (for runs-service attribution)
     runId: text("run_id"), // Child run ID created in runs-service
-    brandId: text("brand_id"),
+    brandIds: text("brand_ids").array(),
     campaignId: text("campaign_id"),
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
@@ -44,7 +44,7 @@ export const postmarkSendings = pgTable(
     uniqueIndex("idx_sendings_message_id").on(table.messageId),
     index("idx_sendings_org").on(table.orgId),
     index("idx_sendings_run").on(table.runId),
-    index("idx_sendings_brand").on(table.brandId),
+    index("idx_sendings_brand_ids").using("gin", table.brandIds),
     index("idx_sendings_campaign").on(table.campaignId),
     index("idx_sendings_workflow").on(table.workflowSlug),
     index("idx_sendings_lead").on(table.leadId),

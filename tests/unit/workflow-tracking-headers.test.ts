@@ -121,7 +121,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
       const insertCall = vi.mocked(db.insert).mock.results[0].value;
       const valuesCall = insertCall.values.mock.calls[0][0];
       expect(valuesCall.campaignId).toBe("camp-from-header");
-      expect(valuesCall.brandId).toBe("brand-from-header");
+      expect(valuesCall.brandIds).toEqual(["brand-from-header"]);
       expect(valuesCall.featureSlug).toBe("feat-from-header");
       expect(valuesCall.workflowSlug).toBe("wf-from-header");
     });
@@ -161,9 +161,52 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
       const insertCall = vi.mocked(db.insert).mock.results[0].value;
       const valuesCall = insertCall.values.mock.calls[0][0];
       expect(valuesCall.campaignId).toBe("camp-from-body");
-      expect(valuesCall.brandId).toBe("brand-from-body");
+      expect(valuesCall.brandIds).toEqual(["brand-from-body"]);
       expect(valuesCall.featureSlug).toBe("feat-from-body");
       expect(valuesCall.workflowSlug).toBe("wf-from-body");
+    });
+
+    it("should parse CSV x-brand-id header into brandIds array", async () => {
+      await request(app)
+        .post("/send")
+        .set({
+          ...getAuthHeaders(),
+          "x-brand-id": "brand-a,brand-b,brand-c",
+        })
+        .send({
+          to: "recipient@test.com",
+          subject: "Test",
+          textBody: "Hello",
+        });
+
+      // DB insert should store as array
+      const insertCall = vi.mocked(db.insert).mock.results[0].value;
+      const valuesCall = insertCall.values.mock.calls[0][0];
+      expect(valuesCall.brandIds).toEqual(["brand-a", "brand-b", "brand-c"]);
+
+      // createRun gets the first brand ID (backwards compatible with runs-service)
+      expect(createRun).toHaveBeenCalledWith(
+        expect.objectContaining({ brandId: "brand-a" }),
+        expect.objectContaining({ "x-brand-id": "brand-a,brand-b,brand-c" })
+      );
+    });
+
+    it("should handle single brand in x-brand-id header (backwards compatible)", async () => {
+      await request(app)
+        .post("/send")
+        .set({
+          ...getAuthHeaders(),
+          "x-brand-id": "single-brand",
+        })
+        .send({
+          to: "recipient@test.com",
+          subject: "Test",
+          textBody: "Hello",
+        });
+
+      const insertCall = vi.mocked(db.insert).mock.results[0].value;
+      const valuesCall = insertCall.values.mock.calls[0][0];
+      expect(valuesCall.brandIds).toEqual(["single-brand"]);
     });
 
     it("should work without any tracking headers or body fields", async () => {

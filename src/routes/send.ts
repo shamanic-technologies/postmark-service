@@ -34,12 +34,13 @@ router.post("/send", async (req: Request, res: Response) => {
 
   // Workflow tracking headers (body takes priority, headers are fallback)
   const campaignId = body.campaignId ?? (req.headers["x-campaign-id"] as string | undefined);
-  const brandId = body.brandId ?? (req.headers["x-brand-id"] as string | undefined);
+  const headerBrandIds = String(req.headers["x-brand-id"] ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  const brandIds = body.brandId ? [body.brandId] : (headerBrandIds.length > 0 ? headerBrandIds : undefined);
   const featureSlug = body.featureSlug ?? (req.headers["x-feature-slug"] as string | undefined);
   const workflowSlug = body.workflowSlug ?? (req.headers["x-workflow-slug"] as string | undefined);
   const trackingHeaders: Record<string, string> = {};
   if (campaignId) trackingHeaders["x-campaign-id"] = campaignId;
-  if (brandId) trackingHeaders["x-brand-id"] = brandId;
+  if (brandIds && brandIds.length > 0) trackingHeaders["x-brand-id"] = brandIds.join(",");
   if (featureSlug) trackingHeaders["x-feature-slug"] = featureSlug;
   if (workflowSlug) trackingHeaders["x-workflow-slug"] = workflowSlug;
 
@@ -79,7 +80,7 @@ router.post("/send", async (req: Request, res: Response) => {
       taskName: "email-send",
       parentRunId,
       userId,
-      brandId: brandId,
+      brandId: brandIds?.[0],
       campaignId: campaignId,
       featureSlug: featureSlug,
       workflowSlug: workflowSlug,
@@ -126,7 +127,7 @@ router.post("/send", async (req: Request, res: Response) => {
           orgId,
           userId,
           runId: sendRunId,
-          brandId,
+          brandIds: brandIds ?? null,
           campaignId,
           featureSlug,
           workflowSlug,
@@ -195,12 +196,12 @@ router.post("/send/batch", async (req: Request, res: Response) => {
 
   // Workflow tracking headers from request (used as fallback for per-email values)
   const headerCampaignId = req.headers["x-campaign-id"] as string | undefined;
-  const headerBrandId = req.headers["x-brand-id"] as string | undefined;
+  const headerBrandIds = String(req.headers["x-brand-id"] ?? "").split(",").map(s => s.trim()).filter(Boolean);
   const headerFeatureSlug = req.headers["x-feature-slug"] as string | undefined;
   const headerWorkflowSlug = req.headers["x-workflow-slug"] as string | undefined;
   const trackingHeaders: Record<string, string> = {};
   if (headerCampaignId) trackingHeaders["x-campaign-id"] = headerCampaignId;
-  if (headerBrandId) trackingHeaders["x-brand-id"] = headerBrandId;
+  if (headerBrandIds.length > 0) trackingHeaders["x-brand-id"] = headerBrandIds.join(",");
   if (headerFeatureSlug) trackingHeaders["x-feature-slug"] = headerFeatureSlug;
   if (headerWorkflowSlug) trackingHeaders["x-workflow-slug"] = headerWorkflowSlug;
 
@@ -248,7 +249,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
     try {
       // Per-email tracking: body takes priority, headers are fallback
       const emailCampaignId = email.campaignId ?? headerCampaignId;
-      const emailBrandId = email.brandId ?? headerBrandId;
+      const emailBrandIds = email.brandId ? [email.brandId] : (headerBrandIds.length > 0 ? headerBrandIds : undefined);
       const emailFeatureSlug = email.featureSlug ?? headerFeatureSlug;
       const emailWorkflowSlug = email.workflowSlug ?? headerWorkflowSlug;
 
@@ -259,7 +260,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
         taskName: "email-send",
         parentRunId,
         userId,
-        brandId: emailBrandId,
+        brandId: emailBrandIds?.[0],
         campaignId: emailCampaignId,
         featureSlug: emailFeatureSlug,
         workflowSlug: emailWorkflowSlug,
@@ -308,7 +309,7 @@ router.post("/send/batch", async (req: Request, res: Response) => {
             orgId,
             userId,
             runId: sendRunId,
-            brandId: emailBrandId,
+            brandIds: emailBrandIds ?? null,
             campaignId: emailCampaignId,
             featureSlug: emailFeatureSlug,
             workflowSlug: emailWorkflowSlug,

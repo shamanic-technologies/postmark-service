@@ -8,7 +8,7 @@ import {
   postmarkLinkClicks,
   postmarkSubscriptionChanges,
 } from "../db/schema";
-import { eq, inArray, and, or, SQL } from "drizzle-orm";
+import { eq, inArray, and, or, arrayContains, arrayOverlaps, sql, SQL } from "drizzle-orm";
 import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
 import {
   resolveFeatureDynastySlugs,
@@ -250,7 +250,7 @@ router.post("/status", async (req: Request, res: Response) => {
         toEmail: postmarkSendings.toEmail,
         leadId: postmarkSendings.leadId,
         campaignId: postmarkSendings.campaignId,
-        brandId: postmarkSendings.brandId,
+        brandIds: postmarkSendings.brandIds,
       })
       .from(postmarkSendings)
       .where(or(...conditions));
@@ -363,10 +363,10 @@ router.post("/status", async (req: Request, res: Response) => {
 
       // Brand scope
       const brandLeadRows = sendings.filter(
-        (s) => s.leadId === item.leadId && s.brandId === brandId
+        (s) => s.leadId === item.leadId && s.brandIds?.includes(brandId)
       );
       const brandEmailRows = sendings.filter(
-        (s) => s.toEmail === item.email && s.brandId === brandId
+        (s) => s.toEmail === item.email && s.brandIds?.includes(brandId)
       );
 
       // Global scope — only bounced + unsubscribed for this email across everything
@@ -403,7 +403,6 @@ router.post("/status", async (req: Request, res: Response) => {
 // ─── Stats helpers ────────────────────────────────────────────────────────────
 
 const GROUP_BY_COLUMN_MAP = {
-  brandId: postmarkSendings.brandId,
   campaignId: postmarkSendings.campaignId,
   workflowSlug: postmarkSendings.workflowSlug,
   featureSlug: postmarkSendings.featureSlug,
@@ -428,7 +427,7 @@ function buildStatsConditions(data: {
     conditions.push(eq(postmarkSendings.orgId, data.orgId));
   }
   if (data.brandId) {
-    conditions.push(eq(postmarkSendings.brandId, data.brandId));
+    conditions.push(arrayContains(postmarkSendings.brandIds, [data.brandId]));
   }
   if (data.campaignId) {
     conditions.push(eq(postmarkSendings.campaignId, data.campaignId));
@@ -569,9 +568,7 @@ async function handleStats(req: Request, res: Response) {
 
     // ─── Grouped response ────────────────────────────────────────────
     const isDynastyGroupBy = groupBy === "workflowDynastySlug" || groupBy === "featureDynastySlug";
-    const dbColumn = isDynastyGroupBy
-      ? (groupBy === "workflowDynastySlug" ? postmarkSendings.workflowSlug : postmarkSendings.featureSlug)
-      : GROUP_BY_COLUMN_MAP[groupBy];
+    const isBrandGroupBy = groupBy === "brandId";
 
     // For dynasty groupBy, fetch all dynasties and build reverse map
     let slugToDynastyMap: Map<string, string> | undefined;
@@ -583,14 +580,36 @@ async function handleStats(req: Request, res: Response) {
       slugToDynastyMap = buildSlugToDynastyMap(dynasties);
     }
 
-    const sendings = await db
-      .select({
-        messageId: postmarkSendings.messageId,
-        toEmail: postmarkSendings.toEmail,
-        groupKey: dbColumn,
-      })
-      .from(postmarkSendings)
-      .where(and(...conditions));
+    // brandId groupBy requires unnesting the brand_ids array
+    type SendingRow = { messageId: string | null; toEmail: string; groupKey: string | null };
+    let sendings: SendingRow[];
+
+    if (isBrandGroupBy) {
+      // Use unnest to expand brand_ids array into per-brand rows
+      const rows = await db.execute<{ message_id: string | null; to_email: string; brand_id: string | null }>(
+        sql`SELECT ps.message_id, ps.to_email, unnest(ps.brand_ids) AS brand_id
+            FROM postmark_sendings ps
+            ${conditions.length > 0 ? sql`WHERE ${and(...conditions)}` : sql``}`
+      );
+      sendings = rows.rows.map((r) => ({
+        messageId: r.message_id,
+        toEmail: r.to_email,
+        groupKey: r.brand_id,
+      }));
+    } else {
+      const dbColumn = isDynastyGroupBy
+        ? (groupBy === "workflowDynastySlug" ? postmarkSendings.workflowSlug : postmarkSendings.featureSlug)
+        : GROUP_BY_COLUMN_MAP[groupBy];
+
+      sendings = await db
+        .select({
+          messageId: postmarkSendings.messageId,
+          toEmail: postmarkSendings.toEmail,
+          groupKey: dbColumn,
+        })
+        .from(postmarkSendings)
+        .where(and(...conditions));
+    }
 
     // Group sendings by dimension key (resolving to dynasty slug when needed)
     const grouped = new Map<string, { messageIds: string[]; toEmails: Set<string>; count: number }>();
