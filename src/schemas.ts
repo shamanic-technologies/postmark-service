@@ -445,7 +445,7 @@ registry.registerPath({
     params: z.object({}),
     headers: z.object({
       "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
-      "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
+      "x-brand-id": z.string().optional().openapi({ description: "Brand ID(s), comma-separated for multi-brand campaigns (injected by workflow-service). Example: uuid1,uuid2,uuid3" }),
       "x-feature-slug": z.string().optional().openapi({ description: "Feature slug (injected by workflow-service)" }),
       "x-workflow-slug": z.string().optional().openapi({ description: "Workflow slug (injected by workflow-service)" }),
     }),
@@ -485,7 +485,7 @@ registry.registerPath({
     params: z.object({}),
     headers: z.object({
       "x-campaign-id": z.string().optional().openapi({ description: "Campaign ID (injected by workflow-service)" }),
-      "x-brand-id": z.string().optional().openapi({ description: "Brand ID (injected by workflow-service)" }),
+      "x-brand-id": z.string().optional().openapi({ description: "Brand ID(s), comma-separated for multi-brand campaigns (injected by workflow-service). Example: uuid1,uuid2,uuid3" }),
       "x-feature-slug": z.string().optional().openapi({ description: "Feature slug (injected by workflow-service)" }),
       "x-workflow-slug": z.string().optional().openapi({ description: "Workflow slug (injected by workflow-service)" }),
     }),
