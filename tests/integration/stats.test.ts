@@ -23,28 +23,35 @@ describe("GET /stats", () => {
     await closeDb();
   });
 
-  it("should return global stats when no filters provided", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-1", campaignId: "c1" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b-global-2", campaignId: "c2" });
-
+  it("should return 400 when no filters provided", async () => {
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
       .query({});
 
-    expect(response.status).toBe(200);
-    expect(response.body.stats.emailsContacted).toBeGreaterThanOrEqual(2);
-    expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(2);
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/at least one filter/i);
   });
 
-  it("should return grouped global stats when only groupBy is provided", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-global-a" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-global-b" });
-
+  it("should return 400 when only groupBy is provided (no filter)", async () => {
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
       .query({ groupBy: "workflowSlug" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/at least one filter/i);
+  });
+
+  it("should return grouped stats when groupBy and a filter are provided", async () => {
+    const orgId = "org-grouped-" + randomUUID();
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-global-a", orgId });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-global-b", orgId });
+
+    const response = await request(app)
+      .get("/stats")
+      .set(getAuthHeaders())
+      .query({ groupBy: "workflowSlug", orgId });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toBeDefined();

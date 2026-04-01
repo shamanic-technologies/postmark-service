@@ -33,17 +33,28 @@ describe("GET /stats/public", () => {
     await closeDb();
   });
 
-  it("should work without identity headers", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" });
+  it("should work without identity headers when a filter is provided", async () => {
+    const brandId = "b-public-" + randomUUID().slice(0, 8);
+    await insertTestSending({ messageId: randomUUID(), brandId, campaignId: "c1" });
 
+    const response = await request(app)
+      .get("/stats/public")
+      .set(getServiceAuthHeaders())
+      .query({ brandId });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsContacted).toBeGreaterThanOrEqual(1);
+    expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should return 400 without any filters", async () => {
     const response = await request(app)
       .get("/stats/public")
       .set(getServiceAuthHeaders())
       .query({});
 
-    expect(response.status).toBe(200);
-    expect(response.body.stats.emailsContacted).toBeGreaterThanOrEqual(1);
-    expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(1);
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/at least one filter/i);
   });
 
   it("should reject requests without API key", async () => {
