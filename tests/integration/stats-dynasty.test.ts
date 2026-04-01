@@ -44,9 +44,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await closeDb();
   });
 
-  // ─── featureSlug filter ──────────────────────────────────────────────────
+  // ─── featureSlugs filter ──────────────────────────────────────────────────
 
-  it("should filter by featureSlug", async () => {
+  it("should filter by featureSlugs", async () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
@@ -54,7 +54,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ featureSlug: "feat-alpha" });
+      .query({ featureSlugs: "feat-alpha" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(2);
@@ -179,9 +179,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     expect(brandB.stats.emailsSent).toBe(1);
   });
 
-  // ─── workflowDynastySlug overrides workflowSlug ──────────────────────────
+  // ─── workflowDynastySlug merges with workflowSlugs ──────────────────────
 
-  it("should use dynasty slugs over single workflowSlug when both provided", async () => {
+  it("should merge dynasty slugs with workflowSlugs when both provided", async () => {
     mockResolveWorkflow.mockResolvedValue(["wf-a", "wf-a-v2"]);
 
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-a" });
@@ -191,11 +191,11 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ workflowDynastySlug: "wf-a", workflowSlug: "wf-other" });
+      .query({ workflowDynastySlug: "wf-a", workflowSlugs: "wf-other" });
 
     expect(response.status).toBe(200);
-    // Dynasty takes precedence — resolves to wf-a + wf-a-v2
-    expect(response.body.stats.emailsSent).toBe(2);
+    // Dynasty resolves to wf-a + wf-a-v2, merged with wf-other from query
+    expect(response.body.stats.emailsSent).toBe(3);
   });
 
   // ─── groupBy workflowDynastySlug ──────────────────────────────────────────

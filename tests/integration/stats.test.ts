@@ -236,7 +236,7 @@ describe("GET /stats", () => {
     expect(response.body.recipients).toBe(2); // alice + bob
   });
 
-  it("should filter by workflowSlug", async () => {
+  it("should filter by workflowSlugs", async () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-alpha" });
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-beta" });
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-alpha" });
@@ -244,19 +244,19 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ brandId: "b1", workflowSlug: "wf-alpha" });
+      .query({ brandId: "b1", workflowSlugs: "wf-alpha" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(2);
   });
 
-  it("should accept workflowSlug as the sole filter", async () => {
+  it("should accept workflowSlugs as the sole filter", async () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-solo" });
 
     const response = await request(app)
       .get("/stats")
       .set(getAuthHeaders())
-      .query({ workflowSlug: "wf-solo" });
+      .query({ workflowSlugs: "wf-solo" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
