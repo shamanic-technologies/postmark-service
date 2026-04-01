@@ -184,14 +184,25 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should accept workflowSlug filter", () => {
+    it("should strip unknown singular workflowSlug field", () => {
       const result = StatsQuerySchema.safeParse({
         orgId: "org_123",
         workflowSlug: "outbound-v2",
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.workflowSlug).toBe("outbound-v2");
+        expect(result.data).not.toHaveProperty("workflowSlug");
+      }
+    });
+
+    it("should strip unknown singular featureSlug field", () => {
+      const result = StatsQuerySchema.safeParse({
+        orgId: "org_123",
+        featureSlug: "sales-cold-email-outreach",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).not.toHaveProperty("featureSlug");
       }
     });
 
@@ -242,15 +253,13 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should accept both singular and plural slug filters", () => {
+    it("should accept single-value workflowSlugs (no comma)", () => {
       const result = StatsQuerySchema.safeParse({
-        featureSlug: "feature-a",
-        workflowSlugs: "wf-1,wf-2",
+        workflowSlugs: "outbound-v2",
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.featureSlug).toBe("feature-a");
-        expect(result.data.workflowSlugs).toBe("wf-1,wf-2");
+        expect(result.data.workflowSlugs).toBe("outbound-v2");
       }
     });
   });

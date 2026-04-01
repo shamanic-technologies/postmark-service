@@ -421,8 +421,6 @@ function buildStatsConditions(data: {
   orgId?: string;
   brandId?: string;
   campaignId?: string;
-  workflowSlug?: string;
-  featureSlug?: string;
   workflowSlugs?: string[];
   featureSlugs?: string[];
 }): SQL[] {
@@ -441,13 +439,9 @@ function buildStatsConditions(data: {
   }
   if (data.workflowSlugs && data.workflowSlugs.length > 0) {
     conditions.push(inArray(postmarkSendings.workflowSlug, data.workflowSlugs));
-  } else if (data.workflowSlug) {
-    conditions.push(eq(postmarkSendings.workflowSlug, data.workflowSlug));
   }
   if (data.featureSlugs && data.featureSlugs.length > 0) {
     conditions.push(inArray(postmarkSendings.featureSlug, data.featureSlugs));
-  } else if (data.featureSlug) {
-    conditions.push(eq(postmarkSendings.featureSlug, data.featureSlug));
   }
   return conditions;
 }
@@ -557,7 +551,7 @@ async function handleStats(req: Request, res: Response) {
 
   if (conditions.length === 0) {
     return res.status(400).json({
-      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowSlugs, featureSlugs, workflowDynastySlug, or featureDynastySlug)",
+      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, or featureDynastySlug)",
     });
   }
 
