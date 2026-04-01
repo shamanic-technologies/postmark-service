@@ -212,6 +212,47 @@ describe("Zod schemas", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("should accept featureSlugs as comma-separated string", () => {
+      const result = StatsQuerySchema.safeParse({
+        featureSlugs: "sales-cold-email-outreach,marketing-newsletter",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.featureSlugs).toBe("sales-cold-email-outreach,marketing-newsletter");
+      }
+    });
+
+    it("should accept workflowSlugs as comma-separated string", () => {
+      const result = StatsQuerySchema.safeParse({
+        workflowSlugs: "wf-alpha,wf-beta",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.workflowSlugs).toBe("wf-alpha,wf-beta");
+      }
+    });
+
+    it("should accept featureSlugs alongside other filters", () => {
+      const result = StatsQuerySchema.safeParse({
+        brandId: "brand_123",
+        featureSlugs: "sales-cold-email-outreach",
+        groupBy: "workflowSlug",
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("should accept both singular and plural slug filters", () => {
+      const result = StatsQuerySchema.safeParse({
+        featureSlug: "feature-a",
+        workflowSlugs: "wf-1,wf-2",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.featureSlug).toBe("feature-a");
+        expect(result.data.workflowSlugs).toBe("wf-1,wf-2");
+      }
+    });
   });
 
   describe("SendEmailRequestSchema - leadId", () => {

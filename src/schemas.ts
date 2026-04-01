@@ -282,6 +282,8 @@ export const StatsQuerySchema = z
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
     workflowSlug: z.string().optional().openapi({ description: "Filter by workflow slug" }),
     featureSlug: z.string().optional().openapi({ description: "Filter by feature slug" }),
+    workflowSlugs: z.string().optional().openapi({ description: "Filter by multiple workflow slugs (comma-separated)" }),
+    featureSlugs: z.string().optional().openapi({ description: "Filter by multiple feature slugs (comma-separated)" }),
     workflowDynastySlug: z.string().optional().openapi({ description: "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)" }),
     featureDynastySlug: z.string().optional().openapi({ description: "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)" }),
     groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
@@ -614,7 +616,7 @@ registry.registerPath({
   path: "/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {

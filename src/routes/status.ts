@@ -516,11 +516,15 @@ async function handleStats(req: Request, res: Response) {
   const {
     groupBy,
     runIds: runIdsRaw,
+    workflowSlugs: workflowSlugsRaw,
+    featureSlugs: featureSlugsRaw,
     workflowDynastySlug,
     featureDynastySlug,
     ...filters
   } = parsed.data;
   const runIds = runIdsRaw ? runIdsRaw.split(",").filter(Boolean) : undefined;
+  const workflowSlugsFromQuery = workflowSlugsRaw ? workflowSlugsRaw.split(",").filter(Boolean) : undefined;
+  const featureSlugsFromQuery = featureSlugsRaw ? featureSlugsRaw.split(",").filter(Boolean) : undefined;
 
   // Resolve dynasty slugs → versioned slug lists via external services
   const identityHeaders = {
@@ -529,29 +533,31 @@ async function handleStats(req: Request, res: Response) {
     runId: (req.headers["x-run-id"] as string) || "",
   };
 
-  let workflowSlugs: string[] | undefined;
-  let featureSlugs: string[] | undefined;
+  let workflowSlugs: string[] | undefined = workflowSlugsFromQuery;
+  let featureSlugs: string[] | undefined = featureSlugsFromQuery;
 
   if (workflowDynastySlug) {
-    workflowSlugs = await resolveWorkflowDynastySlugs(workflowDynastySlug, identityHeaders);
-    if (workflowSlugs.length === 0) {
+    const dynastySlugs = await resolveWorkflowDynastySlugs(workflowDynastySlug, identityHeaders);
+    if (dynastySlugs.length === 0 && !workflowSlugs) {
       // Dynasty exists but has no slugs — return empty stats
       return res.json(groupBy ? { groups: [] } : { stats: buildStatsObject(0, { emailsDelivered: 0, emailsOpened: 0, emailsClicked: 0, emailsBounced: 0 }), recipients: 0 });
     }
+    workflowSlugs = workflowSlugs ? [...workflowSlugs, ...dynastySlugs] : dynastySlugs;
   }
 
   if (featureDynastySlug) {
-    featureSlugs = await resolveFeatureDynastySlugs(featureDynastySlug, identityHeaders);
-    if (featureSlugs.length === 0) {
+    const dynastySlugs = await resolveFeatureDynastySlugs(featureDynastySlug, identityHeaders);
+    if (dynastySlugs.length === 0 && !featureSlugs) {
       return res.json(groupBy ? { groups: [] } : { stats: buildStatsObject(0, { emailsDelivered: 0, emailsOpened: 0, emailsClicked: 0, emailsBounced: 0 }), recipients: 0 });
     }
+    featureSlugs = featureSlugs ? [...featureSlugs, ...dynastySlugs] : dynastySlugs;
   }
 
   const conditions = buildStatsConditions({ ...filters, runIds, workflowSlugs, featureSlugs });
 
   if (conditions.length === 0) {
     return res.status(400).json({
-      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowDynastySlug, or featureDynastySlug)",
+      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowSlugs, featureSlugs, workflowDynastySlug, or featureDynastySlug)",
     });
   }
 
