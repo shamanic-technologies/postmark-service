@@ -1586,7 +1586,7 @@
     "/stats": {
       "get": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
         "tags": [
           "Email Status"
         ],
@@ -1654,6 +1654,26 @@
             "required": false,
             "description": "Filter by feature slug",
             "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by multiple workflow slugs (comma-separated)"
+            },
+            "required": false,
+            "description": "Filter by multiple workflow slugs (comma-separated)",
+            "name": "workflowSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by multiple feature slugs (comma-separated)"
+            },
+            "required": false,
+            "description": "Filter by multiple feature slugs (comma-separated)",
+            "name": "featureSlugs",
             "in": "query"
           },
           {
@@ -1798,6 +1818,26 @@
             "required": false,
             "description": "Filter by feature slug",
             "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by multiple workflow slugs (comma-separated)"
+            },
+            "required": false,
+            "description": "Filter by multiple workflow slugs (comma-separated)",
+            "name": "workflowSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by multiple feature slugs (comma-separated)"
+            },
+            "required": false,
+            "description": "Filter by multiple feature slugs (comma-separated)",
+            "name": "featureSlugs",
             "in": "query"
           },
           {

@@ -119,6 +119,66 @@ describe("GET /stats/public", () => {
     expect(stats.emailsBounced).toBe(1);
   });
 
+  it("should filter by featureSlugs (comma-separated plural)", async () => {
+    const brand = "brand-pub-fslugs";
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "sales-cold-email-outreach" });
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "marketing-newsletter" });
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "other-feature" });
+
+    const response = await request(app)
+      .get("/stats/public")
+      .set(getServiceAuthHeaders())
+      .query({ featureSlugs: "sales-cold-email-outreach,marketing-newsletter" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBe(2);
+  });
+
+  it("should filter by workflowSlugs (comma-separated plural)", async () => {
+    const brand = "brand-pub-wslugs";
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", workflowSlug: "wf-alpha" });
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", workflowSlug: "wf-beta" });
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", workflowSlug: "wf-gamma" });
+
+    const response = await request(app)
+      .get("/stats/public")
+      .set(getServiceAuthHeaders())
+      .query({ workflowSlugs: "wf-alpha,wf-beta" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBe(2);
+  });
+
+  it("should support groupBy workflowSlug with featureSlugs filter", async () => {
+    const brand = "brand-pub-grp-fslugs";
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "sales-cold-email-outreach", workflowSlug: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "sales-cold-email-outreach", workflowSlug: "wf-2" });
+    await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "other-feature", workflowSlug: "wf-3" });
+
+    const response = await request(app)
+      .get("/stats/public")
+      .set(getServiceAuthHeaders())
+      .query({ featureSlugs: "sales-cold-email-outreach", groupBy: "workflowSlug" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toHaveLength(2);
+    const keys = response.body.groups.map((g: any) => g.key).sort();
+    expect(keys).toEqual(["wf-1", "wf-2"]);
+  });
+
+  it("should filter by single featureSlugs value (no comma)", async () => {
+    await insertTestSending({ messageId: randomUUID(), brandId: "b-single", campaignId: "c1", featureSlug: "sales-cold-email-outreach" });
+    await insertTestSending({ messageId: randomUUID(), brandId: "b-single", campaignId: "c1", featureSlug: "other" });
+
+    const response = await request(app)
+      .get("/stats/public")
+      .set(getServiceAuthHeaders())
+      .query({ featureSlugs: "sales-cold-email-outreach" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.stats.emailsSent).toBe(1);
+  });
+
   it("should reject invalid groupBy", async () => {
     const response = await request(app)
       .get("/stats/public")
