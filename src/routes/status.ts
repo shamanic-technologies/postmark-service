@@ -549,6 +549,12 @@ async function handleStats(req: Request, res: Response) {
 
   const conditions = buildStatsConditions({ ...filters, runIds, workflowSlugs, featureSlugs });
 
+  if (conditions.length === 0) {
+    return res.status(400).json({
+      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlug, featureSlug, workflowDynastySlug, or featureDynastySlug)",
+    });
+  }
+
   try {
     if (!groupBy) {
       // ─── Flat response (backwards compatible) ────────────────────────
