@@ -54,3 +54,11 @@ jobs:
         env:
           POSTMARK_SERVICE_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
           POSTMARK_SERVICE_API_KEY: test-secret-key
+
+      - name: Delete Neon branch
+        if: github.event_name == 'pull_request' && always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
