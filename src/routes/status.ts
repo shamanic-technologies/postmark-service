@@ -247,19 +247,10 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
   const { campaignId, items } = parsed.data;
 
   try {
-    // 1. Collect unique leadIds and emails
-    const allLeadIds = [...new Set(items.map((i) => i.leadId))];
+    // 1. Collect unique emails (primary grouping key)
     const allEmails = [...new Set(items.map((i) => i.email))];
 
-    // 2. Query all sendings matching any leadId or email (covers all scopes)
-    const conditions: SQL[] = [];
-    if (allLeadIds.length > 0) {
-      conditions.push(inArray(postmarkSendings.leadId, allLeadIds));
-    }
-    if (allEmails.length > 0) {
-      conditions.push(inArray(postmarkSendings.toEmail, allEmails));
-    }
-
+    // 2. Query all sendings matching any email (covers all scopes)
     const sendings = await db
       .select({
         messageId: postmarkSendings.messageId,
@@ -269,14 +260,14 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         brandIds: postmarkSendings.brandIds,
       })
       .from(postmarkSendings)
-      .where(or(...conditions));
+      .where(inArray(postmarkSendings.toEmail, allEmails));
 
     // 3. Batch-query events for all messageIds
     const allMessageIds = sendings
       .map((s) => s.messageId)
       .filter((id): id is string => id !== null);
 
-    const [deliveries, bounces, subscriptionChanges] = allMessageIds.length > 0
+    const [deliveries, bounces, openings, subscriptionChanges] = allMessageIds.length > 0
       ? await Promise.all([
           db.select({ messageId: postmarkDeliveries.messageId, deliveredAt: postmarkDeliveries.deliveredAt })
             .from(postmarkDeliveries)
@@ -284,11 +275,14 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
           db.select({ messageId: postmarkBounces.messageId })
             .from(postmarkBounces)
             .where(inArray(postmarkBounces.messageId, allMessageIds)),
+          db.select({ messageId: postmarkOpenings.messageId })
+            .from(postmarkOpenings)
+            .where(inArray(postmarkOpenings.messageId, allMessageIds)),
           db.select({ messageId: postmarkSubscriptionChanges.messageId, suppressSending: postmarkSubscriptionChanges.suppressSending })
             .from(postmarkSubscriptionChanges)
             .where(inArray(postmarkSubscriptionChanges.messageId, allMessageIds)),
         ])
-      : [[], [], []];
+      : [[], [], [], []];
 
     // 4. Build lookup maps
     const deliveryMap = new Map<string, Date | null>();
@@ -296,6 +290,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       if (d.messageId) deliveryMap.set(d.messageId, d.deliveredAt);
     }
     const bouncedSet = new Set(bounces.map((b) => b.messageId).filter((id): id is string => !!id));
+    const openedSet = new Set(openings.map((o) => o.messageId).filter((id): id is string => !!id));
     const unsubSet = new Set(
       subscriptionChanges
         .filter((sc) => sc.suppressSending === true)
@@ -303,36 +298,13 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         .filter((id): id is string => !!id)
     );
 
-    // 5. Aggregation helpers
+    // 5. Flat aggregation helper (groups by email, no lead/email split)
     type SendingRow = typeof sendings[number];
 
-    function aggregateLead(rows: SendingRow[]) {
+    function aggregateFlat(rows: SendingRow[]) {
       let contacted = false;
       let delivered = false;
-      let lastDeliveredAt: Date | null = null;
-
-      for (const s of rows) {
-        contacted = true;
-        if (s.messageId && deliveryMap.has(s.messageId)) {
-          delivered = true;
-          const dt = deliveryMap.get(s.messageId)!;
-          if (dt && (!lastDeliveredAt || dt > lastDeliveredAt)) {
-            lastDeliveredAt = dt;
-          }
-        }
-      }
-
-      return {
-        contacted,
-        delivered,
-        replied: false,
-        lastDeliveredAt: lastDeliveredAt?.toISOString() ?? null,
-      };
-    }
-
-    function aggregateEmail(rows: SendingRow[]) {
-      let contacted = false;
-      let delivered = false;
+      let opened = false;
       let bounced = false;
       let unsubscribed = false;
       let lastDeliveredAt: Date | null = null;
@@ -347,6 +319,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
               lastDeliveredAt = dt;
             }
           }
+          if (openedSet.has(s.messageId)) opened = true;
           if (bouncedSet.has(s.messageId)) bounced = true;
           if (unsubSet.has(s.messageId)) unsubscribed = true;
         }
@@ -355,57 +328,45 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       return {
         contacted,
         delivered,
+        opened,
+        replied: false,
+        replyClassification: null,
         bounced,
         unsubscribed,
         lastDeliveredAt: lastDeliveredAt?.toISOString() ?? null,
       };
     }
 
-    // 6. Build results per item
+    // 6. Build results per item, grouped by email
     const results = items.map((item) => {
+      const emailRows = sendings.filter((s) => s.toEmail === item.email);
+
+      // Collect all leadIds found for this email
+      const leadIds = [...new Set(
+        emailRows
+          .map((s) => s.leadId)
+          .filter((id): id is string => id !== null)
+      )];
+
       // Campaign scope (null if no campaignId)
-      const campaignScope = campaignId ? (() => {
-        const campaignLeadRows = sendings.filter(
-          (s) => s.leadId === item.leadId && s.campaignId === campaignId
-        );
-        const campaignEmailRows = sendings.filter(
-          (s) => s.toEmail === item.email && s.campaignId === campaignId
-        );
-        return {
-          lead: aggregateLead(campaignLeadRows),
-          email: aggregateEmail(campaignEmailRows),
-        };
-      })() : null;
+      const campaignScope = campaignId
+        ? aggregateFlat(emailRows.filter((s) => s.campaignId === campaignId))
+        : null;
 
       // Brand scope (null if no brandId header)
-      const brandScope = brandId ? (() => {
-        const brandLeadRows = sendings.filter(
-          (s) => s.leadId === item.leadId && s.brandIds?.includes(brandId)
-        );
-        const brandEmailRows = sendings.filter(
-          (s) => s.toEmail === item.email && s.brandIds?.includes(brandId)
-        );
-        return {
-          lead: aggregateLead(brandLeadRows),
-          email: aggregateEmail(brandEmailRows),
-        };
-      })() : null;
+      const brandScope = brandId
+        ? aggregateFlat(emailRows.filter((s) => s.brandIds?.includes(brandId)))
+        : null;
 
-      // Global scope — only bounced + unsubscribed for this email across everything
-      const globalEmailRows = sendings.filter((s) => s.toEmail === item.email);
-      const globalEmailAgg = aggregateEmail(globalEmailRows);
+      // Global scope — all sendings for this email
+      const globalScope = aggregateFlat(emailRows);
 
       return {
-        leadId: item.leadId,
         email: item.email,
+        leadIds,
         campaign: campaignScope,
         brand: brandScope,
-        global: {
-          email: {
-            bounced: globalEmailAgg.bounced,
-            unsubscribed: globalEmailAgg.unsubscribed,
-          },
-        },
+        global: globalScope,
       };
     });
 
