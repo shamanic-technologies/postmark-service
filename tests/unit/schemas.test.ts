@@ -322,11 +322,11 @@ describe("Zod schemas", () => {
       expect(result.success).toBe(false);
     });
 
-    it("should reject item missing leadId", () => {
+    it("should accept item without leadId (leadId is optional)", () => {
       const result = StatusRequestSchema.safeParse({
         items: [{ email: "a@test.com" }],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
     });
   });
 

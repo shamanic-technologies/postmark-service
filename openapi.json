@@ -690,167 +690,147 @@
             "items": {
               "type": "object",
               "properties": {
-                "leadId": {
-                  "type": "string"
-                },
                 "email": {
                   "type": "string"
+                },
+                "leadIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "campaign": {
                   "type": "object",
                   "nullable": true,
                   "properties": {
-                    "lead": {
-                      "type": "object",
-                      "properties": {
-                        "contacted": {
-                          "type": "boolean"
-                        },
-                        "delivered": {
-                          "type": "boolean"
-                        },
-                        "replied": {
-                          "type": "boolean"
-                        },
-                        "lastDeliveredAt": {
-                          "type": "string",
-                          "nullable": true,
-                          "format": "date-time"
-                        }
-                      },
-                      "required": [
-                        "contacted",
-                        "delivered",
-                        "replied",
-                        "lastDeliveredAt"
-                      ]
+                    "contacted": {
+                      "type": "boolean"
                     },
-                    "email": {
-                      "type": "object",
-                      "properties": {
-                        "contacted": {
-                          "type": "boolean"
-                        },
-                        "delivered": {
-                          "type": "boolean"
-                        },
-                        "bounced": {
-                          "type": "boolean"
-                        },
-                        "unsubscribed": {
-                          "type": "boolean"
-                        },
-                        "lastDeliveredAt": {
-                          "type": "string",
-                          "nullable": true,
-                          "format": "date-time"
-                        }
-                      },
-                      "required": [
-                        "contacted",
-                        "delivered",
-                        "bounced",
-                        "unsubscribed",
-                        "lastDeliveredAt"
-                      ]
+                    "delivered": {
+                      "type": "boolean"
+                    },
+                    "opened": {
+                      "type": "boolean"
+                    },
+                    "replied": {
+                      "type": "boolean"
+                    },
+                    "replyClassification": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "bounced": {
+                      "type": "boolean"
+                    },
+                    "unsubscribed": {
+                      "type": "boolean"
+                    },
+                    "lastDeliveredAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
                     }
                   },
                   "required": [
-                    "lead",
-                    "email"
+                    "contacted",
+                    "delivered",
+                    "opened",
+                    "replied",
+                    "replyClassification",
+                    "bounced",
+                    "unsubscribed",
+                    "lastDeliveredAt"
                   ]
                 },
                 "brand": {
                   "type": "object",
                   "nullable": true,
                   "properties": {
-                    "lead": {
-                      "type": "object",
-                      "properties": {
-                        "contacted": {
-                          "type": "boolean"
-                        },
-                        "delivered": {
-                          "type": "boolean"
-                        },
-                        "replied": {
-                          "type": "boolean"
-                        },
-                        "lastDeliveredAt": {
-                          "type": "string",
-                          "nullable": true,
-                          "format": "date-time"
-                        }
-                      },
-                      "required": [
-                        "contacted",
-                        "delivered",
-                        "replied",
-                        "lastDeliveredAt"
-                      ]
+                    "contacted": {
+                      "type": "boolean"
                     },
-                    "email": {
-                      "type": "object",
-                      "properties": {
-                        "contacted": {
-                          "type": "boolean"
-                        },
-                        "delivered": {
-                          "type": "boolean"
-                        },
-                        "bounced": {
-                          "type": "boolean"
-                        },
-                        "unsubscribed": {
-                          "type": "boolean"
-                        },
-                        "lastDeliveredAt": {
-                          "type": "string",
-                          "nullable": true,
-                          "format": "date-time"
-                        }
-                      },
-                      "required": [
-                        "contacted",
-                        "delivered",
-                        "bounced",
-                        "unsubscribed",
-                        "lastDeliveredAt"
-                      ]
+                    "delivered": {
+                      "type": "boolean"
+                    },
+                    "opened": {
+                      "type": "boolean"
+                    },
+                    "replied": {
+                      "type": "boolean"
+                    },
+                    "replyClassification": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "bounced": {
+                      "type": "boolean"
+                    },
+                    "unsubscribed": {
+                      "type": "boolean"
+                    },
+                    "lastDeliveredAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
                     }
                   },
                   "required": [
-                    "lead",
-                    "email"
+                    "contacted",
+                    "delivered",
+                    "opened",
+                    "replied",
+                    "replyClassification",
+                    "bounced",
+                    "unsubscribed",
+                    "lastDeliveredAt"
                   ]
                 },
                 "global": {
                   "type": "object",
                   "properties": {
-                    "email": {
-                      "type": "object",
-                      "properties": {
-                        "bounced": {
-                          "type": "boolean"
-                        },
-                        "unsubscribed": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "bounced",
-                        "unsubscribed"
-                      ]
+                    "contacted": {
+                      "type": "boolean"
+                    },
+                    "delivered": {
+                      "type": "boolean"
+                    },
+                    "opened": {
+                      "type": "boolean"
+                    },
+                    "replied": {
+                      "type": "boolean"
+                    },
+                    "replyClassification": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "bounced": {
+                      "type": "boolean"
+                    },
+                    "unsubscribed": {
+                      "type": "boolean"
+                    },
+                    "lastDeliveredAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
                     }
                   },
                   "required": [
-                    "email"
+                    "contacted",
+                    "delivered",
+                    "opened",
+                    "replied",
+                    "replyClassification",
+                    "bounced",
+                    "unsubscribed",
+                    "lastDeliveredAt"
                   ]
                 }
               },
               "required": [
-                "leadId",
                 "email",
+                "leadIds",
                 "campaign",
                 "brand",
                 "global"
@@ -874,24 +854,23 @@
             "items": {
               "type": "object",
               "properties": {
-                "leadId": {
-                  "type": "string",
-                  "description": "Lead ID"
-                },
                 "email": {
                   "type": "string",
                   "format": "email",
                   "description": "Email address"
+                },
+                "leadId": {
+                  "type": "string",
+                  "description": "Lead ID (optional)"
                 }
               },
               "required": [
-                "leadId",
                 "email"
               ]
             },
             "minItems": 1,
             "maxItems": 1000,
-            "description": "Lead+email pairs to check"
+            "description": "Email items to check"
           }
         },
         "required": [
@@ -1533,8 +1512,8 @@
     },
     "/orgs/status": {
       "post": {
-        "summary": "Batch status lookup by lead and email",
-        "description": "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results.",
+        "summary": "Batch status lookup by email",
+        "description": "Check delivery status for emails. Groups by email address. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results as flat objects. Returns leadIds array of all lead IDs found for each email.",
         "tags": [
           "Email Status"
         ],

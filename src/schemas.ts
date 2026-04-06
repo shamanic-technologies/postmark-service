@@ -213,31 +213,15 @@ export const RunEmailsResponseSchema = z
 
 // ===== Unified Status Lookup =====
 
-const LeadStatusSchema = z.object({
+const FlatScopeStatusSchema = z.object({
   contacted: z.boolean(),
   delivered: z.boolean(),
+  opened: z.boolean(),
   replied: z.boolean(),
-  lastDeliveredAt: z.string().nullable().openapi({ format: "date-time" }),
-});
-
-const EmailStatusDetailSchema = z.object({
-  contacted: z.boolean(),
-  delivered: z.boolean(),
+  replyClassification: z.string().nullable(),
   bounced: z.boolean(),
   unsubscribed: z.boolean(),
   lastDeliveredAt: z.string().nullable().openapi({ format: "date-time" }),
-});
-
-const ScopeStatusSchema = z.object({
-  lead: LeadStatusSchema,
-  email: EmailStatusDetailSchema,
-});
-
-const GlobalStatusSchema = z.object({
-  email: z.object({
-    bounced: z.boolean(),
-    unsubscribed: z.boolean(),
-  }),
 });
 
 export const StatusRequestSchema = z
@@ -245,10 +229,10 @@ export const StatusRequestSchema = z
     campaignId: z.string().optional().openapi({ description: "Campaign ID — optional scope" }),
     items: z.array(
       z.object({
-        leadId: z.string().openapi({ description: "Lead ID" }),
         email: z.string().email().openapi({ description: "Email address" }),
+        leadId: z.string().optional().openapi({ description: "Lead ID (optional)" }),
       })
-    ).min(1).max(1000).openapi({ description: "Lead+email pairs to check" }),
+    ).min(1).max(1000).openapi({ description: "Email items to check" }),
   })
   .openapi("StatusRequest");
 
@@ -258,11 +242,11 @@ export const StatusResponseSchema = z
   .object({
     results: z.array(
       z.object({
-        leadId: z.string(),
         email: z.string(),
-        campaign: ScopeStatusSchema.nullable(),
-        brand: ScopeStatusSchema.nullable(),
-        global: GlobalStatusSchema,
+        leadIds: z.array(z.string()),
+        campaign: FlatScopeStatusSchema.nullable(),
+        brand: FlatScopeStatusSchema.nullable(),
+        global: FlatScopeStatusSchema,
       })
     ),
   })
@@ -584,9 +568,9 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/orgs/status",
-  summary: "Batch status lookup by lead and email",
+  summary: "Batch status lookup by email",
   description:
-    "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results.",
+    "Check delivery status for emails. Groups by email address. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results as flat objects. Returns leadIds array of all lead IDs found for each email.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
