@@ -205,7 +205,7 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(200);
       const r = response.body.results[0];
       expect(r.email).toBe("nobody@test.com");
-      expect(r.leadIds).toEqual([]);
+      expect(r.leadId).toBeNull();
       // campaign scope (flat)
       expect(r.campaign.contacted).toBe(false);
       expect(r.campaign.delivered).toBe(false);
@@ -244,7 +244,7 @@ describe("Status Endpoints Integration", () => {
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.leadIds).toContain("lead-alice");
+      expect(r.leadId).toBe("lead-alice");
       // campaign (flat)
       expect(r.campaign.contacted).toBe(true);
       expect(r.campaign.delivered).toBe(true);
@@ -345,20 +345,20 @@ describe("Status Endpoints Integration", () => {
       expect(r.brand.delivered).toBe(true);
     });
 
-    it("should return leadIds for all leads found for an email", async () => {
+    it("should return singular leadId for an email", async () => {
       const msg1 = randomUUID();
       const msg2 = randomUUID();
       await insertTestSending({
         messageId: msg1,
-        toEmail: "multi-lead@test.com",
-        leadId: "lead-1",
+        toEmail: "same-lead@test.com",
+        leadId: "lead-same",
         brandId,
         campaignId: "camp-leads",
       });
       await insertTestSending({
         messageId: msg2,
-        toEmail: "multi-lead@test.com",
-        leadId: "lead-2",
+        toEmail: "same-lead@test.com",
+        leadId: "lead-same",
         brandId,
         campaignId: "camp-leads",
       });
@@ -368,14 +368,12 @@ describe("Status Endpoints Integration", () => {
         .set(statusHeaders())
         .send({
           campaignId: "camp-leads",
-          items: [{ email: "multi-lead@test.com" }],
+          items: [{ email: "same-lead@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.leadIds).toHaveLength(2);
-      expect(r.leadIds).toContain("lead-1");
-      expect(r.leadIds).toContain("lead-2");
+      expect(r.leadId).toBe("lead-same");
     });
 
     it("should accept items without leadId", async () => {
@@ -401,7 +399,7 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(200);
       const r = response.body.results[0];
       expect(r.email).toBe("nolead@test.com");
-      expect(r.leadIds).toContain("lead-found");
+      expect(r.leadId).toBe("lead-found");
       expect(r.campaign.contacted).toBe(true);
       expect(r.campaign.delivered).toBe(true);
     });

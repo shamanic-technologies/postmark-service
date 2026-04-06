@@ -243,7 +243,7 @@ export const StatusResponseSchema = z
     results: z.array(
       z.object({
         email: z.string(),
-        leadIds: z.array(z.string()),
+        leadId: z.string().nullable(),
         campaign: FlatScopeStatusSchema.nullable(),
         brand: FlatScopeStatusSchema.nullable(),
         global: FlatScopeStatusSchema,

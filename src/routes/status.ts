@@ -341,12 +341,8 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
     const results = items.map((item) => {
       const emailRows = sendings.filter((s) => s.toEmail === item.email);
 
-      // Collect all leadIds found for this email
-      const leadIds = [...new Set(
-        emailRows
-          .map((s) => s.leadId)
-          .filter((id): id is string => id !== null)
-      )];
+      // Return the leadId found for this email (should be unique per email)
+      const leadId = emailRows.find((s) => s.leadId !== null)?.leadId ?? null;
 
       // Campaign scope (null if no campaignId)
       const campaignScope = campaignId
@@ -363,7 +359,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
 
       return {
         email: item.email,
-        leadIds,
+        leadId,
         campaign: campaignScope,
         brand: brandScope,
         global: globalScope,
