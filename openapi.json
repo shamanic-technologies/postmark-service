@@ -693,11 +693,9 @@
                 "email": {
                   "type": "string"
                 },
-                "leadIds": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                "leadId": {
+                  "type": "string",
+                  "nullable": true
                 },
                 "campaign": {
                   "type": "object",
@@ -830,7 +828,7 @@
               },
               "required": [
                 "email",
-                "leadIds",
+                "leadId",
                 "campaign",
                 "brand",
                 "global"

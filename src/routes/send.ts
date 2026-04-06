@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
+import { eq, and, ne } from "drizzle-orm";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
 import { getOrgKey, getStreamId, getFromAddress } from "../lib/key-client";
 import {
@@ -88,7 +89,29 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
     const sendRunId = sendRun.id;
 
     try {
-      // 6. Send email via Postmark
+      // 6. Guard: reject conflicting leadId for this email
+      if (body.leadId) {
+        const [existing] = await db
+          .select({ leadId: postmarkSendings.leadId })
+          .from(postmarkSendings)
+          .where(
+            and(
+              eq(postmarkSendings.toEmail, body.to),
+              ne(postmarkSendings.leadId, body.leadId),
+            )
+          )
+          .limit(1);
+
+        if (existing) {
+          await updateRun(sendRunId, "failed", orgId, userId, "leadId conflict", trackingHeaders);
+          return res.status(400).json({
+            error: "leadId conflict",
+            details: `Email ${body.to} already has leadId=${existing.leadId} in the database, but this request sent leadId=${body.leadId}`,
+          });
+        }
+      }
+
+      // 7. Send email via Postmark
       const sendParams: SendEmailParams = {
         from: fromAddress,
         to: body.to,
@@ -268,7 +291,26 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
       const sendRunId = sendRun.id;
 
       try {
-        // 2. Send email via Postmark
+        // 2. Guard: reject conflicting leadId for this email
+        if (email.leadId) {
+          const [existing] = await db
+            .select({ leadId: postmarkSendings.leadId })
+            .from(postmarkSendings)
+            .where(
+              and(
+                eq(postmarkSendings.toEmail, email.to),
+                ne(postmarkSendings.leadId, email.leadId),
+              )
+            )
+            .limit(1);
+
+          if (existing) {
+            await updateRun(sendRunId, "failed", orgId, userId, "leadId conflict", trackingHeaders);
+            throw new Error(`leadId conflict: email ${email.to} already has leadId=${existing.leadId}, but this request sent leadId=${email.leadId}`);
+          }
+        }
+
+        // 3. Send email via Postmark
         const batchCaller = { method: "POST" as const, path: "/send/batch" };
         const fromAddress = email.from ?? defaultFrom;
         const sendParams: SendEmailParams = {
