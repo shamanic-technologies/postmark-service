@@ -18,13 +18,15 @@ import {
   buildSlugToDynastyMap,
 } from "../lib/dynasty-client";
 
-const router = Router();
+// ── Internal routes (API key only, no identity headers) ───────────────────────
+
+const internalRouter = Router();
 
 /**
- * GET /status/:messageId
+ * GET /internal/status/:messageId
  * Get the full status of an email by its Postmark message ID
  */
-router.get("/status/:messageId", async (req: Request, res: Response) => {
+internalRouter.get("/status/:messageId", async (req: Request, res: Response) => {
   const { messageId } = req.params;
 
   if (!messageId) {
@@ -126,7 +128,7 @@ router.get("/status/:messageId", async (req: Request, res: Response) => {
       })),
     });
   } catch (error: any) {
-    console.error("Error getting message status:", error);
+    console.error("[postmark-service] Error getting message status:", error);
     res.status(500).json({
       error: "Failed to get message status",
       details: error.message,
@@ -135,10 +137,10 @@ router.get("/status/:messageId", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /status/by-org/:orgId
+ * GET /internal/status/by-org/:orgId
  * Get recent emails for an organization
  */
-router.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
+internalRouter.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
   const { orgId } = req.params;
   const limit = parseInt(req.query.limit as string) || 50;
 
@@ -168,7 +170,7 @@ router.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
       })),
     });
   } catch (error: any) {
-    console.error("Error getting org emails:", error);
+    console.error("[postmark-service] Error getting org emails:", error);
     res.status(500).json({
       error: "Failed to get org emails",
       details: error.message,
@@ -177,10 +179,10 @@ router.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /status/by-run/:runId
+ * GET /internal/status/by-run/:runId
  * Get emails for a specific run
  */
-router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
+internalRouter.get("/status/by-run/:runId", async (req: Request, res: Response) => {
   const { runId } = req.params;
 
   if (!runId) {
@@ -207,7 +209,7 @@ router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
       })),
     });
   } catch (error: any) {
-    console.error("Error getting campaign emails:", error);
+    console.error("[postmark-service] Error getting campaign emails:", error);
     res.status(500).json({
       error: "Failed to get campaign emails",
       details: error.message,
@@ -216,16 +218,23 @@ router.get("/status/by-run/:runId", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /status
- * Batch status lookup by lead+email pairs with campaign/brand/global scopes
+ * GET /internal/stats
+ * Same as /orgs/stats but only requires service API key (no identity headers).
+ * Used by email-gateway for transactional stats aggregation.
  */
-router.post("/status", async (req: Request, res: Response) => {
+internalRouter.get("/stats", handleStats);
+
+// ── Org-scoped routes (API key + x-org-id required) ──────────────────────────
+
+const orgsRouter = Router();
+
+/**
+ * POST /orgs/status
+ * Batch status lookup by lead+email pairs with campaign/brand/global scopes.
+ * x-brand-id is optional — if absent, brand scope is null.
+ */
+orgsRouter.post("/status", async (req: Request, res: Response) => {
   const brandId = req.headers["x-brand-id"] as string | undefined;
-  if (!brandId) {
-    return res.status(400).json({
-      error: "Missing required header: x-brand-id",
-    });
-  }
 
   const parsed = StatusRequestSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -368,13 +377,19 @@ router.post("/status", async (req: Request, res: Response) => {
         };
       })() : null;
 
-      // Brand scope
-      const brandLeadRows = sendings.filter(
-        (s) => s.leadId === item.leadId && s.brandIds?.includes(brandId)
-      );
-      const brandEmailRows = sendings.filter(
-        (s) => s.toEmail === item.email && s.brandIds?.includes(brandId)
-      );
+      // Brand scope (null if no brandId header)
+      const brandScope = brandId ? (() => {
+        const brandLeadRows = sendings.filter(
+          (s) => s.leadId === item.leadId && s.brandIds?.includes(brandId)
+        );
+        const brandEmailRows = sendings.filter(
+          (s) => s.toEmail === item.email && s.brandIds?.includes(brandId)
+        );
+        return {
+          lead: aggregateLead(brandLeadRows),
+          email: aggregateEmail(brandEmailRows),
+        };
+      })() : null;
 
       // Global scope — only bounced + unsubscribed for this email across everything
       const globalEmailRows = sendings.filter((s) => s.toEmail === item.email);
@@ -384,10 +399,7 @@ router.post("/status", async (req: Request, res: Response) => {
         leadId: item.leadId,
         email: item.email,
         campaign: campaignScope,
-        brand: {
-          lead: aggregateLead(brandLeadRows),
-          email: aggregateEmail(brandEmailRows),
-        },
+        brand: brandScope,
         global: {
           email: {
             bounced: globalEmailAgg.bounced,
@@ -399,7 +411,7 @@ router.post("/status", async (req: Request, res: Response) => {
 
     res.json({ results });
   } catch (error: any) {
-    console.error("Error checking status:", error);
+    console.error("[postmark-service] Error checking status:", error);
     res.status(500).json({
       error: "Failed to check status",
       details: error.message,
@@ -496,7 +508,7 @@ function buildStatsObject(emailsSent: number, eventStats: Awaited<ReturnType<typ
   };
 }
 
-// ─── GET /stats handler ───────────────────────────────────────────────────────
+// ─── Shared stats handler ─────────────────────────────────────────────────────
 
 async function handleStats(req: Request, res: Response) {
   const parsed = StatsQuerySchema.safeParse(req.query);
@@ -685,7 +697,7 @@ async function handleStats(req: Request, res: Response) {
 
     return res.json({ groups });
   } catch (error: any) {
-    console.error("Error getting stats:", error);
+    console.error("[postmark-service] Error getting stats:", error);
     res.status(500).json({
       error: "Failed to get stats",
       details: error.message,
@@ -694,16 +706,9 @@ async function handleStats(req: Request, res: Response) {
 }
 
 /**
- * GET /stats
+ * GET /orgs/stats
  * Get aggregated email stats (requires identity headers)
  */
-router.get("/stats", handleStats);
+orgsRouter.get("/stats", handleStats);
 
-/**
- * GET /stats/public
- * Same as /stats but only requires service API key (no identity headers).
- * Used by email-gateway for transactional stats aggregation.
- */
-router.get("/stats/public", handleStats);
-
-export default router;
+export default { internal: internalRouter, orgs: orgsRouter };

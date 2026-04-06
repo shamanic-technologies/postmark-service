@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import request from "supertest";
-import { createTestApp, getAuthHeaders } from "../helpers/test-app";
+import { createTestApp, getServiceHeaders } from "../helpers/test-app";
 import {
   cleanTestData,
   closeDb,
@@ -11,7 +11,7 @@ import {
   randomUUID,
 } from "../helpers/test-db";
 
-describe("GET /performance/leaderboard", () => {
+describe("GET /public/performance/leaderboard", () => {
   const app = createTestApp();
 
   beforeEach(async () => {
@@ -25,8 +25,8 @@ describe("GET /performance/leaderboard", () => {
 
   it("should return empty workflows when no sendings exist", async () => {
     const response = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
+      .get("/public/performance/leaderboard")
+      .set(getServiceHeaders());
 
     expect(response.status).toBe(200);
     expect(response.body.workflows).toEqual([]);
@@ -46,8 +46,8 @@ describe("GET /performance/leaderboard", () => {
     await insertTestOpening(msg1);
 
     const response = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
+      .get("/public/performance/leaderboard")
+      .set(getServiceHeaders());
 
     expect(response.status).toBe(200);
     expect(response.body.workflows).toHaveLength(2);
@@ -71,8 +71,8 @@ describe("GET /performance/leaderboard", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" }); // no workflowSlug
 
     const response = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
+      .get("/public/performance/leaderboard")
+      .set(getServiceHeaders());
 
     expect(response.status).toBe(200);
     expect(response.body.workflows).toHaveLength(1);
@@ -86,8 +86,8 @@ describe("GET /performance/leaderboard", () => {
     await insertTestSending({ messageId: randomUUID(), workflowSlug: "Big", brandId: "b1", campaignId: "c1" });
 
     const response = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
+      .get("/public/performance/leaderboard")
+      .set(getServiceHeaders());
 
     expect(response.status).toBe(200);
     expect(response.body.workflows[0].workflowSlug).toBe("Big");
@@ -115,8 +115,8 @@ describe("GET /performance/leaderboard", () => {
     await insertTestBounce(msg4);
 
     const response = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
+      .get("/public/performance/leaderboard")
+      .set(getServiceHeaders());
 
     expect(response.status).toBe(200);
     const wf = response.body.workflows[0];
@@ -145,8 +145,8 @@ describe("GET /performance/leaderboard", () => {
     await insertTestOpening(msg3);
 
     const response = await request(app)
-      .get("/performance/leaderboard")
-      .set(getAuthHeaders());
+      .get("/public/performance/leaderboard")
+      .set(getServiceHeaders());
 
     expect(response.status).toBe(200);
     expect(response.body.workflows).toHaveLength(1);

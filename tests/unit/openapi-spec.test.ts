@@ -32,13 +32,15 @@ describe("OpenAPI spec", () => {
 
     expect(paths).toContain("/");
     expect(paths).toContain("/health");
-    expect(paths).toContain("/send");
-    expect(paths).toContain("/send/batch");
-    expect(paths).toContain("/status/{messageId}");
-    expect(paths).toContain("/status/by-org/{orgId}");
-    expect(paths).toContain("/status/by-run/{runId}");
-    expect(paths).toContain("/status");
-    expect(paths).toContain("/stats");
+    expect(paths).toContain("/orgs/send");
+    expect(paths).toContain("/orgs/send/batch");
+    expect(paths).toContain("/internal/status/{messageId}");
+    expect(paths).toContain("/internal/status/by-org/{orgId}");
+    expect(paths).toContain("/internal/status/by-run/{runId}");
+    expect(paths).toContain("/orgs/status");
+    expect(paths).toContain("/orgs/stats");
+    expect(paths).toContain("/internal/stats");
+    expect(paths).toContain("/public/performance/leaderboard");
     expect(paths).toContain("/webhooks/postmark");
   });
 
@@ -88,6 +90,7 @@ describe("OpenAPI spec", () => {
     expect(tagNames).toContain("Email Sending");
     expect(tagNames).toContain("Email Status");
     expect(tagNames).toContain("Webhooks");
+    expect(tagNames).toContain("Performance");
   });
 
   it("should include production server URL", () => {
@@ -99,7 +102,7 @@ describe("OpenAPI spec", () => {
 
   it("should use $ref for schema references in paths", () => {
     const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
-    const sendPath = spec.paths["/send"].post;
+    const sendPath = spec.paths["/orgs/send"].post;
 
     expect(sendPath.requestBody.content["application/json"].schema.$ref).toBe(
       "#/components/schemas/SendEmailRequest"

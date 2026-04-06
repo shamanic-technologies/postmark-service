@@ -1,34 +1,23 @@
 import { Request, Response, NextFunction } from "express";
 
 /**
- * Service-to-service authentication middleware
- * Validates X-API-Key header and requires x-org-id, x-user-id, and x-run-id headers
+ * API key authentication middleware.
+ * Validates X-API-Key header against the configured service secret.
+ * Crashes at startup if the env var is missing.
  */
-export function serviceAuth(req: Request, res: Response, next: NextFunction) {
-  // Skip auth for health check and OpenAPI spec
-  if (req.path === "/health" || req.path === "/" || req.path === "/openapi.json") {
-    return next();
-  }
+const validSecret = process.env.POSTMARK_SERVICE_API_KEY || process.env.SERVICE_SECRET_KEY;
+if (!validSecret && process.env.NODE_ENV !== "test") {
+  console.error("[postmark-service] POSTMARK_SERVICE_API_KEY not configured — refusing to start");
+  process.exit(1);
+}
 
-  // Skip auth for Postmark webhooks (they have their own verification)
-  if (req.path.startsWith("/webhooks/postmark")) {
-    return next();
+export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
+  const secret = process.env.POSTMARK_SERVICE_API_KEY || process.env.SERVICE_SECRET_KEY;
+  if (!secret) {
+    return res.status(500).json({ error: "Server configuration error" });
   }
-
-  // Paths that require API key but NOT identity headers
-  const serviceAuthOnlyPaths = ["/stats/public"];
-  const skipIdentity = serviceAuthOnlyPaths.includes(req.path);
 
   const apiKey = req.headers["x-api-key"];
-  const validSecret = process.env.POSTMARK_SERVICE_API_KEY || process.env.SERVICE_SECRET_KEY;
-
-  if (!validSecret) {
-    console.error("POSTMARK_SERVICE_API_KEY not configured in environment variables");
-    return res.status(500).json({
-      error: "Server configuration error",
-    });
-  }
-
   if (!apiKey) {
     return res.status(401).json({
       error: "Missing API key",
@@ -36,39 +25,50 @@ export function serviceAuth(req: Request, res: Response, next: NextFunction) {
     });
   }
 
-  if (apiKey !== validSecret) {
-    return res.status(403).json({
-      error: "Invalid API key",
-    });
+  if (apiKey !== secret) {
+    return res.status(403).json({ error: "Invalid API key" });
   }
 
-  // Skip identity headers for service-auth-only paths
-  if (skipIdentity) {
-    return next();
-  }
+  next();
+}
 
-  // Require identity headers
+export interface OrgContext {
+  orgId: string;
+  userId?: string;
+  runId?: string;
+  campaignId?: string;
+  brandId?: string;
+  featureSlug?: string;
+  workflowSlug?: string;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      orgContext?: OrgContext;
+    }
+  }
+}
+
+/**
+ * Require x-org-id header. Parses all identity headers but only requires orgId.
+ * Must be used AFTER apiKeyAuth.
+ */
+export function requireOrgId(req: Request, res: Response, next: NextFunction) {
   const orgId = req.headers["x-org-id"];
-  const userId = req.headers["x-user-id"];
-
   if (!orgId || typeof orgId !== "string") {
-    return res.status(400).json({
-      error: "Missing required header: x-org-id",
-    });
+    return res.status(400).json({ error: "Missing required header: x-org-id" });
   }
 
-  if (!userId || typeof userId !== "string") {
-    return res.status(400).json({
-      error: "Missing required header: x-user-id",
-    });
-  }
-
-  const runId = req.headers["x-run-id"];
-  if (!runId || typeof runId !== "string") {
-    return res.status(400).json({
-      error: "Missing required header: x-run-id",
-    });
-  }
+  req.orgContext = {
+    orgId,
+    userId: typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"] : undefined,
+    runId: typeof req.headers["x-run-id"] === "string" ? req.headers["x-run-id"] : undefined,
+    campaignId: typeof req.headers["x-campaign-id"] === "string" ? req.headers["x-campaign-id"] : undefined,
+    brandId: typeof req.headers["x-brand-id"] === "string" ? req.headers["x-brand-id"] : undefined,
+    featureSlug: typeof req.headers["x-feature-slug"] === "string" ? req.headers["x-feature-slug"] : undefined,
+    workflowSlug: typeof req.headers["x-workflow-slug"] === "string" ? req.headers["x-workflow-slug"] : undefined,
+  };
 
   next();
 }

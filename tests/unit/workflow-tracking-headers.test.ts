@@ -86,7 +86,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
   describe("POST /send", () => {
     it("should use tracking headers when body fields are absent", async () => {
       await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set({
           ...getAuthHeaders(),
           "x-campaign-id": "camp-from-header",
@@ -128,7 +128,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
 
     it("should prefer body values over header values", async () => {
       await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set({
           ...getAuthHeaders(),
           "x-campaign-id": "camp-from-header",
@@ -168,7 +168,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
 
     it("should parse CSV x-brand-id header into brandIds array", async () => {
       await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set({
           ...getAuthHeaders(),
           "x-brand-id": "brand-a,brand-b,brand-c",
@@ -193,7 +193,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
 
     it("should handle single brand in x-brand-id header (backwards compatible)", async () => {
       await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set({
           ...getAuthHeaders(),
           "x-brand-id": "single-brand",
@@ -211,7 +211,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
 
     it("should work without any tracking headers or body fields", async () => {
       const res = await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set(getAuthHeaders())
         .send({
           to: "recipient@test.com",
@@ -233,7 +233,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
 
     it("should forward tracking headers to runs-service (updateRun, addCosts)", async () => {
       await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set({
           ...getAuthHeaders(),
           "x-campaign-id": "camp-1",
@@ -273,7 +273,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
 
     it("should forward tracking headers to key-service", async () => {
       await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set({
           ...getAuthHeaders(),
           "x-campaign-id": "camp-1",
@@ -314,7 +314,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
   describe("POST /send/batch", () => {
     it("should use tracking headers as fallback for batch emails", async () => {
       await request(app)
-        .post("/send/batch")
+        .post("/orgs/send/batch")
         .set({
           ...getAuthHeaders(),
           "x-campaign-id": "camp-from-header",

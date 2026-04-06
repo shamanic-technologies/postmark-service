@@ -21,6 +21,7 @@ const document = generator.generateDocument({
     { name: "Email Sending", description: "Send emails via Postmark" },
     { name: "Email Status", description: "Query email delivery status" },
     { name: "Webhooks", description: "Postmark webhook handlers" },
+    { name: "Performance", description: "Workflow performance metrics" },
   ],
 });
 
