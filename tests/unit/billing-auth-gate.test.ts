@@ -76,7 +76,7 @@ describe("billing credit authorization gate", () => {
       });
 
       const res = await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set(getAuthHeaders())
         .send(validBody);
 
@@ -99,7 +99,7 @@ describe("billing credit authorization gate", () => {
       });
 
       const res = await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set(getAuthHeaders())
         .send(validBody);
 
@@ -121,7 +121,7 @@ describe("billing credit authorization gate", () => {
       });
 
       const res = await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set(getAuthHeaders())
         .send(validBody);
 
@@ -141,7 +141,7 @@ describe("billing credit authorization gate", () => {
       );
 
       const res = await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set(getAuthHeaders())
         .send(validBody);
 
@@ -162,7 +162,7 @@ describe("billing credit authorization gate", () => {
       });
 
       await request(app)
-        .post("/send")
+        .post("/orgs/send")
         .set({
           ...getAuthHeaders(),
           "x-campaign-id": "camp-1",
@@ -205,7 +205,7 @@ describe("billing credit authorization gate", () => {
       });
 
       const res = await request(app)
-        .post("/send/batch")
+        .post("/orgs/send/batch")
         .set(getAuthHeaders())
         .send(batchBody);
 
@@ -227,7 +227,7 @@ describe("billing credit authorization gate", () => {
       });
 
       const res = await request(app)
-        .post("/send/batch")
+        .post("/orgs/send/batch")
         .set(getAuthHeaders())
         .send(batchBody);
 
@@ -247,7 +247,7 @@ describe("billing credit authorization gate", () => {
       });
 
       const res = await request(app)
-        .post("/send/batch")
+        .post("/orgs/send/batch")
         .set(getAuthHeaders())
         .send(batchBody);
 

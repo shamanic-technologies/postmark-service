@@ -12,12 +12,11 @@ import { inArray } from "drizzle-orm";
 const router = Router();
 
 /**
- * GET /performance/leaderboard
+ * GET /public/performance/leaderboard
  *
- * Returns global workflow performance stats.
- * Auth headers (x-org-id, x-user-id) are required but NEVER used for filtering.
+ * Returns global workflow performance stats. API key only, no identity headers.
  */
-router.get("/performance/leaderboard", async (req: Request, res: Response) => {
+router.get("/performance/leaderboard", async (_req: Request, res: Response) => {
   try {
     const sendings = await db
       .select({

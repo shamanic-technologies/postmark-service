@@ -31,6 +31,10 @@
     {
       "name": "Webhooks",
       "description": "Postmark webhook handlers"
+    },
+    {
+      "name": "Performance",
+      "description": "Workflow performance metrics"
     }
   ],
   "components": {
@@ -758,6 +762,7 @@
                 },
                 "brand": {
                   "type": "object",
+                  "nullable": true,
                   "properties": {
                     "lead": {
                       "type": "object",
@@ -1188,7 +1193,7 @@
         }
       }
     },
-    "/send": {
+    "/orgs/send": {
       "post": {
         "summary": "Send a single email",
         "description": "Send an email via Postmark and record it in the database. Runs-service integration is BLOCKING.",
@@ -1295,7 +1300,7 @@
         }
       }
     },
-    "/send/batch": {
+    "/orgs/send/batch": {
       "post": {
         "summary": "Send batch emails",
         "description": "Send up to 500 emails in one request. Runs-service integration is BLOCKING for each email.",
@@ -1392,7 +1397,7 @@
         }
       }
     },
-    "/status/{messageId}": {
+    "/internal/status/{messageId}": {
       "get": {
         "summary": "Get email status",
         "description": "Get the full delivery status of an email by its Postmark message ID",
@@ -1440,7 +1445,7 @@
         }
       }
     },
-    "/status/by-org/{orgId}": {
+    "/internal/status/by-org/{orgId}": {
       "get": {
         "summary": "Get emails by organization",
         "description": "Get recent emails for an organization",
@@ -1488,7 +1493,7 @@
         }
       }
     },
-    "/status/by-run/{runId}": {
+    "/internal/status/by-run/{runId}": {
       "get": {
         "summary": "Get emails by run",
         "description": "Get all emails for a specific run",
@@ -1526,10 +1531,10 @@
         }
       }
     },
-    "/status": {
+    "/orgs/status": {
       "post": {
         "summary": "Batch status lookup by lead and email",
-        "description": "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results. Brand ID is read from x-brand-id header.",
+        "description": "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results.",
         "tags": [
           "Email Status"
         ],
@@ -1542,10 +1547,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Brand ID — primary dedup scope"
+              "description": "Brand ID — if provided, returns brand-scoped stats; otherwise brand is null"
             },
-            "required": true,
-            "description": "Brand ID — primary dedup scope",
+            "required": false,
+            "description": "Brand ID — if provided, returns brand-scoped stats; otherwise brand is null",
             "name": "x-brand-id",
             "in": "header"
           }
@@ -1583,10 +1588,10 @@
         }
       }
     },
-    "/stats": {
+    "/orgs/stats": {
       "get": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
         "tags": [
           "Email Status"
         ],
@@ -1727,10 +1732,10 @@
         }
       }
     },
-    "/stats/public": {
+    "/internal/stats": {
       "get": {
         "summary": "Get aggregated stats (service auth only)",
-        "description": "Same as GET /stats but only requires X-API-Key (no x-org-id, x-user-id, x-run-id headers). Used by email-gateway for transactional stats aggregation.",
+        "description": "Same as GET /orgs/stats but only requires X-API-Key (no identity headers). Used by email-gateway for transactional stats aggregation.",
         "tags": [
           "Email Status"
         ],
@@ -1871,10 +1876,10 @@
         }
       }
     },
-    "/performance/leaderboard": {
+    "/public/performance/leaderboard": {
       "get": {
         "summary": "Workflow performance leaderboard",
-        "description": "Returns global workflow performance stats. Requires x-org-id and x-user-id headers.",
+        "description": "Returns global workflow performance stats. API key only, no identity headers required.",
         "tags": [
           "Performance"
         ],

@@ -261,7 +261,7 @@ export const StatusResponseSchema = z
         leadId: z.string(),
         email: z.string(),
         campaign: ScopeStatusSchema.nullable(),
-        brand: ScopeStatusSchema,
+        brand: ScopeStatusSchema.nullable(),
         global: GlobalStatusSchema,
       })
     ),
@@ -434,7 +434,7 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
-  path: "/send",
+  path: "/orgs/send",
   summary: "Send a single email",
   description:
     "Send an email via Postmark and record it in the database. Runs-service integration is BLOCKING.",
@@ -474,7 +474,7 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
-  path: "/send/batch",
+  path: "/orgs/send/batch",
   summary: "Send batch emails",
   description:
     "Send up to 500 emails in one request. Runs-service integration is BLOCKING for each email.",
@@ -512,7 +512,7 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/status/{messageId}",
+  path: "/internal/status/{messageId}",
   summary: "Get email status",
   description:
     "Get the full delivery status of an email by its Postmark message ID",
@@ -537,7 +537,7 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/status/by-org/{orgId}",
+  path: "/internal/status/by-org/{orgId}",
   summary: "Get emails by organization",
   description: "Get recent emails for an organization",
   tags: ["Email Status"],
@@ -563,7 +563,7 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/status/by-run/{runId}",
+  path: "/internal/status/by-run/{runId}",
   summary: "Get emails by run",
   description: "Get all emails for a specific run",
   tags: ["Email Status"],
@@ -583,15 +583,15 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
-  path: "/status",
+  path: "/orgs/status",
   summary: "Batch status lookup by lead and email",
   description:
-    "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped, and global results. Brand ID is read from x-brand-id header.",
+    "Check delivery status for lead+email pairs. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
     headers: z.object({
-      "x-brand-id": z.string().openapi({ description: "Brand ID — primary dedup scope" }),
+      "x-brand-id": z.string().optional().openapi({ description: "Brand ID — if provided, returns brand-scoped stats; otherwise brand is null" }),
     }),
     body: {
       content: { "application/json": { schema: StatusRequestSchema } },
@@ -611,10 +611,10 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/stats",
+  path: "/orgs/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When no filters are provided, returns stats across all sendings. When groupBy is provided, returns grouped results. Requires x-org-id and x-user-id headers.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
@@ -638,10 +638,10 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/stats/public",
+  path: "/internal/stats",
   summary: "Get aggregated stats (service auth only)",
   description:
-    "Same as GET /stats but only requires X-API-Key (no x-org-id, x-user-id, x-run-id headers). Used by email-gateway for transactional stats aggregation.",
+    "Same as GET /orgs/stats but only requires X-API-Key (no identity headers). Used by email-gateway for transactional stats aggregation.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
@@ -667,10 +667,10 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/performance/leaderboard",
+  path: "/public/performance/leaderboard",
   summary: "Workflow performance leaderboard",
   description:
-    "Returns global workflow performance stats. Requires x-org-id and x-user-id headers.",
+    "Returns global workflow performance stats. API key only, no identity headers required.",
   tags: ["Performance"],
   security: [{ apiKey: [] }],
   responses: {

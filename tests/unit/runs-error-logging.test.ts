@@ -68,7 +68,7 @@ describe("runs-service BLOCKING behavior", () => {
     );
 
     const res = await request(app)
-      .post("/send")
+      .post("/orgs/send")
       .set(getAuthHeaders({ runId: "run_xyz" }))
       .send({
         brandId: "brand_1",
@@ -105,7 +105,7 @@ describe("runs-service BLOCKING behavior", () => {
     });
 
     await request(app)
-      .post("/send")
+      .post("/orgs/send")
       .set(getAuthHeaders({ orgId: "org_abc", userId: "user_xyz", runId: "run_xyz" }))
       .send({
         brandId: "brand_1",
@@ -146,7 +146,7 @@ describe("runs-service BLOCKING behavior", () => {
     });
 
     await request(app)
-      .post("/send")
+      .post("/orgs/send")
       .set(getAuthHeaders())
       .send({
         from: "sender@test.com",
@@ -167,7 +167,7 @@ describe("runs-service BLOCKING behavior", () => {
     );
 
     await request(app)
-      .post("/send")
+      .post("/orgs/send")
       .set(getAuthHeaders({ runId: "run_xyz" }))
       .send({
         brandId: "brand_1",

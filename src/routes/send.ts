@@ -18,7 +18,7 @@ const router = Router();
  * Send an email via Postmark and record it in the database
  * BLOCKING: runs-service must succeed before email is sent
  */
-router.post("/send", async (req: Request, res: Response) => {
+router.post("/send", async (req: Request & { orgContext?: import("../middleware/serviceAuth").OrgContext }, res: Response) => {
   const parsed = SendEmailRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -180,7 +180,7 @@ router.post("/send", async (req: Request, res: Response) => {
  * Send multiple emails in a batch
  * BLOCKING: runs-service must succeed before each email is sent
  */
-router.post("/send/batch", async (req: Request, res: Response) => {
+router.post("/send/batch", async (req: Request & { orgContext?: import("../middleware/serviceAuth").OrgContext }, res: Response) => {
   const parsed = BatchSendRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({

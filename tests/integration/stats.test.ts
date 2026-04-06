@@ -25,7 +25,7 @@ describe("GET /stats", () => {
 
   it("should return 400 when no filters provided", async () => {
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({});
 
@@ -35,7 +35,7 @@ describe("GET /stats", () => {
 
   it("should return 400 when only groupBy is provided (no filter)", async () => {
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ groupBy: "workflowSlug" });
 
@@ -49,7 +49,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-global-b", orgId });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ groupBy: "workflowSlug", orgId });
 
@@ -67,7 +67,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), runId: "other-run", brandId: "b2", campaignId: "c2" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ runIds: runId });
 
@@ -83,7 +83,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), runId: "other-run", brandId: "b2", campaignId: "c2" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ runIds: `${runId1},${runId2}` });
 
@@ -96,7 +96,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: "org-other", brandId: "b2", campaignId: "c2" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: "org-abc" });
 
@@ -109,7 +109,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "brand-y", campaignId: "c2" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: "brand-x" });
 
@@ -122,7 +122,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b2", campaignId: "camp-2" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ campaignId: "camp-1" });
 
@@ -136,7 +136,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: "org-2", brandId: "brand-a", campaignId: "c3" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: "org-1", brandId: "brand-a" });
 
@@ -150,7 +150,7 @@ describe("GET /stats", () => {
     await insertTestDelivery(msgId);
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: "b1" });
 
@@ -174,7 +174,7 @@ describe("GET /stats", () => {
     await insertTestBounce(msg3);
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: brand });
 
@@ -191,7 +191,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: "b1" });
 
@@ -206,7 +206,7 @@ describe("GET /stats", () => {
 
   it("should return all zeros when filter matches no sendings", async () => {
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: "non-existent-brand" });
 
@@ -227,7 +227,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, campaignId: "c1" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: brand });
 
@@ -242,7 +242,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-alpha" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: "b1", workflowSlugs: "wf-alpha" });
 
@@ -254,7 +254,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-solo" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ workflowSlugs: "wf-solo" });
 
@@ -279,7 +279,7 @@ describe("GET /stats", () => {
     await insertTestOpening(msg1);
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: brand, groupBy: "campaignId" });
 
@@ -307,7 +307,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "brand-y", campaignId: "c1" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: org, groupBy: "brandId" });
 
@@ -327,7 +327,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "wf-1" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: org, groupBy: "workflowSlug" });
 
@@ -347,7 +347,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, campaignId: "c1" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: brand, groupBy: "leadEmail" });
 
@@ -368,7 +368,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, campaignId: "c2" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: brand, groupBy: "campaignId" });
 
@@ -385,7 +385,7 @@ describe("GET /stats", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1" }); // no workflowSlug
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: org, groupBy: "workflowSlug" });
 
@@ -400,7 +400,7 @@ describe("GET /stats", () => {
 
   it("should reject invalid groupBy value", async () => {
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ brandId: "b1", groupBy: "invalidField" });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import request from "supertest";
-import { createTestApp, getAuthHeaders } from "../helpers/test-app";
+import { createTestApp, getAuthHeaders, getServiceHeaders } from "../helpers/test-app";
 import {
   cleanTestData,
   closeDb,
@@ -24,11 +24,11 @@ describe("Status Endpoints Integration", () => {
     await closeDb();
   });
 
-  describe("GET /status/:messageId", () => {
+  describe("GET /internal/status/:messageId", () => {
     it("should return 404 for non-existent message", async () => {
       const response = await request(app)
-        .get(`/status/${randomUUID()}`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/${randomUUID()}`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBe("Message not found");
@@ -39,8 +39,8 @@ describe("Status Endpoints Integration", () => {
       await insertTestSending({ messageId });
 
       const response = await request(app)
-        .get(`/status/${messageId}`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/${messageId}`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.messageId).toBe(messageId);
@@ -55,8 +55,8 @@ describe("Status Endpoints Integration", () => {
       await insertTestDelivery(messageId);
 
       const response = await request(app)
-        .get(`/status/${messageId}`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/${messageId}`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe("delivered");
@@ -70,8 +70,8 @@ describe("Status Endpoints Integration", () => {
       await insertTestBounce(messageId);
 
       const response = await request(app)
-        .get(`/status/${messageId}`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/${messageId}`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe("bounced");
@@ -86,8 +86,8 @@ describe("Status Endpoints Integration", () => {
       await insertTestOpening(messageId);
 
       const response = await request(app)
-        .get(`/status/${messageId}`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/${messageId}`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe("opened");
@@ -95,11 +95,11 @@ describe("Status Endpoints Integration", () => {
     });
   });
 
-  describe("GET /status/by-org/:orgId", () => {
+  describe("GET /internal/status/by-org/:orgId", () => {
     it("should return empty array for org with no emails", async () => {
       const response = await request(app)
-        .get("/status/by-org/non-existent-org")
-        .set(getAuthHeaders());
+        .get("/internal/status/by-org/non-existent-org")
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(0);
@@ -112,8 +112,8 @@ describe("Status Endpoints Integration", () => {
       await insertTestSending({ messageId: randomUUID(), orgId });
 
       const response = await request(app)
-        .get(`/status/by-org/${orgId}`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/by-org/${orgId}`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.orgId).toBe(orgId);
@@ -128,23 +128,23 @@ describe("Status Endpoints Integration", () => {
       await insertTestSending({ messageId: randomUUID(), orgId });
 
       const response = await request(app)
-        .get(`/status/by-org/${orgId}?limit=2`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/by-org/${orgId}?limit=2`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.emails.length).toBe(2);
     });
   });
 
-  describe("GET /status/by-run/:runId", () => {
+  describe("GET /internal/status/by-run/:runId", () => {
     it("should return emails for run", async () => {
       const runId = "run-123";
       await insertTestSending({ messageId: randomUUID(), runId });
       await insertTestSending({ messageId: randomUUID(), runId });
 
       const response = await request(app)
-        .get(`/status/by-run/${runId}`)
-        .set(getAuthHeaders());
+        .get(`/internal/status/by-run/${runId}`)
+        .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
       expect(response.body.runId).toBe(runId);
@@ -152,28 +152,41 @@ describe("Status Endpoints Integration", () => {
     });
   });
 
-  describe("POST /status", () => {
+  describe("POST /orgs/status", () => {
     const brandId = "brand-test";
 
     function statusHeaders() {
       return { ...getAuthHeaders(), "x-brand-id": brandId };
     }
 
-    it("should return 400 when x-brand-id header is missing", async () => {
+    it("should return brand=null when x-brand-id header is missing", async () => {
+      const messageId = randomUUID();
+      await insertTestSending({
+        messageId,
+        toEmail: "nobrand@test.com",
+        leadId: "lead-nobrand",
+        brandId: "some-brand",
+        campaignId: "camp-nobrand",
+      });
+
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          items: [{ leadId: "lead-1", email: "test@test.com" }],
+          campaignId: "camp-nobrand",
+          items: [{ leadId: "lead-nobrand", email: "nobrand@test.com" }],
         });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe("Missing required header: x-brand-id");
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.brand).toBeNull();
+      expect(r.campaign).not.toBeNull();
+      expect(r.global).not.toBeNull();
     });
 
     it("should return 400 for invalid request body", async () => {
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({});
 
@@ -182,7 +195,7 @@ describe("Status Endpoints Integration", () => {
 
     it("should return all-false for unknown lead/email", async () => {
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId: "camp-empty",
@@ -219,7 +232,7 @@ describe("Status Endpoints Integration", () => {
       await insertTestDelivery(messageId, "alice@test.com");
 
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId,
@@ -254,7 +267,7 @@ describe("Status Endpoints Integration", () => {
       await insertTestBounce(messageId, "bounced@test.com");
 
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId,
@@ -281,7 +294,7 @@ describe("Status Endpoints Integration", () => {
       await insertTestSubscriptionChange(messageId, "unsub@test.com", true);
 
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId,
@@ -317,7 +330,7 @@ describe("Status Endpoints Integration", () => {
 
       // Query for camp-B: campaign should NOT show delivered, brand SHOULD
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId: "camp-B",
@@ -352,7 +365,7 @@ describe("Status Endpoints Integration", () => {
       await insertTestDelivery(msg2, "email2@test.com");
 
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId: "camp-multi",
@@ -391,7 +404,7 @@ describe("Status Endpoints Integration", () => {
       await insertTestDelivery(msg1, "a@test.com");
 
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId,
@@ -427,7 +440,7 @@ describe("Status Endpoints Integration", () => {
       });
 
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           items: [{ leadId: "lead-nocamp", email: "nocampaign@test.com" }],
@@ -452,7 +465,7 @@ describe("Status Endpoints Integration", () => {
       await insertTestDelivery(messageId, "reply@test.com");
 
       const response = await request(app)
-        .post("/status")
+        .post("/orgs/status")
         .set(statusHeaders())
         .send({
           campaignId,

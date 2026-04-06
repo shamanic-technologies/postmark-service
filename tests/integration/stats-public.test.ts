@@ -21,7 +21,7 @@ function getServiceAuthHeaders() {
   };
 }
 
-describe("GET /stats/public", () => {
+describe("GET /internal/stats", () => {
   const app = createTestApp();
 
   beforeEach(async () => {
@@ -38,7 +38,7 @@ describe("GET /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId, campaignId: "c1" });
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ brandId });
 
@@ -49,7 +49,7 @@ describe("GET /stats/public", () => {
 
   it("should return 400 without any filters", async () => {
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({});
 
@@ -59,7 +59,7 @@ describe("GET /stats/public", () => {
 
   it("should reject requests without API key", async () => {
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set({ "Content-Type": "application/json" })
       .query({});
 
@@ -71,7 +71,7 @@ describe("GET /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "brand-pub-y", campaignId: "c2" });
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ brandId: "brand-pub-x" });
 
@@ -85,7 +85,7 @@ describe("GET /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "camp-b" });
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ brandId: brand, groupBy: "campaignId" });
 
@@ -106,7 +106,7 @@ describe("GET /stats/public", () => {
     await insertTestBounce(msg2);
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ brandId: brand });
 
@@ -126,7 +126,7 @@ describe("GET /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "other-feature" });
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ featureSlugs: "sales-cold-email-outreach,marketing-newsletter" });
 
@@ -141,7 +141,7 @@ describe("GET /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", workflowSlug: "wf-gamma" });
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ workflowSlugs: "wf-alpha,wf-beta" });
 
@@ -156,7 +156,7 @@ describe("GET /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: brand, campaignId: "c1", featureSlug: "other-feature", workflowSlug: "wf-3" });
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ featureSlugs: "sales-cold-email-outreach", groupBy: "workflowSlug" });
 
@@ -171,7 +171,7 @@ describe("GET /stats/public", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b-single", campaignId: "c1", featureSlug: "other" });
 
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ featureSlugs: "sales-cold-email-outreach" });
 
@@ -181,7 +181,7 @@ describe("GET /stats/public", () => {
 
   it("should reject invalid groupBy", async () => {
     const response = await request(app)
-      .get("/stats/public")
+      .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({ groupBy: "invalidField" });
 

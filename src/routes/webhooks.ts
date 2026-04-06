@@ -15,7 +15,7 @@ const router = Router();
  * GET /webhooks/postmark/url
  * Returns the webhook URL that BYOK users should configure in their Postmark dashboard.
  */
-router.get("/webhooks/postmark/url", (req: Request, res: Response) => {
+router.get("/postmark/url", (req: Request, res: Response) => {
   const protocol = req.headers["x-forwarded-proto"] || req.protocol;
   const host = req.headers["x-forwarded-host"] || req.get("host");
   const webhookUrl = `${protocol}://${host}/webhooks/postmark`;
@@ -30,16 +30,8 @@ router.get("/webhooks/postmark/url", (req: Request, res: Response) => {
 /**
  * POST /webhooks/postmark
  * Handle all Postmark webhook events
- *
- * Postmark sends different event types:
- * - Delivery
- * - Bounce
- * - Open
- * - Click
- * - SpamComplaint
- * - SubscriptionChange
  */
-router.post("/webhooks/postmark", async (req: Request, res: Response) => {
+router.post("/postmark", async (req: Request, res: Response) => {
   const payload = req.body;
 
   const recordType = payload.RecordType;

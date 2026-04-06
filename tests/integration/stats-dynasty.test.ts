@@ -52,7 +52,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ featureSlugs: "feat-alpha" });
 
@@ -67,7 +67,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-1" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: org, groupBy: "featureSlug" });
 
@@ -90,7 +90,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ featureDynastySlug: "feat-alpha" });
 
@@ -103,7 +103,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     mockResolveFeature.mockResolvedValue([]);
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ featureDynastySlug: "nonexistent-dynasty" });
 
@@ -119,7 +119,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "brand-x", campaignId: "c1", featureSlug: "feat-alpha-v2" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ featureDynastySlug: "feat-alpha", brandId: "brand-x" });
 
@@ -137,7 +137,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "other-wf" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ workflowDynastySlug: "cold-email-sequoia" });
 
@@ -150,7 +150,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     mockResolveWorkflow.mockResolvedValue([]);
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ workflowDynastySlug: "nonexistent-dynasty" });
 
@@ -166,7 +166,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "brand-a", campaignId: "c1", featureSlug: "feat-beta" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ featureDynastySlug: "feat-alpha", groupBy: "brandId" });
 
@@ -189,7 +189,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-other" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ workflowDynastySlug: "wf-a", workflowSlugs: "wf-other" });
 
@@ -221,7 +221,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "warm-intro" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: org, groupBy: "workflowDynastySlug" });
 
@@ -258,7 +258,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: org, groupBy: "featureDynastySlug" });
 
@@ -289,7 +289,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "orphan-wf" });
 
     const response = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(getAuthHeaders())
       .query({ orgId: org, groupBy: "workflowDynastySlug" });
 

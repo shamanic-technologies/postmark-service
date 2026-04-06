@@ -7,7 +7,7 @@ import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { serviceAuth } from "./middleware/serviceAuth";
+import { apiKeyAuth, requireOrgId } from "./middleware/serviceAuth";
 import { db } from "./db";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
@@ -44,14 +44,14 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "x-org-id", "x-user-id", "x-run-id"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "x-org-id", "x-user-id", "x-run-id", "x-campaign-id", "x-brand-id", "x-feature-slug", "x-workflow-slug"],
   })
 );
 
 app.use(express.json());
 
-// Service-to-service authentication (skips webhooks)
-app.use(serviceAuth);
+// ── Public (no auth) ──────────────────────────────────────────────────────────
+app.use("/", healthRoutes);
 
 // OpenAPI spec endpoint
 app.get("/openapi.json", (req, res) => {
@@ -64,12 +64,18 @@ app.get("/openapi.json", (req, res) => {
   }
 });
 
-// Mount routes
-app.use("/", healthRoutes);
-app.use("/", sendRoutes);
-app.use("/", statusRoutes);
-app.use("/", webhooksRoutes);
-app.use("/", performanceRoutes);
+// Webhooks — no auth (Postmark calls these directly)
+app.use("/webhooks", webhooksRoutes);
+
+// ── Public (API key only) ─────────────────────────────────────────────────────
+app.use("/public", apiKeyAuth, performanceRoutes);
+
+// ── Internal (API key only) ───────────────────────────────────────────────────
+app.use("/internal", apiKeyAuth, statusRoutes.internal);
+
+// ── Org-scoped (API key + x-org-id required) ─────────────────────────────────
+app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
+app.use("/orgs", apiKeyAuth, requireOrgId, statusRoutes.orgs);
 
 // Only start server if not in test environment
 if (process.env.NODE_ENV !== "test") {
