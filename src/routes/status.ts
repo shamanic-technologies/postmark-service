@@ -569,8 +569,8 @@ async function handleStats(req: Request, res: Response) {
     if (isBrandGroupBy) {
       // Use unnest to expand brand_ids array into per-brand rows
       const rows = await db.execute<{ message_id: string | null; to_email: string; brand_id: string | null }>(
-        sql`SELECT ps.message_id, ps.to_email, unnest(ps.brand_ids) AS brand_id
-            FROM postmark_sendings ps
+        sql`SELECT "postmark_sendings"."message_id", "postmark_sendings"."to_email", unnest("postmark_sendings"."brand_ids") AS brand_id
+            FROM "postmark_sendings"
             ${conditions.length > 0 ? sql`WHERE ${and(...conditions)}` : sql``}`
       );
       sendings = rows.rows.map((r) => ({
