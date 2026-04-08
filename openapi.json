@@ -691,162 +691,41 @@
               "type": "object",
               "properties": {
                 "email": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The email address that was looked up"
                 },
                 "byCampaign": {
                   "type": "object",
                   "nullable": true,
                   "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "contacted": {
-                        "type": "boolean"
-                      },
-                      "delivered": {
-                        "type": "boolean"
-                      },
-                      "opened": {
-                        "type": "boolean"
-                      },
-                      "replied": {
-                        "type": "boolean"
-                      },
-                      "replyClassification": {
-                        "type": "string",
-                        "nullable": true
-                      },
-                      "bounced": {
-                        "type": "boolean"
-                      },
-                      "unsubscribed": {
-                        "type": "boolean"
-                      },
-                      "lastDeliveredAt": {
-                        "type": "string",
-                        "nullable": true,
-                        "format": "date-time"
-                      }
-                    },
-                    "required": [
-                      "contacted",
-                      "delivered",
-                      "opened",
-                      "replied",
-                      "replyClassification",
-                      "bounced",
-                      "unsubscribed",
-                      "lastDeliveredAt"
-                    ]
-                  }
+                    "$ref": "#/components/schemas/ScopeStatus"
+                  },
+                  "description": "Per-campaign breakdown (brand mode only). Keys are campaign UUIDs, values are scoped status. Null in campaign and global modes."
                 },
                 "brand": {
-                  "type": "object",
-                  "nullable": true,
-                  "properties": {
-                    "contacted": {
-                      "type": "boolean"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ScopeStatus"
                     },
-                    "delivered": {
-                      "type": "boolean"
-                    },
-                    "opened": {
-                      "type": "boolean"
-                    },
-                    "replied": {
-                      "type": "boolean"
-                    },
-                    "replyClassification": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "bounced": {
-                      "type": "boolean"
-                    },
-                    "unsubscribed": {
-                      "type": "boolean"
-                    },
-                    "lastDeliveredAt": {
-                      "type": "string",
+                    {
                       "nullable": true,
-                      "format": "date-time"
+                      "description": "Aggregated status across all campaigns for the brand (brand mode only). BOOL_OR across campaigns. Null in campaign and global modes."
                     }
-                  },
-                  "required": [
-                    "contacted",
-                    "delivered",
-                    "opened",
-                    "replied",
-                    "replyClassification",
-                    "bounced",
-                    "unsubscribed",
-                    "lastDeliveredAt"
                   ]
                 },
                 "campaign": {
-                  "type": "object",
-                  "nullable": true,
-                  "properties": {
-                    "contacted": {
-                      "type": "boolean"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ScopeStatus"
                     },
-                    "delivered": {
-                      "type": "boolean"
-                    },
-                    "opened": {
-                      "type": "boolean"
-                    },
-                    "replied": {
-                      "type": "boolean"
-                    },
-                    "replyClassification": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "bounced": {
-                      "type": "boolean"
-                    },
-                    "unsubscribed": {
-                      "type": "boolean"
-                    },
-                    "lastDeliveredAt": {
-                      "type": "string",
+                    {
                       "nullable": true,
-                      "format": "date-time"
+                      "description": "Status scoped to the requested campaignId (campaign mode only). Null in brand and global modes."
                     }
-                  },
-                  "required": [
-                    "contacted",
-                    "delivered",
-                    "opened",
-                    "replied",
-                    "replyClassification",
-                    "bounced",
-                    "unsubscribed",
-                    "lastDeliveredAt"
                   ]
                 },
                 "global": {
-                  "type": "object",
-                  "properties": {
-                    "email": {
-                      "type": "object",
-                      "properties": {
-                        "bounced": {
-                          "type": "boolean"
-                        },
-                        "unsubscribed": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "bounced",
-                        "unsubscribed"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "email"
-                  ]
+                  "$ref": "#/components/schemas/GlobalScope"
                 }
               },
               "required": [
@@ -863,16 +742,95 @@
           "results"
         ]
       },
+      "ScopeStatus": {
+        "type": "object",
+        "properties": {
+          "contacted": {
+            "type": "boolean",
+            "description": "True if at least one email was sent in this scope"
+          },
+          "delivered": {
+            "type": "boolean",
+            "description": "True if at least one email was delivered"
+          },
+          "opened": {
+            "type": "boolean",
+            "description": "True if at least one email was opened"
+          },
+          "replied": {
+            "type": "boolean",
+            "description": "True if at least one reply was received (always false for Postmark — no reply tracking)"
+          },
+          "replyClassification": {
+            "type": "string",
+            "nullable": true,
+            "description": "Reply sentiment classification (always null for Postmark)"
+          },
+          "bounced": {
+            "type": "boolean",
+            "description": "True if at least one email bounced"
+          },
+          "unsubscribed": {
+            "type": "boolean",
+            "description": "True if the recipient unsubscribed via a sending in this scope"
+          },
+          "lastDeliveredAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "ISO timestamp of the most recent delivery in this scope"
+          }
+        },
+        "required": [
+          "contacted",
+          "delivered",
+          "opened",
+          "replied",
+          "replyClassification",
+          "bounced",
+          "unsubscribed",
+          "lastDeliveredAt"
+        ]
+      },
+      "GlobalScope": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "object",
+            "properties": {
+              "bounced": {
+                "type": "boolean",
+                "description": "True if any email to this address bounced across all campaigns in the org"
+              },
+              "unsubscribed": {
+                "type": "boolean",
+                "description": "True if the recipient unsubscribed from any campaign in the org"
+              }
+            },
+            "required": [
+              "bounced",
+              "unsubscribed"
+            ],
+            "description": "Org-wide email health flags (not scoped to brand or campaign)"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "description": "Org-wide email health flags. Always present in all modes."
+      },
       "StatusRequest": {
         "type": "object",
         "properties": {
           "brandId": {
             "type": "string",
-            "description": "Brand ID — activates brand mode with per-campaign breakdown"
+            "description": "Brand UUID — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
+            "example": "b1a2c3d4-5678-90ab-cdef-111111111111"
           },
           "campaignId": {
             "type": "string",
-            "description": "Campaign ID — activates campaign mode"
+            "description": "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandId.",
+            "example": "c1a2b3d4-5678-90ab-cdef-222222222222"
           },
           "items": {
             "type": "array",
@@ -882,7 +840,8 @@
                 "email": {
                   "type": "string",
                   "format": "email",
-                  "description": "Email address"
+                  "description": "Recipient email address to look up",
+                  "example": "alice@example.com"
                 }
               },
               "required": [
@@ -891,7 +850,7 @@
             },
             "minItems": 1,
             "maxItems": 1000,
-            "description": "Email items to check"
+            "description": "List of emails to check (1–1000)"
           }
         },
         "required": [
@@ -1534,7 +1493,7 @@
     "/orgs/status": {
       "post": {
         "summary": "Batch status lookup by email",
-        "description": "Check delivery status for emails. Mode depends on body filters: brandId only → brand mode (byCampaign + brand + global), campaignId only → campaign mode (campaign + global), both → campaign mode (brandId ignored), neither → global only. Headers are for tracing/logging only.",
+        "description": "Check delivery status for a batch of email addresses. The response shape depends on the body filters:\n\n| brandId | campaignId | Mode     | Active fields                  |\n|---------|------------|----------|--------------------------------|\n| absent  | absent     | Global   | global                         |\n| present | absent     | Brand    | byCampaign + brand + global    |\n| absent  | present    | Campaign | campaign + global              |\n| present | present    | Campaign | campaign + global (brandId ignored) |\n\nNon-applicable fields are null. Headers (x-brand-id, x-campaign-id, etc.) are for tracing/logging only — they do NOT drive filtering logic. Filters are in the request body.\n\nAggregation rules:\n- byCampaign[id].*: exact status for that campaign\n- brand.*: BOOL_OR across all campaigns of the brand (true if true in any campaign)\n- brand.lastDeliveredAt: MAX across all campaigns\n- global.email.bounced/unsubscribed: aggregated across all campaigns in the org (no brand/campaign filter)",
         "tags": [
           "Email Status"
         ],
@@ -1554,7 +1513,7 @@
         },
         "responses": {
           "200": {
-            "description": "Per-item status results",
+            "description": "Per-item status results. Shape depends on mode — see description.",
             "content": {
               "application/json": {
                 "schema": {
