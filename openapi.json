@@ -693,11 +693,53 @@
                 "email": {
                   "type": "string"
                 },
-                "leadId": {
-                  "type": "string",
-                  "nullable": true
+                "byCampaign": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "contacted": {
+                        "type": "boolean"
+                      },
+                      "delivered": {
+                        "type": "boolean"
+                      },
+                      "opened": {
+                        "type": "boolean"
+                      },
+                      "replied": {
+                        "type": "boolean"
+                      },
+                      "replyClassification": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "bounced": {
+                        "type": "boolean"
+                      },
+                      "unsubscribed": {
+                        "type": "boolean"
+                      },
+                      "lastDeliveredAt": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "contacted",
+                      "delivered",
+                      "opened",
+                      "replied",
+                      "replyClassification",
+                      "bounced",
+                      "unsubscribed",
+                      "lastDeliveredAt"
+                    ]
+                  }
                 },
-                "campaign": {
+                "brand": {
                   "type": "object",
                   "nullable": true,
                   "properties": {
@@ -740,7 +782,7 @@
                     "lastDeliveredAt"
                   ]
                 },
-                "brand": {
+                "campaign": {
                   "type": "object",
                   "nullable": true,
                   "properties": {
@@ -786,51 +828,32 @@
                 "global": {
                   "type": "object",
                   "properties": {
-                    "contacted": {
-                      "type": "boolean"
-                    },
-                    "delivered": {
-                      "type": "boolean"
-                    },
-                    "opened": {
-                      "type": "boolean"
-                    },
-                    "replied": {
-                      "type": "boolean"
-                    },
-                    "replyClassification": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "bounced": {
-                      "type": "boolean"
-                    },
-                    "unsubscribed": {
-                      "type": "boolean"
-                    },
-                    "lastDeliveredAt": {
-                      "type": "string",
-                      "nullable": true,
-                      "format": "date-time"
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "bounced": {
+                          "type": "boolean"
+                        },
+                        "unsubscribed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "bounced",
+                        "unsubscribed"
+                      ]
                     }
                   },
                   "required": [
-                    "contacted",
-                    "delivered",
-                    "opened",
-                    "replied",
-                    "replyClassification",
-                    "bounced",
-                    "unsubscribed",
-                    "lastDeliveredAt"
+                    "email"
                   ]
                 }
               },
               "required": [
                 "email",
-                "leadId",
-                "campaign",
+                "byCampaign",
                 "brand",
+                "campaign",
                 "global"
               ]
             }
@@ -843,9 +866,13 @@
       "StatusRequest": {
         "type": "object",
         "properties": {
+          "brandId": {
+            "type": "string",
+            "description": "Brand ID — activates brand mode with per-campaign breakdown"
+          },
           "campaignId": {
             "type": "string",
-            "description": "Campaign ID — optional scope"
+            "description": "Campaign ID — activates campaign mode"
           },
           "items": {
             "type": "array",
@@ -856,10 +883,6 @@
                   "type": "string",
                   "format": "email",
                   "description": "Email address"
-                },
-                "leadId": {
-                  "type": "string",
-                  "description": "Lead ID (optional)"
                 }
               },
               "required": [
@@ -1511,25 +1534,13 @@
     "/orgs/status": {
       "post": {
         "summary": "Batch status lookup by email",
-        "description": "Check delivery status for emails. Groups by email address. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results as flat objects. Returns leadIds array of all lead IDs found for each email.",
+        "description": "Check delivery status for emails. Mode depends on body filters: brandId only → brand mode (byCampaign + brand + global), campaignId only → campaign mode (campaign + global), both → campaign mode (brandId ignored), neither → global only. Headers are for tracing/logging only.",
         "tags": [
           "Email Status"
         ],
         "security": [
           {
             "apiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Brand ID — if provided, returns brand-scoped stats; otherwise brand is null"
-            },
-            "required": false,
-            "description": "Brand ID — if provided, returns brand-scoped stats; otherwise brand is null",
-            "name": "x-brand-id",
-            "in": "header"
           }
         ],
         "requestBody": {

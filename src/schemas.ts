@@ -213,7 +213,7 @@ export const RunEmailsResponseSchema = z
 
 // ===== Unified Status Lookup =====
 
-const FlatScopeStatusSchema = z.object({
+const ScopeStatusSchema = z.object({
   contacted: z.boolean(),
   delivered: z.boolean(),
   opened: z.boolean(),
@@ -224,13 +224,20 @@ const FlatScopeStatusSchema = z.object({
   lastDeliveredAt: z.string().nullable().openapi({ format: "date-time" }),
 });
 
+const GlobalScopeSchema = z.object({
+  email: z.object({
+    bounced: z.boolean(),
+    unsubscribed: z.boolean(),
+  }),
+});
+
 export const StatusRequestSchema = z
   .object({
-    campaignId: z.string().optional().openapi({ description: "Campaign ID — optional scope" }),
+    brandId: z.string().optional().openapi({ description: "Brand ID — activates brand mode with per-campaign breakdown" }),
+    campaignId: z.string().optional().openapi({ description: "Campaign ID — activates campaign mode" }),
     items: z.array(
       z.object({
         email: z.string().email().openapi({ description: "Email address" }),
-        leadId: z.string().optional().openapi({ description: "Lead ID (optional)" }),
       })
     ).min(1).max(1000).openapi({ description: "Email items to check" }),
   })
@@ -243,10 +250,10 @@ export const StatusResponseSchema = z
     results: z.array(
       z.object({
         email: z.string(),
-        leadId: z.string().nullable(),
-        campaign: FlatScopeStatusSchema.nullable(),
-        brand: FlatScopeStatusSchema.nullable(),
-        global: FlatScopeStatusSchema,
+        byCampaign: z.record(z.string(), ScopeStatusSchema).nullable(),
+        brand: ScopeStatusSchema.nullable(),
+        campaign: ScopeStatusSchema.nullable(),
+        global: GlobalScopeSchema,
       })
     ),
   })
@@ -570,13 +577,10 @@ registry.registerPath({
   path: "/orgs/status",
   summary: "Batch status lookup by email",
   description:
-    "Check delivery status for emails. Groups by email address. Returns campaign-scoped (optional), brand-scoped (optional, requires x-brand-id), and global results as flat objects. Returns leadIds array of all lead IDs found for each email.",
+    "Check delivery status for emails. Mode depends on body filters: brandId only → brand mode (byCampaign + brand + global), campaignId only → campaign mode (campaign + global), both → campaign mode (brandId ignored), neither → global only. Headers are for tracing/logging only.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
-    headers: z.object({
-      "x-brand-id": z.string().optional().openapi({ description: "Brand ID — if provided, returns brand-scoped stats; otherwise brand is null" }),
-    }),
     body: {
       content: { "application/json": { schema: StatusRequestSchema } },
     },

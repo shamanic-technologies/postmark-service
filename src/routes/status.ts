@@ -230,12 +230,11 @@ const orgsRouter = Router();
 
 /**
  * POST /orgs/status
- * Batch status lookup by lead+email pairs with campaign/brand/global scopes.
- * x-brand-id is optional — if absent, brand scope is null.
+ * Batch status lookup by email with mode-dependent response shape.
+ * Modes: brandId only → brand, campaignId only → campaign, both → campaign (brandId ignored), neither → global only.
+ * Headers are tracing/logging only — filters are in the body.
  */
 orgsRouter.post("/status", async (req: Request, res: Response) => {
-  const brandId = req.headers["x-brand-id"] as string | undefined;
-
   const parsed = StatusRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -244,23 +243,35 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
     });
   }
 
-  const { campaignId, items } = parsed.data;
+  const { brandId, campaignId, items } = parsed.data;
+
+  // Mode resolution: campaignId takes precedence over brandId
+  const mode: "brand" | "campaign" | "global" = campaignId
+    ? "campaign"
+    : brandId
+      ? "brand"
+      : "global";
 
   try {
-    // 1. Collect unique emails (primary grouping key)
+    // 1. Collect unique emails
     const allEmails = [...new Set(items.map((i) => i.email))];
 
-    // 2. Query all sendings matching any email (covers all scopes)
+    // 2. Query all sendings matching any email in this org
+    const orgId = (req as any).orgContext?.orgId as string | undefined;
+    const sendingConditions: SQL[] = [inArray(postmarkSendings.toEmail, allEmails)];
+    if (orgId) {
+      sendingConditions.push(eq(postmarkSendings.orgId, orgId));
+    }
+
     const sendings = await db
       .select({
         messageId: postmarkSendings.messageId,
         toEmail: postmarkSendings.toEmail,
-        leadId: postmarkSendings.leadId,
         campaignId: postmarkSendings.campaignId,
         brandIds: postmarkSendings.brandIds,
       })
       .from(postmarkSendings)
-      .where(inArray(postmarkSendings.toEmail, allEmails));
+      .where(and(...sendingConditions));
 
     // 3. Batch-query events for all messageIds
     const allMessageIds = sendings
@@ -298,10 +309,10 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         .filter((id): id is string => !!id)
     );
 
-    // 5. Flat aggregation helper (groups by email, no lead/email split)
+    // 5. Scope aggregation helper
     type SendingRow = typeof sendings[number];
 
-    function aggregateFlat(rows: SendingRow[]) {
+    function aggregateScope(rows: SendingRow[]) {
       let contacted = false;
       let delivered = false;
       let opened = false;
@@ -337,32 +348,76 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       };
     }
 
-    // 6. Build results per item, grouped by email
+    // 6. Global scope helper — only bounced/unsubscribed across all org sendings
+    function aggregateGlobal(rows: SendingRow[]) {
+      let bounced = false;
+      let unsubscribed = false;
+
+      for (const s of rows) {
+        if (s.messageId) {
+          if (bouncedSet.has(s.messageId)) bounced = true;
+          if (unsubSet.has(s.messageId)) unsubscribed = true;
+        }
+      }
+
+      return { email: { bounced, unsubscribed } };
+    }
+
+    // 7. Build results per item
     const results = items.map((item) => {
       const emailRows = sendings.filter((s) => s.toEmail === item.email);
 
-      // Return the leadId found for this email (should be unique per email)
-      const leadId = emailRows.find((s) => s.leadId !== null)?.leadId ?? null;
+      // Global — all sendings for this email in the org
+      const global = aggregateGlobal(emailRows);
 
-      // Campaign scope (null if no campaignId)
-      const campaignScope = campaignId
-        ? aggregateFlat(emailRows.filter((s) => s.campaignId === campaignId))
-        : null;
+      if (mode === "campaign") {
+        return {
+          email: item.email,
+          byCampaign: null,
+          brand: null,
+          campaign: aggregateScope(emailRows.filter((s) => s.campaignId === campaignId)),
+          global,
+        };
+      }
 
-      // Brand scope (null if no brandId header)
-      const brandScope = brandId
-        ? aggregateFlat(emailRows.filter((s) => s.brandIds?.includes(brandId)))
-        : null;
+      if (mode === "brand") {
+        // Brand-filtered rows
+        const brandRows = emailRows.filter((s) => s.brandIds?.includes(brandId!));
 
-      // Global scope — all sendings for this email
-      const globalScope = aggregateFlat(emailRows);
+        // Group by campaignId for byCampaign breakdown
+        const campaignGroups = new Map<string, SendingRow[]>();
+        for (const row of brandRows) {
+          if (row.campaignId) {
+            let group = campaignGroups.get(row.campaignId);
+            if (!group) {
+              group = [];
+              campaignGroups.set(row.campaignId, group);
+            }
+            group.push(row);
+          }
+        }
 
+        const byCampaign: Record<string, ReturnType<typeof aggregateScope>> = {};
+        for (const [cId, rows] of campaignGroups) {
+          byCampaign[cId] = aggregateScope(rows);
+        }
+
+        return {
+          email: item.email,
+          byCampaign: Object.keys(byCampaign).length > 0 ? byCampaign : null,
+          brand: aggregateScope(brandRows),
+          campaign: null,
+          global,
+        };
+      }
+
+      // Global-only mode
       return {
         email: item.email,
-        leadId,
-        campaign: campaignScope,
-        brand: brandScope,
-        global: globalScope,
+        byCampaign: null,
+        brand: null,
+        campaign: null,
+        global,
       };
     });
 
