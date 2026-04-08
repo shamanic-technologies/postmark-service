@@ -214,32 +214,32 @@ export const RunEmailsResponseSchema = z
 // ===== Unified Status Lookup =====
 
 const ScopeStatusSchema = z.object({
-  contacted: z.boolean(),
-  delivered: z.boolean(),
-  opened: z.boolean(),
-  replied: z.boolean(),
-  replyClassification: z.string().nullable(),
-  bounced: z.boolean(),
-  unsubscribed: z.boolean(),
-  lastDeliveredAt: z.string().nullable().openapi({ format: "date-time" }),
-});
+  contacted: z.boolean().openapi({ description: "True if at least one email was sent in this scope" }),
+  delivered: z.boolean().openapi({ description: "True if at least one email was delivered" }),
+  opened: z.boolean().openapi({ description: "True if at least one email was opened" }),
+  replied: z.boolean().openapi({ description: "True if at least one reply was received (always false for Postmark — no reply tracking)" }),
+  replyClassification: z.string().nullable().openapi({ description: "Reply sentiment classification (always null for Postmark)" }),
+  bounced: z.boolean().openapi({ description: "True if at least one email bounced" }),
+  unsubscribed: z.boolean().openapi({ description: "True if the recipient unsubscribed via a sending in this scope" }),
+  lastDeliveredAt: z.string().nullable().openapi({ format: "date-time", description: "ISO timestamp of the most recent delivery in this scope" }),
+}).openapi("ScopeStatus");
 
 const GlobalScopeSchema = z.object({
   email: z.object({
-    bounced: z.boolean(),
-    unsubscribed: z.boolean(),
-  }),
-});
+    bounced: z.boolean().openapi({ description: "True if any email to this address bounced across all campaigns in the org" }),
+    unsubscribed: z.boolean().openapi({ description: "True if the recipient unsubscribed from any campaign in the org" }),
+  }).openapi({ description: "Org-wide email health flags (not scoped to brand or campaign)" }),
+}).openapi("GlobalScope");
 
 export const StatusRequestSchema = z
   .object({
-    brandId: z.string().optional().openapi({ description: "Brand ID — activates brand mode with per-campaign breakdown" }),
-    campaignId: z.string().optional().openapi({ description: "Campaign ID — activates campaign mode" }),
+    brandId: z.string().optional().openapi({ description: "Brand UUID — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.", example: "b1a2c3d4-5678-90ab-cdef-111111111111" }),
+    campaignId: z.string().optional().openapi({ description: "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandId.", example: "c1a2b3d4-5678-90ab-cdef-222222222222" }),
     items: z.array(
       z.object({
-        email: z.string().email().openapi({ description: "Email address" }),
+        email: z.string().email().openapi({ description: "Recipient email address to look up", example: "alice@example.com" }),
       })
-    ).min(1).max(1000).openapi({ description: "Email items to check" }),
+    ).min(1).max(1000).openapi({ description: "List of emails to check (1–1000)" }),
   })
   .openapi("StatusRequest");
 
@@ -249,11 +249,11 @@ export const StatusResponseSchema = z
   .object({
     results: z.array(
       z.object({
-        email: z.string(),
-        byCampaign: z.record(z.string(), ScopeStatusSchema).nullable(),
-        brand: ScopeStatusSchema.nullable(),
-        campaign: ScopeStatusSchema.nullable(),
-        global: GlobalScopeSchema,
+        email: z.string().openapi({ description: "The email address that was looked up" }),
+        byCampaign: z.record(z.string(), ScopeStatusSchema).nullable().openapi({ description: "Per-campaign breakdown (brand mode only). Keys are campaign UUIDs, values are scoped status. Null in campaign and global modes." }),
+        brand: ScopeStatusSchema.nullable().openapi({ description: "Aggregated status across all campaigns for the brand (brand mode only). BOOL_OR across campaigns. Null in campaign and global modes." }),
+        campaign: ScopeStatusSchema.nullable().openapi({ description: "Status scoped to the requested campaignId (campaign mode only). Null in brand and global modes." }),
+        global: GlobalScopeSchema.openapi({ description: "Org-wide email health flags. Always present in all modes." }),
       })
     ),
   })
@@ -576,8 +576,24 @@ registry.registerPath({
   method: "post",
   path: "/orgs/status",
   summary: "Batch status lookup by email",
-  description:
-    "Check delivery status for emails. Mode depends on body filters: brandId only → brand mode (byCampaign + brand + global), campaignId only → campaign mode (campaign + global), both → campaign mode (brandId ignored), neither → global only. Headers are for tracing/logging only.",
+  description: [
+    "Check delivery status for a batch of email addresses. The response shape depends on the body filters:",
+    "",
+    "| brandId | campaignId | Mode     | Active fields                  |",
+    "|---------|------------|----------|--------------------------------|",
+    "| absent  | absent     | Global   | global                         |",
+    "| present | absent     | Brand    | byCampaign + brand + global    |",
+    "| absent  | present    | Campaign | campaign + global              |",
+    "| present | present    | Campaign | campaign + global (brandId ignored) |",
+    "",
+    "Non-applicable fields are null. Headers (x-brand-id, x-campaign-id, etc.) are for tracing/logging only — they do NOT drive filtering logic. Filters are in the request body.",
+    "",
+    "Aggregation rules:",
+    "- byCampaign[id].*: exact status for that campaign",
+    "- brand.*: BOOL_OR across all campaigns of the brand (true if true in any campaign)",
+    "- brand.lastDeliveredAt: MAX across all campaigns",
+    "- global.email.bounced/unsubscribed: aggregated across all campaigns in the org (no brand/campaign filter)",
+  ].join("\n"),
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
@@ -587,7 +603,7 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Per-item status results",
+      description: "Per-item status results. Shape depends on mode — see description.",
       content: { "application/json": { schema: StatusResponseSchema } },
     },
     400: {
