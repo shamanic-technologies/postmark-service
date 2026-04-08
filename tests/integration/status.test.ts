@@ -155,48 +155,112 @@ describe("Status Endpoints Integration", () => {
   describe("POST /orgs/status", () => {
     const brandId = "brand-test";
 
-    function statusHeaders() {
-      return { ...getAuthHeaders(), "x-brand-id": brandId };
-    }
+    it("should return 400 for invalid request body", async () => {
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({});
 
-    it("should return brand=null when x-brand-id header is missing", async () => {
+      expect(response.status).toBe(400);
+    });
+
+    // ── Global-only mode (no brandId, no campaignId) ──────────────────
+
+    it("should return global-only mode when neither brandId nor campaignId provided", async () => {
       const messageId = randomUUID();
       await insertTestSending({
         messageId,
-        toEmail: "nobrand@test.com",
-        leadId: "lead-nobrand",
-        brandId: "some-brand",
-        campaignId: "camp-nobrand",
+        toEmail: "globalonly@test.com",
+        brandId,
+        campaignId: "camp-x",
       });
 
       const response = await request(app)
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          campaignId: "camp-nobrand",
-          items: [{ email: "nobrand@test.com" }],
+          items: [{ email: "globalonly@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
+      expect(r.byCampaign).toBeNull();
+      expect(r.brand).toBeNull();
+      expect(r.campaign).toBeNull();
+      expect(r.global).toEqual({ email: { bounced: false, unsubscribed: false } });
+    });
+
+    it("should return global bounced=true when email has bounced", async () => {
+      const messageId = randomUUID();
+      await insertTestSending({ messageId, toEmail: "gbounce@test.com" });
+      await insertTestBounce(messageId, "gbounce@test.com");
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          items: [{ email: "gbounce@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.global.email.bounced).toBe(true);
+      expect(r.global.email.unsubscribed).toBe(false);
+    });
+
+    it("should return global unsubscribed=true when email has unsubscribed", async () => {
+      const messageId = randomUUID();
+      await insertTestSending({ messageId, toEmail: "gunsub@test.com" });
+      await insertTestSubscriptionChange(messageId, "gunsub@test.com", true);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          items: [{ email: "gunsub@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.global.email.unsubscribed).toBe(true);
+    });
+
+    // ── Campaign mode (campaignId provided) ───────────────────────────
+
+    it("should return campaign mode when campaignId provided", async () => {
+      const messageId = randomUUID();
+      const campaignId = "camp-mode";
+      await insertTestSending({
+        messageId,
+        toEmail: "camp@test.com",
+        brandId,
+        campaignId,
+      });
+      await insertTestDelivery(messageId, "camp@test.com");
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          campaignId,
+          items: [{ email: "camp@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.byCampaign).toBeNull();
       expect(r.brand).toBeNull();
       expect(r.campaign).not.toBeNull();
-      expect(r.global).not.toBeNull();
+      expect(r.campaign.contacted).toBe(true);
+      expect(r.campaign.delivered).toBe(true);
+      expect(r.campaign.lastDeliveredAt).not.toBeNull();
+      expect(r.global).toEqual({ email: { bounced: false, unsubscribed: false } });
     });
 
-    it("should return 400 for invalid request body", async () => {
+    it("should return all-false campaign scope for unknown email", async () => {
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
-        .send({});
-
-      expect(response.status).toBe(400);
-    });
-
-    it("should return all-false for unknown email", async () => {
-      const response = await request(app)
-        .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
           campaignId: "camp-empty",
           items: [{ email: "nobody@test.com" }],
@@ -204,9 +268,6 @@ describe("Status Endpoints Integration", () => {
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.email).toBe("nobody@test.com");
-      expect(r.leadId).toBeNull();
-      // campaign scope (flat)
       expect(r.campaign.contacted).toBe(false);
       expect(r.campaign.delivered).toBe(false);
       expect(r.campaign.opened).toBe(false);
@@ -214,61 +275,49 @@ describe("Status Endpoints Integration", () => {
       expect(r.campaign.replyClassification).toBeNull();
       expect(r.campaign.bounced).toBe(false);
       expect(r.campaign.unsubscribed).toBe(false);
-      // brand scope (flat)
-      expect(r.brand.contacted).toBe(false);
-      expect(r.brand.bounced).toBe(false);
-      // global scope (flat)
-      expect(r.global.bounced).toBe(false);
-      expect(r.global.unsubscribed).toBe(false);
     });
 
-    it("should return contacted + delivered at campaign and brand scopes", async () => {
+    it("should use campaign mode when both brandId and campaignId provided (brandId ignored)", async () => {
       const messageId = randomUUID();
-      const campaignId = "camp-status-1";
+      const campaignId = "camp-both";
       await insertTestSending({
         messageId,
-        toEmail: "alice@test.com",
-        leadId: "lead-alice",
+        toEmail: "both@test.com",
         brandId,
         campaignId,
       });
-      await insertTestDelivery(messageId, "alice@test.com");
+      await insertTestDelivery(messageId, "both@test.com");
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
+          brandId,
           campaignId,
-          items: [{ email: "alice@test.com" }],
+          items: [{ email: "both@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.leadId).toBe("lead-alice");
-      // campaign (flat)
+      expect(r.byCampaign).toBeNull();
+      expect(r.brand).toBeNull();
+      expect(r.campaign).not.toBeNull();
       expect(r.campaign.contacted).toBe(true);
-      expect(r.campaign.delivered).toBe(true);
-      expect(r.campaign.lastDeliveredAt).not.toBeNull();
-      // brand (flat)
-      expect(r.brand.contacted).toBe(true);
-      expect(r.brand.delivered).toBe(true);
     });
 
-    it("should detect bounces across all scopes", async () => {
+    it("should detect bounces in campaign scope", async () => {
       const messageId = randomUUID();
       const campaignId = "camp-bounce";
       await insertTestSending({
         messageId,
         toEmail: "bounced@test.com",
-        leadId: "lead-bounce",
-        brandId,
         campaignId,
       });
       await insertTestBounce(messageId, "bounced@test.com");
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
           campaignId,
           items: [{ email: "bounced@test.com" }],
@@ -277,131 +326,55 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(200);
       const r = response.body.results[0];
       expect(r.campaign.bounced).toBe(true);
-      expect(r.brand.bounced).toBe(true);
-      expect(r.global.bounced).toBe(true);
+      expect(r.global.email.bounced).toBe(true);
     });
 
-    it("should detect unsubscribes across all scopes", async () => {
+    it("should detect opened in campaign scope", async () => {
       const messageId = randomUUID();
-      const campaignId = "camp-unsub";
+      const campaignId = "camp-open";
       await insertTestSending({
         messageId,
-        toEmail: "unsub@test.com",
-        leadId: "lead-unsub",
-        brandId,
+        toEmail: "opener@test.com",
         campaignId,
       });
-      await insertTestSubscriptionChange(messageId, "unsub@test.com", true);
+      await insertTestDelivery(messageId, "opener@test.com");
+      await insertTestOpening(messageId);
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
           campaignId,
-          items: [{ email: "unsub@test.com" }],
+          items: [{ email: "opener@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.campaign.unsubscribed).toBe(true);
-      expect(r.brand.unsubscribed).toBe(true);
-      expect(r.global.unsubscribed).toBe(true);
+      expect(r.campaign.opened).toBe(true);
     });
 
-    it("should separate campaign scope from brand scope", async () => {
-      const msg1 = randomUUID();
-      const msg2 = randomUUID();
-      // Same brand, different campaigns
-      await insertTestSending({
-        messageId: msg1,
-        toEmail: "shared@test.com",
-        leadId: "lead-shared",
-        brandId,
-        campaignId: "camp-A",
-      });
-      await insertTestSending({
-        messageId: msg2,
-        toEmail: "shared@test.com",
-        leadId: "lead-shared",
-        brandId,
-        campaignId: "camp-B",
-      });
-      await insertTestDelivery(msg1, "shared@test.com");
-
-      // Query for camp-B: campaign should NOT show delivered, brand SHOULD
-      const response = await request(app)
-        .post("/orgs/status")
-        .set(statusHeaders())
-        .send({
-          campaignId: "camp-B",
-          items: [{ email: "shared@test.com" }],
-        });
-
-      expect(response.status).toBe(200);
-      const r = response.body.results[0];
-      expect(r.campaign.contacted).toBe(true);
-      expect(r.campaign.delivered).toBe(false);
-      expect(r.brand.contacted).toBe(true);
-      expect(r.brand.delivered).toBe(true);
-    });
-
-    it("should return singular leadId for an email", async () => {
-      const msg1 = randomUUID();
-      const msg2 = randomUUID();
-      await insertTestSending({
-        messageId: msg1,
-        toEmail: "same-lead@test.com",
-        leadId: "lead-same",
-        brandId,
-        campaignId: "camp-leads",
-      });
-      await insertTestSending({
-        messageId: msg2,
-        toEmail: "same-lead@test.com",
-        leadId: "lead-same",
-        brandId,
-        campaignId: "camp-leads",
-      });
-
-      const response = await request(app)
-        .post("/orgs/status")
-        .set(statusHeaders())
-        .send({
-          campaignId: "camp-leads",
-          items: [{ email: "same-lead@test.com" }],
-        });
-
-      expect(response.status).toBe(200);
-      const r = response.body.results[0];
-      expect(r.leadId).toBe("lead-same");
-    });
-
-    it("should accept items without leadId", async () => {
+    it("should always return replied=false and replyClassification=null", async () => {
       const messageId = randomUUID();
-      const campaignId = "camp-no-lead";
+      const campaignId = "camp-reply";
       await insertTestSending({
         messageId,
-        toEmail: "nolead@test.com",
-        leadId: "lead-found",
-        brandId,
+        toEmail: "reply@test.com",
         campaignId,
       });
-      await insertTestDelivery(messageId, "nolead@test.com");
+      await insertTestDelivery(messageId, "reply@test.com");
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
           campaignId,
-          items: [{ email: "nolead@test.com" }],
+          items: [{ email: "reply@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.email).toBe("nolead@test.com");
-      expect(r.leadId).toBe("lead-found");
-      expect(r.campaign.contacted).toBe(true);
-      expect(r.campaign.delivered).toBe(true);
+      expect(r.campaign.replied).toBe(false);
+      expect(r.campaign.replyClassification).toBeNull();
     });
 
     it("should handle multiple items in a single request", async () => {
@@ -409,25 +382,13 @@ describe("Status Endpoints Integration", () => {
       const msg2 = randomUUID();
       const campaignId = "camp-batch";
 
-      await insertTestSending({
-        messageId: msg1,
-        toEmail: "a@test.com",
-        leadId: "lead-a",
-        brandId,
-        campaignId,
-      });
-      await insertTestSending({
-        messageId: msg2,
-        toEmail: "b@test.com",
-        leadId: "lead-b",
-        brandId,
-        campaignId,
-      });
+      await insertTestSending({ messageId: msg1, toEmail: "a@test.com", campaignId });
+      await insertTestSending({ messageId: msg2, toEmail: "b@test.com", campaignId });
       await insertTestDelivery(msg1, "a@test.com");
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
           campaignId,
           items: [
@@ -452,84 +413,197 @@ describe("Status Endpoints Integration", () => {
       expect(cResult.campaign.delivered).toBe(false);
     });
 
-    it("should return campaign=null when no campaignId provided", async () => {
-      const messageId = randomUUID();
+    // ── Brand mode (brandId provided, no campaignId) ──────────────────
+
+    it("should return brand mode with byCampaign breakdown when brandId provided", async () => {
+      const msg1 = randomUUID();
+      const msg2 = randomUUID();
       await insertTestSending({
-        messageId,
-        toEmail: "nocampaign@test.com",
-        leadId: "lead-nocamp",
+        messageId: msg1,
+        toEmail: "alice@test.com",
         brandId,
+        campaignId: "camp-A",
       });
+      await insertTestSending({
+        messageId: msg2,
+        toEmail: "alice@test.com",
+        brandId,
+        campaignId: "camp-B",
+      });
+      await insertTestDelivery(msg1, "alice@test.com");
+      await insertTestOpening(msg2);
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
-          items: [{ email: "nocampaign@test.com" }],
+          brandId,
+          items: [{ email: "alice@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
       expect(r.campaign).toBeNull();
+      expect(r.byCampaign).not.toBeNull();
+      expect(r.byCampaign["camp-A"]).toBeDefined();
+      expect(r.byCampaign["camp-A"].contacted).toBe(true);
+      expect(r.byCampaign["camp-A"].delivered).toBe(true);
+      expect(r.byCampaign["camp-B"]).toBeDefined();
+      expect(r.byCampaign["camp-B"].contacted).toBe(true);
+      expect(r.byCampaign["camp-B"].opened).toBe(true);
+      // Brand aggregation = BOOL_OR across campaigns
+      expect(r.brand.contacted).toBe(true);
+      expect(r.brand.delivered).toBe(true);
+      expect(r.brand.opened).toBe(true);
+    });
+
+    it("should return brand scope with BOOL_OR aggregation", async () => {
+      const msg1 = randomUUID();
+      const msg2 = randomUUID();
+      // Camp-A: delivered only. Camp-B: bounced only.
+      await insertTestSending({
+        messageId: msg1,
+        toEmail: "bool-or@test.com",
+        brandId,
+        campaignId: "camp-deliver",
+      });
+      await insertTestSending({
+        messageId: msg2,
+        toEmail: "bool-or@test.com",
+        brandId,
+        campaignId: "camp-bounce",
+      });
+      await insertTestDelivery(msg1, "bool-or@test.com");
+      await insertTestBounce(msg2, "bool-or@test.com");
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          brandId,
+          items: [{ email: "bool-or@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      // Brand should show both delivered AND bounced (from different campaigns)
+      expect(r.brand.delivered).toBe(true);
+      expect(r.brand.bounced).toBe(true);
+      // byCampaign should show them separately
+      expect(r.byCampaign["camp-deliver"].delivered).toBe(true);
+      expect(r.byCampaign["camp-deliver"].bounced).toBe(false);
+      expect(r.byCampaign["camp-bounce"].bounced).toBe(true);
+      expect(r.byCampaign["camp-bounce"].delivered).toBe(false);
+    });
+
+    it("should return byCampaign=null when brand has no campaign-linked sendings", async () => {
+      const messageId = randomUUID();
+      // Sending with brandId but no campaignId
+      await insertTestSending({
+        messageId,
+        toEmail: "nocamp-brand@test.com",
+        brandId,
+      });
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          brandId,
+          items: [{ email: "nocamp-brand@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.byCampaign).toBeNull();
       expect(r.brand.contacted).toBe(true);
     });
 
-    it("should always return replied=false and replyClassification=null", async () => {
-      const messageId = randomUUID();
-      const campaignId = "camp-reply";
+    it("should not include sendings from other brands in brand mode", async () => {
+      const msg1 = randomUUID();
+      const msg2 = randomUUID();
       await insertTestSending({
-        messageId,
-        toEmail: "reply@test.com",
-        leadId: "lead-reply",
+        messageId: msg1,
+        toEmail: "multi-brand@test.com",
         brandId,
-        campaignId,
+        campaignId: "camp-mine",
       });
-      await insertTestDelivery(messageId, "reply@test.com");
+      await insertTestSending({
+        messageId: msg2,
+        toEmail: "multi-brand@test.com",
+        brandId: "other-brand",
+        campaignId: "camp-other",
+      });
+      await insertTestDelivery(msg1, "multi-brand@test.com");
+      await insertTestBounce(msg2, "multi-brand@test.com");
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
-          campaignId,
-          items: [{ email: "reply@test.com" }],
+          brandId,
+          items: [{ email: "multi-brand@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.campaign.replied).toBe(false);
-      expect(r.campaign.replyClassification).toBeNull();
-      expect(r.brand.replied).toBe(false);
-      expect(r.brand.replyClassification).toBeNull();
-      expect(r.global.replied).toBe(false);
-      expect(r.global.replyClassification).toBeNull();
+      // Only camp-mine should appear in byCampaign
+      expect(r.byCampaign["camp-mine"]).toBeDefined();
+      expect(r.byCampaign["camp-other"]).toBeUndefined();
+      // Brand scope should only reflect brandId's sendings
+      expect(r.brand.delivered).toBe(true);
+      expect(r.brand.bounced).toBe(false);
+      // Global should reflect ALL sendings (cross-brand)
+      expect(r.global.email.bounced).toBe(true);
     });
 
-    it("should detect opened status via openings table", async () => {
+    it("should detect unsubscribes in brand mode", async () => {
       const messageId = randomUUID();
-      const campaignId = "camp-open";
       await insertTestSending({
         messageId,
-        toEmail: "opener@test.com",
-        leadId: "lead-opener",
+        toEmail: "unsub-brand@test.com",
         brandId,
-        campaignId,
+        campaignId: "camp-unsub-brand",
       });
-      await insertTestDelivery(messageId, "opener@test.com");
-      await insertTestOpening(messageId);
+      await insertTestSubscriptionChange(messageId, "unsub-brand@test.com", true);
 
       const response = await request(app)
         .post("/orgs/status")
-        .set(statusHeaders())
+        .set(getAuthHeaders())
         .send({
-          campaignId,
-          items: [{ email: "opener@test.com" }],
+          brandId,
+          items: [{ email: "unsub-brand@test.com" }],
         });
 
       expect(response.status).toBe(200);
       const r = response.body.results[0];
-      expect(r.campaign.opened).toBe(true);
-      expect(r.brand.opened).toBe(true);
-      expect(r.global.opened).toBe(true);
+      expect(r.byCampaign["camp-unsub-brand"].unsubscribed).toBe(true);
+      expect(r.brand.unsubscribed).toBe(true);
+      expect(r.global.email.unsubscribed).toBe(true);
+    });
+
+    // ── Response shape: no leadId ─────────────────────────────────────
+
+    it("should not include leadId in the response", async () => {
+      const messageId = randomUUID();
+      await insertTestSending({
+        messageId,
+        toEmail: "nolead@test.com",
+        leadId: "lead-shouldnt-appear",
+        campaignId: "camp-nolead",
+      });
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          campaignId: "camp-nolead",
+          items: [{ email: "nolead@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r).not.toHaveProperty("leadId");
     });
   });
 });
