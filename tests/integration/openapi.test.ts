@@ -18,7 +18,7 @@ describe("OpenAPI endpoint", () => {
       const response = await request(app).get("/openapi.json");
 
       const paths = Object.keys(response.body.paths);
-      expect(paths).toContain("/send");
+      expect(paths).toContain("/orgs/send");
       expect(paths).toContain("/health");
       expect(paths).toContain("/webhooks/postmark");
     });

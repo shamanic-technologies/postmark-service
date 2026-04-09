@@ -121,6 +121,23 @@ describe("Status Endpoints Integration", () => {
       expect(response.body.emails.length).toBe(2);
     });
 
+    it("should return all results when limit is omitted", async () => {
+      const orgId = "test-org-no-limit";
+      // Insert more than the old silent default of 50
+      const insertions = Array.from({ length: 55 }, () =>
+        insertTestSending({ messageId: randomUUID(), orgId })
+      );
+      await Promise.all(insertions);
+
+      const response = await request(app)
+        .get(`/internal/status/by-org/${orgId}`)
+        .set(getServiceHeaders());
+
+      expect(response.status).toBe(200);
+      expect(response.body.count).toBe(55);
+      expect(response.body.emails.length).toBe(55);
+    });
+
     it("should respect limit parameter", async () => {
       const orgId = "test-org-limit";
       await insertTestSending({ messageId: randomUUID(), orgId });
