@@ -541,7 +541,7 @@ registry.registerPath({
       limit: z
         .string()
         .optional()
-        .openapi({ description: "Max results (default: 50)" }),
+        .openapi({ description: "Max results to return. Omit to return all." }),
     }),
   },
   responses: {

@@ -1430,10 +1430,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Max results (default: 50)"
+              "description": "Max results to return. Omit to return all."
             },
             "required": false,
-            "description": "Max results (default: 50)",
+            "description": "Max results to return. Omit to return all.",
             "name": "limit",
             "in": "query"
           }
