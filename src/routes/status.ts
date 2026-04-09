@@ -142,19 +142,20 @@ internalRouter.get("/status/:messageId", async (req: Request, res: Response) => 
  */
 internalRouter.get("/status/by-org/:orgId", async (req: Request, res: Response) => {
   const { orgId } = req.params;
-  const limit = parseInt(req.query.limit as string) || 50;
+  const limitParam = req.query.limit ? parseInt(req.query.limit as string) : undefined;
 
   if (!orgId) {
     return res.status(400).json({ error: "orgId is required" });
   }
 
   try {
-    const sendings = await db
+    const query = db
       .select()
       .from(postmarkSendings)
       .where(eq(postmarkSendings.orgId, orgId))
-      .orderBy(postmarkSendings.createdAt)
-      .limit(limit);
+      .orderBy(postmarkSendings.createdAt);
+
+    const sendings = limitParam ? await query.limit(limitParam) : await query;
 
     res.json({
       orgId,
