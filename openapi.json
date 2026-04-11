@@ -878,26 +878,63 @@
               "emailsClicked": {
                 "type": "number"
               },
-              "emailsReplied": {
-                "type": "number"
-              },
               "emailsBounced": {
                 "type": "number"
               },
-              "repliesWillingToMeet": {
+              "repliesPositive": {
                 "type": "number"
               },
-              "repliesInterested": {
+              "repliesNegative": {
                 "type": "number"
               },
-              "repliesNotInterested": {
+              "repliesNeutral": {
                 "type": "number"
               },
-              "repliesOutOfOffice": {
+              "repliesAutoReply": {
                 "type": "number"
               },
-              "repliesUnsubscribe": {
-                "type": "number"
+              "repliesDetail": {
+                "type": "object",
+                "properties": {
+                  "interested": {
+                    "type": "number"
+                  },
+                  "meetingBooked": {
+                    "type": "number"
+                  },
+                  "closed": {
+                    "type": "number"
+                  },
+                  "notInterested": {
+                    "type": "number"
+                  },
+                  "wrongPerson": {
+                    "type": "number"
+                  },
+                  "unsubscribe": {
+                    "type": "number"
+                  },
+                  "neutral": {
+                    "type": "number"
+                  },
+                  "autoReply": {
+                    "type": "number"
+                  },
+                  "outOfOffice": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "interested",
+                  "meetingBooked",
+                  "closed",
+                  "notInterested",
+                  "wrongPerson",
+                  "unsubscribe",
+                  "neutral",
+                  "autoReply",
+                  "outOfOffice"
+                ]
               }
             },
             "required": [
@@ -906,13 +943,12 @@
               "emailsDelivered",
               "emailsOpened",
               "emailsClicked",
-              "emailsReplied",
               "emailsBounced",
-              "repliesWillingToMeet",
-              "repliesInterested",
-              "repliesNotInterested",
-              "repliesOutOfOffice",
-              "repliesUnsubscribe"
+              "repliesPositive",
+              "repliesNegative",
+              "repliesNeutral",
+              "repliesAutoReply",
+              "repliesDetail"
             ]
           },
           "recipients": {
@@ -953,26 +989,63 @@
                     "emailsClicked": {
                       "type": "number"
                     },
-                    "emailsReplied": {
-                      "type": "number"
-                    },
                     "emailsBounced": {
                       "type": "number"
                     },
-                    "repliesWillingToMeet": {
+                    "repliesPositive": {
                       "type": "number"
                     },
-                    "repliesInterested": {
+                    "repliesNegative": {
                       "type": "number"
                     },
-                    "repliesNotInterested": {
+                    "repliesNeutral": {
                       "type": "number"
                     },
-                    "repliesOutOfOffice": {
+                    "repliesAutoReply": {
                       "type": "number"
                     },
-                    "repliesUnsubscribe": {
-                      "type": "number"
+                    "repliesDetail": {
+                      "type": "object",
+                      "properties": {
+                        "interested": {
+                          "type": "number"
+                        },
+                        "meetingBooked": {
+                          "type": "number"
+                        },
+                        "closed": {
+                          "type": "number"
+                        },
+                        "notInterested": {
+                          "type": "number"
+                        },
+                        "wrongPerson": {
+                          "type": "number"
+                        },
+                        "unsubscribe": {
+                          "type": "number"
+                        },
+                        "neutral": {
+                          "type": "number"
+                        },
+                        "autoReply": {
+                          "type": "number"
+                        },
+                        "outOfOffice": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "interested",
+                        "meetingBooked",
+                        "closed",
+                        "notInterested",
+                        "wrongPerson",
+                        "unsubscribe",
+                        "neutral",
+                        "autoReply",
+                        "outOfOffice"
+                      ]
                     }
                   },
                   "required": [
@@ -981,13 +1054,12 @@
                     "emailsDelivered",
                     "emailsOpened",
                     "emailsClicked",
-                    "emailsReplied",
                     "emailsBounced",
-                    "repliesWillingToMeet",
-                    "repliesInterested",
-                    "repliesNotInterested",
-                    "repliesOutOfOffice",
-                    "repliesUnsubscribe"
+                    "repliesPositive",
+                    "repliesNegative",
+                    "repliesNeutral",
+                    "repliesAutoReply",
+                    "repliesDetail"
                   ]
                 },
                 "recipients": {

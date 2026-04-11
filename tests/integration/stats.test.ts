@@ -196,12 +196,21 @@ describe("GET /stats", () => {
       .query({ brandId: "b1" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsReplied).toBe(0);
-    expect(response.body.stats.repliesWillingToMeet).toBe(0);
-    expect(response.body.stats.repliesInterested).toBe(0);
-    expect(response.body.stats.repliesNotInterested).toBe(0);
-    expect(response.body.stats.repliesOutOfOffice).toBe(0);
-    expect(response.body.stats.repliesUnsubscribe).toBe(0);
+    expect(response.body.stats.repliesPositive).toBe(0);
+    expect(response.body.stats.repliesNegative).toBe(0);
+    expect(response.body.stats.repliesNeutral).toBe(0);
+    expect(response.body.stats.repliesAutoReply).toBe(0);
+    expect(response.body.stats.repliesDetail).toEqual({
+      interested: 0,
+      meetingBooked: 0,
+      closed: 0,
+      notInterested: 0,
+      wrongPerson: 0,
+      unsubscribe: 0,
+      neutral: 0,
+      autoReply: 0,
+      outOfOffice: 0,
+    });
   });
 
   it("should return all zeros when filter matches no sendings", async () => {
