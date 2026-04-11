@@ -511,13 +511,22 @@ function buildStatsObject(emailsSent: number, eventStats: Awaited<ReturnType<typ
     emailsDelivered: eventStats.emailsDelivered,
     emailsOpened: eventStats.emailsOpened,
     emailsClicked: eventStats.emailsClicked,
-    emailsReplied: 0,
     emailsBounced: eventStats.emailsBounced,
-    repliesWillingToMeet: 0,
-    repliesInterested: 0,
-    repliesNotInterested: 0,
-    repliesOutOfOffice: 0,
-    repliesUnsubscribe: 0,
+    repliesPositive: 0,
+    repliesNegative: 0,
+    repliesNeutral: 0,
+    repliesAutoReply: 0,
+    repliesDetail: {
+      interested: 0,
+      meetingBooked: 0,
+      closed: 0,
+      notInterested: 0,
+      wrongPerson: 0,
+      unsubscribe: 0,
+      neutral: 0,
+      autoReply: 0,
+      outOfOffice: 0,
+    },
   };
 }
 
