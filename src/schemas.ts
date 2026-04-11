@@ -281,19 +281,30 @@ export const StatsQuerySchema = z
 
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
+const RepliesDetailSchema = z.object({
+  interested: z.number(),
+  meetingBooked: z.number(),
+  closed: z.number(),
+  notInterested: z.number(),
+  wrongPerson: z.number(),
+  unsubscribe: z.number(),
+  neutral: z.number(),
+  autoReply: z.number(),
+  outOfOffice: z.number(),
+});
+
 const StatsObjectSchema = z.object({
   emailsContacted: z.number(),
   emailsSent: z.number(),
   emailsDelivered: z.number(),
   emailsOpened: z.number(),
   emailsClicked: z.number(),
-  emailsReplied: z.number(),
   emailsBounced: z.number(),
-  repliesWillingToMeet: z.number(),
-  repliesInterested: z.number(),
-  repliesNotInterested: z.number(),
-  repliesOutOfOffice: z.number(),
-  repliesUnsubscribe: z.number(),
+  repliesPositive: z.number(),
+  repliesNegative: z.number(),
+  repliesNeutral: z.number(),
+  repliesAutoReply: z.number(),
+  repliesDetail: RepliesDetailSchema,
 });
 
 export const StatsResponseSchema = z
