@@ -2,7 +2,7 @@ name: Test Guard
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   check-tests-exist:
