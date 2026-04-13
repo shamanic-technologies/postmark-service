@@ -123,12 +123,24 @@ export const BatchSendResponseSchema = z
 
 export type BatchSendResponse = z.infer<typeof BatchSendResponseSchema>;
 
-// ===== Email Status =====
+// ===== Email Status (Layer 2 — no raw events exposed) =====
+
+const MessageStatusSchema = z.object({
+  contacted: z.boolean().openapi({ description: "A sending exists for this message" }),
+  sent: z.boolean().openapi({ description: "Sending accepted by Postmark (errorCode=0), or implied by downstream events" }),
+  delivered: z.boolean().openapi({ description: "Delivery webhook received, or implied by open/click. False if bounced" }),
+  opened: z.boolean().openapi({ description: "Open webhook received, or implied by click" }),
+  clicked: z.boolean().openapi({ description: "Click webhook received (never implied)" }),
+  replied: z.boolean().openapi({ description: "Always false — Postmark has no reply tracking" }),
+  replyClassification: z.string().nullable().openapi({ description: "Always null — Postmark has no reply tracking" }),
+  bounced: z.boolean().openapi({ description: "Bounce webhook received" }),
+  unsubscribed: z.boolean().openapi({ description: "SubscriptionChange with suppress_sending=true" }),
+  lastDeliveredAt: z.string().nullable().openapi({ format: "date-time", description: "ISO timestamp of delivery" }),
+}).openapi("MessageStatus");
 
 export const EmailStatusSchema = z
   .object({
     messageId: z.string(),
-    status: z.enum(["sent", "delivered", "bounced", "opened", "clicked"]),
     sending: z.object({
       id: z.string(),
       to: z.string(),
@@ -138,35 +150,7 @@ export const EmailStatusSchema = z
       orgId: z.string().nullable(),
       runId: z.string().nullable(),
     }),
-    delivery: z
-      .object({
-        deliveredAt: z.string().nullable().openapi({ format: "date-time" }),
-        recipient: z.string().nullable(),
-      })
-      .nullable(),
-    bounce: z
-      .object({
-        type: z.string().nullable(),
-        typeCode: z.number().nullable(),
-        description: z.string().nullable(),
-        bouncedAt: z.string().nullable().openapi({ format: "date-time" }),
-        email: z.string().nullable(),
-      })
-      .nullable(),
-    openings: z.array(z.object({
-      receivedAt: z.string().nullable(),
-      firstOpen: z.boolean().nullable(),
-      platform: z.string().nullable(),
-      readSeconds: z.number().nullable(),
-      geo: z.any().nullable(),
-    })),
-    clicks: z.array(z.object({
-      receivedAt: z.string().nullable(),
-      originalLink: z.string().nullable(),
-      clickLocation: z.string().nullable(),
-      platform: z.string().nullable(),
-      geo: z.any().nullable(),
-    })),
+    status: MessageStatusSchema,
   })
   .openapi("EmailStatus");
 
@@ -180,13 +164,11 @@ export const OrgEmailsResponseSchema = z
     count: z.number(),
     emails: z.array(
       z.object({
-        id: z.string(),
         messageId: z.string().nullable(),
         to: z.string(),
         subject: z.string(),
         submittedAt: z.string().nullable(),
-        runId: z.string().nullable(),
-        errorCode: z.number().nullable(),
+        status: MessageStatusSchema,
       })
     ),
   })
@@ -200,12 +182,11 @@ export const RunEmailsResponseSchema = z
     total: z.number(),
     emails: z.array(
       z.object({
-        id: z.string(),
         messageId: z.string().nullable(),
         to: z.string(),
         subject: z.string(),
         submittedAt: z.string().nullable(),
-        success: z.boolean(),
+        status: MessageStatusSchema,
       })
     ),
   })
@@ -214,10 +195,11 @@ export const RunEmailsResponseSchema = z
 // ===== Unified Status Lookup =====
 
 const ScopeStatusSchema = z.object({
-  contacted: z.boolean().openapi({ description: "True if at least one email was sent in this scope" }),
-  delivered: z.boolean().openapi({ description: "True if at least one email was delivered" }),
-  opened: z.boolean().openapi({ description: "True if at least one email was opened" }),
-  clicked: z.boolean().openapi({ description: "True if at least one link was clicked" }),
+  contacted: z.boolean().openapi({ description: "True if at least one sending exists in this scope" }),
+  sent: z.boolean().openapi({ description: "True if at least one email was accepted by Postmark (errorCode=0), or implied by downstream events" }),
+  delivered: z.boolean().openapi({ description: "True if at least one email was delivered, or implied by open/click. False if bounced" }),
+  opened: z.boolean().openapi({ description: "True if at least one email was opened, or implied by click" }),
+  clicked: z.boolean().openapi({ description: "True if at least one link was clicked (never implied)" }),
   replied: z.boolean().openapi({ description: "True if at least one reply was received (always false for Postmark — no reply tracking)" }),
   replyClassification: z.string().nullable().openapi({ description: "Reply sentiment classification (always null for Postmark)" }),
   bounced: z.boolean().openapi({ description: "True if at least one email bounced" }),
@@ -264,7 +246,7 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 // ===== Stats =====
 
-export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "workflowDynastySlug", "featureDynastySlug", "leadEmail"]);
+export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "workflowDynastySlug", "featureDynastySlug", "recipientEmail"]);
 
 export const StatsQuerySchema = z
   .object({
@@ -335,6 +317,7 @@ export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
 const WorkflowStatsSchema = z.object({
   workflowSlug: z.string(),
+  emailsContacted: z.number(),
   emailsSent: z.number(),
   emailsDelivered: z.number(),
   emailsOpened: z.number(),
