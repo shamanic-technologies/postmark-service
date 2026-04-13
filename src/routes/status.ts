@@ -279,7 +279,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       .map((s) => s.messageId)
       .filter((id): id is string => id !== null);
 
-    const [deliveries, bounces, openings, subscriptionChanges] = allMessageIds.length > 0
+    const [deliveries, bounces, openings, clicks, subscriptionChanges] = allMessageIds.length > 0
       ? await Promise.all([
           db.select({ messageId: postmarkDeliveries.messageId, deliveredAt: postmarkDeliveries.deliveredAt })
             .from(postmarkDeliveries)
@@ -290,11 +290,14 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
           db.select({ messageId: postmarkOpenings.messageId })
             .from(postmarkOpenings)
             .where(inArray(postmarkOpenings.messageId, allMessageIds)),
+          db.select({ messageId: postmarkLinkClicks.messageId })
+            .from(postmarkLinkClicks)
+            .where(inArray(postmarkLinkClicks.messageId, allMessageIds)),
           db.select({ messageId: postmarkSubscriptionChanges.messageId, suppressSending: postmarkSubscriptionChanges.suppressSending })
             .from(postmarkSubscriptionChanges)
             .where(inArray(postmarkSubscriptionChanges.messageId, allMessageIds)),
         ])
-      : [[], [], [], []];
+      : [[], [], [], [], []];
 
     // 4. Build lookup maps
     const deliveryMap = new Map<string, Date | null>();
@@ -303,6 +306,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
     }
     const bouncedSet = new Set(bounces.map((b) => b.messageId).filter((id): id is string => !!id));
     const openedSet = new Set(openings.map((o) => o.messageId).filter((id): id is string => !!id));
+    const clickedSet = new Set(clicks.map((c) => c.messageId).filter((id): id is string => !!id));
     const unsubSet = new Set(
       subscriptionChanges
         .filter((sc) => sc.suppressSending === true)
@@ -317,6 +321,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       let contacted = false;
       let delivered = false;
       let opened = false;
+      let clicked = false;
       let bounced = false;
       let unsubscribed = false;
       let lastDeliveredAt: Date | null = null;
@@ -332,6 +337,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
             }
           }
           if (openedSet.has(s.messageId)) opened = true;
+          if (clickedSet.has(s.messageId)) clicked = true;
           if (bouncedSet.has(s.messageId)) bounced = true;
           if (unsubSet.has(s.messageId)) unsubscribed = true;
         }
@@ -341,6 +347,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         contacted,
         delivered,
         opened,
+        clicked,
         replied: false,
         replyClassification: null,
         bounced,

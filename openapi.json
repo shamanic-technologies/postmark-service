@@ -757,6 +757,10 @@
             "type": "boolean",
             "description": "True if at least one email was opened"
           },
+          "clicked": {
+            "type": "boolean",
+            "description": "True if at least one link was clicked"
+          },
           "replied": {
             "type": "boolean",
             "description": "True if at least one reply was received (always false for Postmark — no reply tracking)"
@@ -785,6 +789,7 @@
           "contacted",
           "delivered",
           "opened",
+          "clicked",
           "replied",
           "replyClassification",
           "bounced",

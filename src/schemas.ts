@@ -217,6 +217,7 @@ const ScopeStatusSchema = z.object({
   contacted: z.boolean().openapi({ description: "True if at least one email was sent in this scope" }),
   delivered: z.boolean().openapi({ description: "True if at least one email was delivered" }),
   opened: z.boolean().openapi({ description: "True if at least one email was opened" }),
+  clicked: z.boolean().openapi({ description: "True if at least one link was clicked" }),
   replied: z.boolean().openapi({ description: "True if at least one reply was received (always false for Postmark — no reply tracking)" }),
   replyClassification: z.string().nullable().openapi({ description: "Reply sentiment classification (always null for Postmark)" }),
   bounced: z.boolean().openapi({ description: "True if at least one email bounced" }),
