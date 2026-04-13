@@ -47,9 +47,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
   // ─── featureSlugs filter ──────────────────────────────────────────────────
 
   it("should filter by featureSlugs", async () => {
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -62,9 +62,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
 
   it("should group by featureSlug", async () => {
     const org = "org-group-feat";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-1" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-2" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-1" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -85,9 +85,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
   it("should resolve featureDynastySlug and filter with IN clause", async () => {
     mockResolveFeature.mockResolvedValue(["feat-alpha", "feat-alpha-v2"]);
 
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha-v2" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha-v2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -114,9 +114,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
   it("should combine featureDynastySlug with other filters", async () => {
     mockResolveFeature.mockResolvedValue(["feat-alpha", "feat-alpha-v2"]);
 
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-x", campaignId: "c1", featureSlug: "feat-alpha" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-y", campaignId: "c1", featureSlug: "feat-alpha" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-x", campaignId: "c1", featureSlug: "feat-alpha-v2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "brand-x", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "brand-y", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", brandId: "brand-x", campaignId: "c1", featureSlug: "feat-alpha-v2" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -132,9 +132,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
   it("should resolve workflowDynastySlug and filter with IN clause", async () => {
     mockResolveWorkflow.mockResolvedValue(["cold-email-sequoia", "cold-email-sequoia-v2"]);
 
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "cold-email-sequoia" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "cold-email-sequoia-v2" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "other-wf" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "b1", campaignId: "c1", workflowSlug: "cold-email-sequoia" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "b1", campaignId: "c1", workflowSlug: "cold-email-sequoia-v2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", brandId: "b1", campaignId: "c1", workflowSlug: "other-wf" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -161,9 +161,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
   it("should support grouped response with dynasty slug filters", async () => {
     mockResolveFeature.mockResolvedValue(["feat-alpha", "feat-alpha-v2"]);
 
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-a", campaignId: "c1", featureSlug: "feat-alpha" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-b", campaignId: "c1", featureSlug: "feat-alpha-v2" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "brand-a", campaignId: "c1", featureSlug: "feat-beta" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "brand-a", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "brand-b", campaignId: "c1", featureSlug: "feat-alpha-v2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", brandId: "brand-a", campaignId: "c1", featureSlug: "feat-beta" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -184,9 +184,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
   it("should merge dynasty slugs with workflowSlugs when both provided", async () => {
     mockResolveWorkflow.mockResolvedValue(["wf-a", "wf-a-v2"]);
 
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-a" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-a-v2" });
-    await insertTestSending({ messageId: randomUUID(), brandId: "b1", campaignId: "c1", workflowSlug: "wf-other" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "b1", campaignId: "c1", workflowSlug: "wf-a" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "b1", campaignId: "c1", workflowSlug: "wf-a-v2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", brandId: "b1", campaignId: "c1", workflowSlug: "wf-other" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -216,9 +216,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     );
 
     const org = "org-dynasty-group";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email-v2" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "warm-intro" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email-v2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "warm-intro" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -253,9 +253,9 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     );
 
     const org = "org-feat-dynasty-group";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha-v2" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-alpha-v2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", orgId: org, brandId: "b1", campaignId: "c1", featureSlug: "feat-beta" });
 
     const response = await request(app)
       .get("/orgs/stats")
@@ -285,8 +285,8 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     );
 
     const org = "org-orphan-slug";
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email" });
-    await insertTestSending({ messageId: randomUUID(), orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "orphan-wf" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "cold-email" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId: org, brandId: "b1", campaignId: "c1", workflowSlug: "orphan-wf" });
 
     const response = await request(app)
       .get("/orgs/stats")
