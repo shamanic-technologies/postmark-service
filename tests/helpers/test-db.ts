@@ -124,6 +124,27 @@ export async function insertTestOpening(messageId: string, recipient?: string) {
 }
 
 /**
+ * Insert test link click record
+ */
+export async function insertTestLinkClick(messageId: string, recipient?: string) {
+  const [click] = await db
+    .insert(postmarkLinkClicks)
+    .values({
+      messageId,
+      recordType: "Click",
+      recipient: recipient || "test@example.com",
+      receivedAt: new Date(),
+      platform: "Desktop",
+      originalLink: "https://example.com",
+      clickLocation: "HTML",
+      messageStream: "broadcast",
+    })
+    .returning();
+
+  return click;
+}
+
+/**
  * Insert test subscription change record
  */
 export async function insertTestSubscriptionChange(

@@ -8,6 +8,7 @@ import {
   insertTestDelivery,
   insertTestBounce,
   insertTestOpening,
+  insertTestLinkClick,
   insertTestSubscriptionChange,
   randomUUID,
 } from "../helpers/test-db";
@@ -288,6 +289,7 @@ describe("Status Endpoints Integration", () => {
       expect(r.campaign.contacted).toBe(false);
       expect(r.campaign.delivered).toBe(false);
       expect(r.campaign.opened).toBe(false);
+      expect(r.campaign.clicked).toBe(false);
       expect(r.campaign.replied).toBe(false);
       expect(r.campaign.replyClassification).toBeNull();
       expect(r.campaign.bounced).toBe(false);
@@ -368,6 +370,63 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(200);
       const r = response.body.results[0];
       expect(r.campaign.opened).toBe(true);
+    });
+
+    it("should detect clicked in campaign scope", async () => {
+      const messageId = randomUUID();
+      const campaignId = "camp-click";
+      await insertTestSending({
+        messageId,
+        toEmail: "clicker@test.com",
+        campaignId,
+      });
+      await insertTestDelivery(messageId, "clicker@test.com");
+      await insertTestLinkClick(messageId);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          campaignId,
+          items: [{ email: "clicker@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.campaign.clicked).toBe(true);
+    });
+
+    it("should detect clicked in brand mode with BOOL_OR aggregation", async () => {
+      const msg1 = randomUUID();
+      const msg2 = randomUUID();
+      await insertTestSending({
+        messageId: msg1,
+        toEmail: "brand-clicker@test.com",
+        brandId,
+        campaignId: "camp-click-yes",
+      });
+      await insertTestSending({
+        messageId: msg2,
+        toEmail: "brand-clicker@test.com",
+        brandId,
+        campaignId: "camp-click-no",
+      });
+      await insertTestDelivery(msg1, "brand-clicker@test.com");
+      await insertTestLinkClick(msg1);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          brandId,
+          items: [{ email: "brand-clicker@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.byCampaign["camp-click-yes"].clicked).toBe(true);
+      expect(r.byCampaign["camp-click-no"].clicked).toBe(false);
+      expect(r.brand.clicked).toBe(true);
     });
 
     it("should always return replied=false and replyClassification=null", async () => {
