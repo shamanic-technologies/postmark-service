@@ -8,6 +8,7 @@ import {
   insertTestDelivery,
   insertTestBounce,
   insertTestOpening,
+  insertTestLinkClick,
   insertTestSubscriptionChange,
   randomUUID,
 } from "../helpers/test-db";
@@ -34,7 +35,7 @@ describe("Status Endpoints Integration", () => {
       expect(response.body.error).toBe("Message not found");
     });
 
-    it("should return status 'sent' for message with only sending record", async () => {
+    it("should return Layer 2 status for message with only sending record", async () => {
       const messageId = randomUUID();
       await insertTestSending({ messageId });
 
@@ -44,12 +45,15 @@ describe("Status Endpoints Integration", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.messageId).toBe(messageId);
-      expect(response.body.status).toBe("sent");
-      expect(response.body.delivery).toBeNull();
-      expect(response.body.bounce).toBeNull();
+      expect(response.body.status.contacted).toBe(true);
+      expect(response.body.status.sent).toBe(true);
+      expect(response.body.status.delivered).toBe(false);
+      expect(response.body.status.opened).toBe(false);
+      expect(response.body.status.clicked).toBe(false);
+      expect(response.body.status.bounced).toBe(false);
     });
 
-    it("should return status 'delivered' when delivery exists", async () => {
+    it("should return delivered=true when delivery exists", async () => {
       const messageId = randomUUID();
       await insertTestSending({ messageId });
       await insertTestDelivery(messageId);
@@ -59,12 +63,12 @@ describe("Status Endpoints Integration", () => {
         .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe("delivered");
-      expect(response.body.delivery).not.toBeNull();
-      expect(response.body.delivery.recipient).toBe("test@example.com");
+      expect(response.body.status.delivered).toBe(true);
+      expect(response.body.status.sent).toBe(true);
+      expect(response.body.status.lastDeliveredAt).not.toBeNull();
     });
 
-    it("should return status 'bounced' when bounce exists", async () => {
+    it("should return bounced=true and delivered=false when bounce exists", async () => {
       const messageId = randomUUID();
       await insertTestSending({ messageId });
       await insertTestBounce(messageId);
@@ -74,12 +78,12 @@ describe("Status Endpoints Integration", () => {
         .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe("bounced");
-      expect(response.body.bounce).not.toBeNull();
-      expect(response.body.bounce.type).toBe("HardBounce");
+      expect(response.body.status.bounced).toBe(true);
+      expect(response.body.status.sent).toBe(true);
+      expect(response.body.status.delivered).toBe(false);
     });
 
-    it("should return status 'opened' when opening exists", async () => {
+    it("should return opened=true when opening exists", async () => {
       const messageId = randomUUID();
       await insertTestSending({ messageId });
       await insertTestDelivery(messageId);
@@ -90,8 +94,26 @@ describe("Status Endpoints Integration", () => {
         .set(getServiceHeaders());
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe("opened");
-      expect(response.body.openings.length).toBeGreaterThan(0);
+      expect(response.body.status.opened).toBe(true);
+      expect(response.body.status.delivered).toBe(true);
+      expect(response.body.status.sent).toBe(true);
+    });
+
+    it("should imply opened and delivered when click exists without open/delivery webhooks", async () => {
+      const messageId = randomUUID();
+      await insertTestSending({ messageId });
+      // Only click, no delivery or open webhooks
+      await insertTestLinkClick(messageId);
+
+      const response = await request(app)
+        .get(`/internal/status/${messageId}`)
+        .set(getServiceHeaders());
+
+      expect(response.status).toBe(200);
+      expect(response.body.status.clicked).toBe(true);
+      expect(response.body.status.opened).toBe(true);
+      expect(response.body.status.delivered).toBe(true);
+      expect(response.body.status.sent).toBe(true);
     });
   });
 
@@ -106,10 +128,13 @@ describe("Status Endpoints Integration", () => {
       expect(response.body.emails).toEqual([]);
     });
 
-    it("should return emails for org", async () => {
+    it("should return emails for org with Layer 2 status", async () => {
       const orgId = "test-org-123";
-      await insertTestSending({ messageId: randomUUID(), orgId });
-      await insertTestSending({ messageId: randomUUID(), orgId });
+      const msg1 = randomUUID();
+      const msg2 = randomUUID();
+      await insertTestSending({ messageId: msg1, orgId });
+      await insertTestSending({ messageId: msg2, orgId });
+      await insertTestDelivery(msg1);
 
       const response = await request(app)
         .get(`/internal/status/by-org/${orgId}`)
@@ -119,6 +144,29 @@ describe("Status Endpoints Integration", () => {
       expect(response.body.orgId).toBe(orgId);
       expect(response.body.count).toBe(2);
       expect(response.body.emails.length).toBe(2);
+      // Each email should have a status object
+      const delivered = response.body.emails.find((e: any) => e.messageId === msg1);
+      expect(delivered.status.contacted).toBe(true);
+      expect(delivered.status.delivered).toBe(true);
+      const notDelivered = response.body.emails.find((e: any) => e.messageId === msg2);
+      expect(notDelivered.status.delivered).toBe(false);
+    });
+
+    it("should return all results when limit is omitted", async () => {
+      const orgId = "test-org-no-limit";
+      // Insert more than the old silent default of 50
+      const insertions = Array.from({ length: 55 }, () =>
+        insertTestSending({ messageId: randomUUID(), orgId })
+      );
+      await Promise.all(insertions);
+
+      const response = await request(app)
+        .get(`/internal/status/by-org/${orgId}`)
+        .set(getServiceHeaders());
+
+      expect(response.status).toBe(200);
+      expect(response.body.count).toBe(55);
+      expect(response.body.emails.length).toBe(55);
     });
 
     it("should return all results when limit is omitted", async () => {
@@ -154,10 +202,12 @@ describe("Status Endpoints Integration", () => {
   });
 
   describe("GET /internal/status/by-run/:runId", () => {
-    it("should return emails for run", async () => {
+    it("should return emails for run with Layer 2 status", async () => {
       const runId = "run-123";
+      const msg1 = randomUUID();
+      await insertTestSending({ messageId: msg1, runId });
       await insertTestSending({ messageId: randomUUID(), runId });
-      await insertTestSending({ messageId: randomUUID(), runId });
+      await insertTestDelivery(msg1);
 
       const response = await request(app)
         .get(`/internal/status/by-run/${runId}`)
@@ -166,6 +216,9 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(200);
       expect(response.body.runId).toBe(runId);
       expect(response.body.total).toBe(2);
+      const delivered = response.body.emails.find((e: any) => e.messageId === msg1);
+      expect(delivered.status.delivered).toBe(true);
+      expect(delivered.status.sent).toBe(true);
     });
   });
 
@@ -286,8 +339,10 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(200);
       const r = response.body.results[0];
       expect(r.campaign.contacted).toBe(false);
+      expect(r.campaign.sent).toBe(false);
       expect(r.campaign.delivered).toBe(false);
       expect(r.campaign.opened).toBe(false);
+      expect(r.campaign.clicked).toBe(false);
       expect(r.campaign.replied).toBe(false);
       expect(r.campaign.replyClassification).toBeNull();
       expect(r.campaign.bounced).toBe(false);
@@ -368,6 +423,63 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(200);
       const r = response.body.results[0];
       expect(r.campaign.opened).toBe(true);
+    });
+
+    it("should detect clicked in campaign scope", async () => {
+      const messageId = randomUUID();
+      const campaignId = "camp-click";
+      await insertTestSending({
+        messageId,
+        toEmail: "clicker@test.com",
+        campaignId,
+      });
+      await insertTestDelivery(messageId, "clicker@test.com");
+      await insertTestLinkClick(messageId);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          campaignId,
+          items: [{ email: "clicker@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.campaign.clicked).toBe(true);
+    });
+
+    it("should detect clicked in brand mode with BOOL_OR aggregation", async () => {
+      const msg1 = randomUUID();
+      const msg2 = randomUUID();
+      await insertTestSending({
+        messageId: msg1,
+        toEmail: "brand-clicker@test.com",
+        brandId,
+        campaignId: "camp-click-yes",
+      });
+      await insertTestSending({
+        messageId: msg2,
+        toEmail: "brand-clicker@test.com",
+        brandId,
+        campaignId: "camp-click-no",
+      });
+      await insertTestDelivery(msg1, "brand-clicker@test.com");
+      await insertTestLinkClick(msg1);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({
+          brandId,
+          items: [{ email: "brand-clicker@test.com" }],
+        });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.byCampaign["camp-click-yes"].clicked).toBe(true);
+      expect(r.byCampaign["camp-click-no"].clicked).toBe(false);
+      expect(r.brand.clicked).toBe(true);
     });
 
     it("should always return replied=false and replyClassification=null", async () => {
