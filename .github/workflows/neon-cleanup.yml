@@ -10,6 +10,8 @@ concurrency:
 
 jobs:
   delete-neon-branch:
+    # Skip promotion PRs (staging→main, etc.) — no Neon branch exists for those
+    if: github.event.pull_request.head.ref != 'staging' && github.event.pull_request.head.ref != 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Delete Neon branch
