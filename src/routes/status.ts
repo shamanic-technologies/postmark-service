@@ -263,7 +263,7 @@ const orgsRouter = Router();
 /**
  * POST /orgs/status
  * Batch status lookup by email with mode-dependent response shape.
- * Modes: brandId only → brand, campaignId only → campaign, both → campaign (brandId ignored), neither → global only.
+ * Modes: brandIds only → brand, campaignId only → campaign, both → campaign (brandIds ignored), neither → global only.
  * Headers are tracing/logging only — filters are in the body.
  */
 orgsRouter.post("/status", async (req: Request, res: Response) => {
@@ -275,12 +275,12 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
     });
   }
 
-  const { brandId, campaignId, items } = parsed.data;
+  const { brandIds, campaignId, items } = parsed.data;
 
-  // Mode resolution: campaignId takes precedence over brandId
+  // Mode resolution: campaignId takes precedence over brandIds
   const mode: "brand" | "campaign" | "global" = campaignId
     ? "campaign"
-    : brandId
+    : brandIds && brandIds.length > 0
       ? "brand"
       : "global";
 
@@ -389,7 +389,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
 
       if (mode === "brand") {
         // Brand-filtered rows
-        const brandRows = emailRows.filter((s) => s.brandIds?.includes(brandId!));
+        const brandRows = emailRows.filter((s) => s.brandIds?.some((id) => brandIds!.includes(id)));
 
         // Group by campaignId for byCampaign breakdown
         const campaignGroups = new Map<string, SendingRow[]>();
@@ -450,7 +450,7 @@ const GROUP_BY_COLUMN_MAP = {
 function buildStatsConditions(data: {
   runIds?: string[];
   orgId?: string;
-  brandId?: string;
+  brandIds?: string[];
   campaignId?: string;
   workflowSlugs?: string[];
   featureSlugs?: string[];
@@ -462,8 +462,8 @@ function buildStatsConditions(data: {
   if (data.orgId) {
     conditions.push(eq(postmarkSendings.orgId, data.orgId));
   }
-  if (data.brandId) {
-    conditions.push(arrayContains(postmarkSendings.brandIds, [data.brandId]));
+  if (data.brandIds && data.brandIds.length > 0) {
+    conditions.push(arrayContains(postmarkSendings.brandIds, data.brandIds));
   }
   if (data.campaignId) {
     conditions.push(eq(postmarkSendings.campaignId, data.campaignId));
@@ -575,6 +575,7 @@ async function handleStats(req: Request, res: Response) {
   const {
     groupBy,
     runIds: runIdsRaw,
+    brandIds: brandIdsRaw,
     workflowSlugs: workflowSlugsRaw,
     featureSlugs: featureSlugsRaw,
     workflowDynastySlug,
@@ -582,6 +583,7 @@ async function handleStats(req: Request, res: Response) {
     ...filters
   } = parsed.data;
   const runIds = runIdsRaw ? runIdsRaw.split(",").filter(Boolean) : undefined;
+  const brandIds = brandIdsRaw ? brandIdsRaw.split(",").filter(Boolean) : undefined;
   const workflowSlugsFromQuery = workflowSlugsRaw ? workflowSlugsRaw.split(",").filter(Boolean) : undefined;
   const featureSlugsFromQuery = featureSlugsRaw ? featureSlugsRaw.split(",").filter(Boolean) : undefined;
 
@@ -613,11 +615,11 @@ async function handleStats(req: Request, res: Response) {
     featureSlugs = featureSlugs ? [...featureSlugs, ...dynastySlugs] : dynastySlugs;
   }
 
-  const conditions = buildStatsConditions({ ...filters, runIds, workflowSlugs, featureSlugs });
+  const conditions = buildStatsConditions({ ...filters, runIds, brandIds, workflowSlugs, featureSlugs });
 
   if (conditions.length === 0) {
     return res.status(400).json({
-      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, or featureDynastySlug)",
+      error: "At least one filter is required (runIds, orgId, brandIds, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, or featureDynastySlug)",
     });
   }
 
@@ -648,7 +650,7 @@ async function handleStats(req: Request, res: Response) {
 
     // ─── Grouped response ────────────────────────────────────────────
     const isDynastyGroupBy = groupBy === "workflowDynastySlug" || groupBy === "featureDynastySlug";
-    const isBrandGroupBy = groupBy === "brandId";
+    const isBrandGroupBy = groupBy === "brandIds";
 
     // For dynasty groupBy, fetch all dynasties and build reverse map
     let slugToDynastyMap: Map<string, string> | undefined;

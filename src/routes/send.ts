@@ -36,7 +36,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
   // Workflow tracking headers (body takes priority, headers are fallback)
   const campaignId = body.campaignId ?? (req.headers["x-campaign-id"] as string | undefined);
   const headerBrandIds = String(req.headers["x-brand-id"] ?? "").split(",").map(s => s.trim()).filter(Boolean);
-  const brandIds = body.brandId ? [body.brandId] : (headerBrandIds.length > 0 ? headerBrandIds : undefined);
+  const brandIds = body.brandIds ?? (headerBrandIds.length > 0 ? headerBrandIds : undefined);
   const featureSlug = body.featureSlug ?? (req.headers["x-feature-slug"] as string | undefined);
   const workflowSlug = body.workflowSlug ?? (req.headers["x-workflow-slug"] as string | undefined);
   const trackingHeaders: Record<string, string> = {};
@@ -272,7 +272,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     try {
       // Per-email tracking: body takes priority, headers are fallback
       const emailCampaignId = email.campaignId ?? headerCampaignId;
-      const emailBrandIds = email.brandId ? [email.brandId] : (headerBrandIds.length > 0 ? headerBrandIds : undefined);
+      const emailBrandIds = email.brandIds ?? (headerBrandIds.length > 0 ? headerBrandIds : undefined);
       const emailFeatureSlug = email.featureSlug ?? headerFeatureSlug;
       const emailWorkflowSlug = email.workflowSlug ?? headerWorkflowSlug;
 

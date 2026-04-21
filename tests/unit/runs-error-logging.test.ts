@@ -71,7 +71,7 @@ describe("runs-service BLOCKING behavior", () => {
       .post("/orgs/send")
       .set(getAuthHeaders({ runId: "run_xyz" }))
       .send({
-        brandId: "brand_1",
+        brandIds: ["brand_1"],
         campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
@@ -108,7 +108,7 @@ describe("runs-service BLOCKING behavior", () => {
       .post("/orgs/send")
       .set(getAuthHeaders({ orgId: "org_abc", userId: "user_xyz", runId: "run_xyz" }))
       .send({
-        brandId: "brand_1",
+        brandIds: ["brand_1"],
         campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
@@ -170,7 +170,7 @@ describe("runs-service BLOCKING behavior", () => {
       .post("/orgs/send")
       .set(getAuthHeaders({ runId: "run_xyz" }))
       .send({
-        brandId: "brand_1",
+        brandIds: ["brand_1"],
         campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
