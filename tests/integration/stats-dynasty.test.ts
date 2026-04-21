@@ -121,7 +121,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ featureDynastySlug: "feat-alpha", brandId: "brand-x" });
+      .query({ featureDynastySlug: "feat-alpha", brandIds: "brand-x" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(2);
@@ -168,7 +168,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ featureDynastySlug: "feat-alpha", groupBy: "brandId" });
+      .query({ featureDynastySlug: "feat-alpha", groupBy: "brandIds" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
