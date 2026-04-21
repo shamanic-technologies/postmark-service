@@ -40,7 +40,7 @@ describe("GET /internal/stats", () => {
     const response = await request(app)
       .get("/internal/stats")
       .set(getServiceAuthHeaders())
-      .query({ brandId });
+      .query({ brandIds: brandId });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsContacted).toBeGreaterThanOrEqual(1);
@@ -66,14 +66,14 @@ describe("GET /internal/stats", () => {
     expect(response.status).toBe(401);
   });
 
-  it("should filter by brandId", async () => {
+  it("should filter by brandIds", async () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "brand-pub-x", campaignId: "c1" });
     await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "brand-pub-y", campaignId: "c2" });
 
     const response = await request(app)
       .get("/internal/stats")
       .set(getServiceAuthHeaders())
-      .query({ brandId: "brand-pub-x" });
+      .query({ brandIds: "brand-pub-x" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -87,7 +87,7 @@ describe("GET /internal/stats", () => {
     const response = await request(app)
       .get("/internal/stats")
       .set(getServiceAuthHeaders())
-      .query({ brandId: brand, groupBy: "campaignId" });
+      .query({ brandIds: brand, groupBy: "campaignId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -108,7 +108,7 @@ describe("GET /internal/stats", () => {
     const response = await request(app)
       .get("/internal/stats")
       .set(getServiceAuthHeaders())
-      .query({ brandId: brand });
+      .query({ brandIds: brand });
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
