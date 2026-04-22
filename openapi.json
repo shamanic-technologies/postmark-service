@@ -1645,7 +1645,7 @@
             "schema": {
               "type": "string",
               "enum": [
-                "brandIds",
+                "brandId",
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
@@ -1789,7 +1789,7 @@
             "schema": {
               "type": "string",
               "enum": [
-                "brandIds",
+                "brandId",
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",

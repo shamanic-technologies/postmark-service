@@ -207,7 +207,7 @@ describe("Zod schemas", () => {
     });
 
     it("should accept groupBy with valid enum values", () => {
-      for (const value of ["brandIds", "campaignId", "workflowSlug", "recipientEmail"]) {
+      for (const value of ["brandId", "campaignId", "workflowSlug", "recipientEmail"]) {
         const result = StatsQuerySchema.safeParse({
           orgId: "org_123",
           groupBy: value,

@@ -650,7 +650,7 @@ async function handleStats(req: Request, res: Response) {
 
     // ─── Grouped response ────────────────────────────────────────────
     const isDynastyGroupBy = groupBy === "workflowDynastySlug" || groupBy === "featureDynastySlug";
-    const isBrandGroupBy = groupBy === "brandIds";
+    const isBrandGroupBy = groupBy === "brandId";
 
     // For dynasty groupBy, fetch all dynasties and build reverse map
     let slugToDynastyMap: Map<string, string> | undefined;

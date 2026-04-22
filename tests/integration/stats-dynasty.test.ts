@@ -168,7 +168,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ featureDynastySlug: "feat-alpha", groupBy: "brandIds" });
+      .query({ featureDynastySlug: "feat-alpha", groupBy: "brandId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
