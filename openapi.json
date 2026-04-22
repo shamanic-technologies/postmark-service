@@ -138,12 +138,9 @@
       "SendEmailRequest": {
         "type": "object",
         "properties": {
-          "brandIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Brand IDs"
+          "brandId": {
+            "type": "string",
+            "description": "Brand ID"
           },
           "campaignId": {
             "type": "string",
@@ -297,11 +294,8 @@
             "items": {
               "type": "object",
               "properties": {
-                "brandIds": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                "brandId": {
+                  "type": "string"
                 },
                 "campaignId": {
                   "type": "string"
@@ -754,19 +748,14 @@
       "StatusRequest": {
         "type": "object",
         "properties": {
-          "brandIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Brand UUIDs — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
-            "example": [
-              "b1a2c3d4-5678-90ab-cdef-111111111111"
-            ]
+          "brandId": {
+            "type": "string",
+            "description": "Brand UUID — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
+            "example": "b1a2c3d4-5678-90ab-cdef-111111111111"
           },
           "campaignId": {
             "type": "string",
-            "description": "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandIds.",
+            "description": "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandId.",
             "example": "c1a2b3d4-5678-90ab-cdef-222222222222"
           },
           "items": {
@@ -1506,7 +1495,7 @@
     "/orgs/status": {
       "post": {
         "summary": "Batch status lookup by email",
-        "description": "Check delivery status for a batch of email addresses. The response shape depends on the body filters:\n\n| brandIds | campaignId | Mode     | Active fields                  |\n|----------|------------|----------|--------------------------------|\n| absent   | absent     | Global   | global                         |\n| present  | absent     | Brand    | byCampaign + brand + global    |\n| absent   | present    | Campaign | campaign + global              |\n| present  | present    | Campaign | campaign + global (brandIds ignored) |\n\nNon-applicable fields are null. Headers (x-brand-id, x-campaign-id, etc.) are for tracing/logging only — they do NOT drive filtering logic. Filters are in the request body.\n\nAggregation rules:\n- byCampaign[id].*: exact status for that campaign\n- brand.*: BOOL_OR across all campaigns of the brand (true if true in any campaign)\n- brand.lastDeliveredAt: MAX across all campaigns\n- global.email.bounced/unsubscribed: aggregated across all campaigns in the org (no brand/campaign filter)",
+        "description": "Check delivery status for a batch of email addresses. The response shape depends on the body filters:\n\n| brandId | campaignId | Mode     | Active fields                  |\n|---------|------------|----------|--------------------------------|\n| absent  | absent     | Global   | global                         |\n| present | absent     | Brand    | byCampaign + brand + global    |\n| absent  | present    | Campaign | campaign + global              |\n| present | present    | Campaign | campaign + global (brandId ignored) |\n\nNon-applicable fields are null. Headers (x-brand-id, x-campaign-id, etc.) are for tracing/logging only — they do NOT drive filtering logic. Filters are in the request body.\n\nAggregation rules:\n- byCampaign[id].*: exact status for that campaign\n- brand.*: BOOL_OR across all campaigns of the brand (true if true in any campaign)\n- brand.lastDeliveredAt: MAX across all campaigns\n- global.email.bounced/unsubscribed: aggregated across all campaigns in the org (no brand/campaign filter)",
         "tags": [
           "Email Status"
         ],
@@ -1551,7 +1540,7 @@
     "/orgs/stats": {
       "get": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandIds, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
         "tags": [
           "Email Status"
         ],
@@ -1584,11 +1573,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by brand IDs (comma-separated)"
+              "description": "Filter by brand ID"
             },
             "required": false,
-            "description": "Filter by brand IDs (comma-separated)",
-            "name": "brandIds",
+            "description": "Filter by brand ID",
+            "name": "brandId",
             "in": "query"
           },
           {
@@ -1728,11 +1717,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by brand IDs (comma-separated)"
+              "description": "Filter by brand ID"
             },
             "required": false,
-            "description": "Filter by brand IDs (comma-separated)",
-            "name": "brandIds",
+            "description": "Filter by brand ID",
+            "name": "brandId",
             "in": "query"
           },
           {

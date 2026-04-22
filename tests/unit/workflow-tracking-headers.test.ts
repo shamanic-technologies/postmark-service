@@ -141,7 +141,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
           subject: "Test",
           textBody: "Hello",
           campaignId: "camp-from-body",
-          brandIds: ["brand-from-body"],
+          brandId: "brand-from-body",
           featureSlug: "feat-from-body",
           workflowSlug: "wf-from-body",
         });
@@ -166,7 +166,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
       expect(valuesCall.workflowSlug).toBe("wf-from-body");
     });
 
-    it("should parse CSV x-brand-id header into brandIds array", async () => {
+    it("should parse CSV x-brand-id header into brandIds DB array", async () => {
       await request(app)
         .post("/orgs/send")
         .set({

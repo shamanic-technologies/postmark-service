@@ -234,9 +234,9 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(400);
     });
 
-    // ── Global-only mode (no brandIds, no campaignId) ──────────────────
+    // ── Global-only mode (no brandId, no campaignId) ──────────────────
 
-    it("should return global-only mode when neither brandIds nor campaignId provided", async () => {
+    it("should return global-only mode when neither brandId nor campaignId provided", async () => {
       const messageId = randomUUID();
       await insertTestSending({
         messageId,
@@ -349,7 +349,7 @@ describe("Status Endpoints Integration", () => {
       expect(r.campaign.unsubscribed).toBe(false);
     });
 
-    it("should use campaign mode when both brandIds and campaignId provided (brandIds ignored)", async () => {
+    it("should use campaign mode when both brandId and campaignId provided (brandId ignored)", async () => {
       const messageId = randomUUID();
       const campaignId = "camp-both";
       await insertTestSending({
@@ -364,7 +364,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandIds: [brandId],
+          brandId: brandId,
           campaignId,
           items: [{ email: "both@test.com" }],
         });
@@ -471,7 +471,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandIds: [brandId],
+          brandId: brandId,
           items: [{ email: "brand-clicker@test.com" }],
         });
 
@@ -542,9 +542,9 @@ describe("Status Endpoints Integration", () => {
       expect(cResult.campaign.delivered).toBe(false);
     });
 
-    // ── Brand mode (brandIds provided, no campaignId) ──────────────────
+    // ── Brand mode (brandId provided, no campaignId) ──────────────────
 
-    it("should return brand mode with byCampaign breakdown when brandIds provided", async () => {
+    it("should return brand mode with byCampaign breakdown when brandId provided", async () => {
       const msg1 = randomUUID();
       const msg2 = randomUUID();
       await insertTestSending({
@@ -566,7 +566,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandIds: [brandId],
+          brandId: brandId,
           items: [{ email: "alice@test.com" }],
         });
 
@@ -609,7 +609,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandIds: [brandId],
+          brandId: brandId,
           items: [{ email: "bool-or@test.com" }],
         });
 
@@ -627,7 +627,7 @@ describe("Status Endpoints Integration", () => {
 
     it("should return byCampaign=null when brand has no campaign-linked sendings", async () => {
       const messageId = randomUUID();
-      // Sending with brandIds but no campaignId
+      // Sending with brandId but no campaignId
       await insertTestSending({
         messageId,
         toEmail: "nocamp-brand@test.com",
@@ -638,7 +638,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandIds: [brandId],
+          brandId: brandId,
           items: [{ email: "nocamp-brand@test.com" }],
         });
 
@@ -670,7 +670,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandIds: [brandId],
+          brandId: brandId,
           items: [{ email: "multi-brand@test.com" }],
         });
 
@@ -679,7 +679,7 @@ describe("Status Endpoints Integration", () => {
       // Only camp-mine should appear in byCampaign
       expect(r.byCampaign["camp-mine"]).toBeDefined();
       expect(r.byCampaign["camp-other"]).toBeUndefined();
-      // Brand scope should only reflect brandIds's sendings
+      // Brand scope should only reflect brandId's sendings
       expect(r.brand.delivered).toBe(true);
       expect(r.brand.bounced).toBe(false);
       // Global should reflect ALL sendings (cross-brand)
@@ -700,7 +700,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandIds: [brandId],
+          brandId: brandId,
           items: [{ email: "unsub-brand@test.com" }],
         });
 

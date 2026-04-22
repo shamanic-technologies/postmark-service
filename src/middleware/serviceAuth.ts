@@ -37,7 +37,7 @@ export interface OrgContext {
   userId?: string;
   runId?: string;
   campaignId?: string;
-  brandIds?: string[];
+  brandId?: string;
   featureSlug?: string;
   workflowSlug?: string;
 }
@@ -65,7 +65,7 @@ export function requireOrgId(req: Request, res: Response, next: NextFunction) {
     userId: typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"] : undefined,
     runId: typeof req.headers["x-run-id"] === "string" ? req.headers["x-run-id"] : undefined,
     campaignId: typeof req.headers["x-campaign-id"] === "string" ? req.headers["x-campaign-id"] : undefined,
-    brandIds: typeof req.headers["x-brand-id"] === "string" ? req.headers["x-brand-id"].split(",").map(s => s.trim()).filter(Boolean) : undefined,
+    brandId: typeof req.headers["x-brand-id"] === "string" ? req.headers["x-brand-id"] : undefined,
     featureSlug: typeof req.headers["x-feature-slug"] === "string" ? req.headers["x-feature-slug"] : undefined,
     workflowSlug: typeof req.headers["x-workflow-slug"] === "string" ? req.headers["x-workflow-slug"] : undefined,
   };
