@@ -140,10 +140,10 @@
         "properties": {
           "brandId": {
             "type": "array",
+            "description": "Brand ID(s) — accepts a single string or an array of strings",
             "items": {
               "type": "string"
-            },
-            "description": "Brand ID(s)"
+            }
           },
           "campaignId": {
             "type": "string",
@@ -756,10 +756,10 @@
         "properties": {
           "brandId": {
             "type": "array",
+            "description": "Brand UUID(s) — activates brand mode. Accepts a single string or array. Ignored if campaignId is also provided.",
             "items": {
               "type": "string"
             },
-            "description": "Brand UUID(s) — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
             "example": [
               "b1a2c3d4-5678-90ab-cdef-111111111111"
             ]

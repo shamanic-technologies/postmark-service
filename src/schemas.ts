@@ -20,6 +20,12 @@ registry.registerComponent("securitySchemes", "apiKey", {
 
 const TrackLinksSchema = z.enum(["None", "HtmlAndText", "HtmlOnly", "TextOnly"]);
 
+// brandId in JSON body: accepts string or array, normalizes to array
+const BrandIdBodySchema = z.preprocess(
+  (val) => (typeof val === "string" ? [val] : val),
+  z.array(z.string())
+);
+
 const EmailHeaderSchema = z.object({
   name: z.string(),
   value: z.string(),
@@ -29,7 +35,7 @@ const EmailHeaderSchema = z.object({
 
 export const SendEmailRequestSchema = z
   .object({
-    brandId: z.array(z.string()).optional().openapi({ description: "Brand ID(s)" }),
+    brandId: BrandIdBodySchema.optional().openapi({ description: "Brand ID(s) — accepts a single string or an array of strings", type: "array", items: { type: "string" } }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     featureSlug: z.string().optional().openapi({ description: "Feature slug for tracking" }),
     workflowSlug: z.string().optional().openapi({ description: "Workflow slug for tracking/grouping" }),
@@ -75,7 +81,7 @@ export const BatchSendRequestSchema = z
     emails: z
       .array(
         z.object({
-          brandId: z.array(z.string()).optional(),
+          brandId: BrandIdBodySchema.optional(),
           campaignId: z.string().optional(),
           featureSlug: z.string().optional(),
           workflowSlug: z.string().optional(),
@@ -216,7 +222,7 @@ const GlobalScopeSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandId: z.array(z.string()).optional().openapi({ description: "Brand UUID(s) — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.", example: ["b1a2c3d4-5678-90ab-cdef-111111111111"] }),
+    brandId: BrandIdBodySchema.optional().openapi({ description: "Brand UUID(s) — activates brand mode. Accepts a single string or array. Ignored if campaignId is also provided.", type: "array", items: { type: "string" }, example: ["b1a2c3d4-5678-90ab-cdef-111111111111"] }),
     campaignId: z.string().optional().openapi({ description: "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandId.", example: "c1a2b3d4-5678-90ab-cdef-222222222222" }),
     items: z.array(
       z.object({
