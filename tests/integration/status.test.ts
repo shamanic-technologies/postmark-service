@@ -364,7 +364,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandId: brandId,
+          brandId: [brandId],
           campaignId,
           items: [{ email: "both@test.com" }],
         });
@@ -471,7 +471,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandId: brandId,
+          brandId: [brandId],
           items: [{ email: "brand-clicker@test.com" }],
         });
 
@@ -566,7 +566,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandId: brandId,
+          brandId: [brandId],
           items: [{ email: "alice@test.com" }],
         });
 
@@ -609,7 +609,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandId: brandId,
+          brandId: [brandId],
           items: [{ email: "bool-or@test.com" }],
         });
 
@@ -638,7 +638,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandId: brandId,
+          brandId: [brandId],
           items: [{ email: "nocamp-brand@test.com" }],
         });
 
@@ -670,7 +670,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandId: brandId,
+          brandId: [brandId],
           items: [{ email: "multi-brand@test.com" }],
         });
 
@@ -700,7 +700,7 @@ describe("Status Endpoints Integration", () => {
         .post("/orgs/status")
         .set(getAuthHeaders())
         .send({
-          brandId: brandId,
+          brandId: [brandId],
           items: [{ email: "unsub-brand@test.com" }],
         });
 

@@ -280,7 +280,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
   // Mode resolution: campaignId takes precedence over brandId
   const mode: "brand" | "campaign" | "global" = campaignId
     ? "campaign"
-    : brandId
+    : brandId && brandId.length > 0
       ? "brand"
       : "global";
 
@@ -389,7 +389,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
 
       if (mode === "brand") {
         // Brand-filtered rows
-        const brandRows = emailRows.filter((s) => s.brandIds?.includes(brandId!));
+        const brandRows = emailRows.filter((s) => s.brandIds?.some((id) => brandId!.includes(id)));
 
         // Group by campaignId for byCampaign breakdown
         const campaignGroups = new Map<string, SendingRow[]>();
@@ -450,7 +450,7 @@ const GROUP_BY_COLUMN_MAP = {
 function buildStatsConditions(data: {
   runIds?: string[];
   orgId?: string;
-  brandId?: string;
+  brandId?: string[];
   campaignId?: string;
   workflowSlugs?: string[];
   featureSlugs?: string[];
@@ -462,8 +462,8 @@ function buildStatsConditions(data: {
   if (data.orgId) {
     conditions.push(eq(postmarkSendings.orgId, data.orgId));
   }
-  if (data.brandId) {
-    conditions.push(arrayContains(postmarkSendings.brandIds, [data.brandId]));
+  if (data.brandId && data.brandId.length > 0) {
+    conditions.push(arrayContains(postmarkSendings.brandIds, data.brandId));
   }
   if (data.campaignId) {
     conditions.push(eq(postmarkSendings.campaignId, data.campaignId));
@@ -575,7 +575,7 @@ async function handleStats(req: Request, res: Response) {
   const {
     groupBy,
     runIds: runIdsRaw,
-    brandId,
+    brandId: brandIdRaw,
     workflowSlugs: workflowSlugsRaw,
     featureSlugs: featureSlugsRaw,
     workflowDynastySlug,
@@ -583,6 +583,7 @@ async function handleStats(req: Request, res: Response) {
     ...filters
   } = parsed.data;
   const runIds = runIdsRaw ? runIdsRaw.split(",").filter(Boolean) : undefined;
+  const brandId = brandIdRaw ? brandIdRaw.split(",").filter(Boolean) : undefined;
   const workflowSlugsFromQuery = workflowSlugsRaw ? workflowSlugsRaw.split(",").filter(Boolean) : undefined;
   const featureSlugsFromQuery = featureSlugsRaw ? featureSlugsRaw.split(",").filter(Boolean) : undefined;
 

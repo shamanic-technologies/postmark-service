@@ -139,8 +139,11 @@
         "type": "object",
         "properties": {
           "brandId": {
-            "type": "string",
-            "description": "Brand ID"
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Brand ID(s)"
           },
           "campaignId": {
             "type": "string",
@@ -295,7 +298,10 @@
               "type": "object",
               "properties": {
                 "brandId": {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "campaignId": {
                   "type": "string"
@@ -749,9 +755,14 @@
         "type": "object",
         "properties": {
           "brandId": {
-            "type": "string",
-            "description": "Brand UUID — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
-            "example": "b1a2c3d4-5678-90ab-cdef-111111111111"
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Brand UUID(s) — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
+            "example": [
+              "b1a2c3d4-5678-90ab-cdef-111111111111"
+            ]
           },
           "campaignId": {
             "type": "string",
@@ -1573,10 +1584,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by brand ID"
+              "description": "Filter by brand ID (comma-separated for multiple)"
             },
             "required": false,
-            "description": "Filter by brand ID",
+            "description": "Filter by brand ID (comma-separated for multiple)",
             "name": "brandId",
             "in": "query"
           },
@@ -1717,10 +1728,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by brand ID"
+              "description": "Filter by brand ID (comma-separated for multiple)"
             },
             "required": false,
-            "description": "Filter by brand ID",
+            "description": "Filter by brand ID (comma-separated for multiple)",
             "name": "brandId",
             "in": "query"
           },

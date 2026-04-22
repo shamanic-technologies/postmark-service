@@ -141,7 +141,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
           subject: "Test",
           textBody: "Hello",
           campaignId: "camp-from-body",
-          brandId: "brand-from-body",
+          brandId: ["brand-from-body"],
           featureSlug: "feat-from-body",
           workflowSlug: "wf-from-body",
         });
