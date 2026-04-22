@@ -312,7 +312,7 @@ describe("GET /stats", () => {
     expect(campB.stats.emailsDelivered).toBe(0);
   });
 
-  it("should group by brandIds", async () => {
+  it("should group by brandId", async () => {
     const org = "org-group-brand";
     await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId: org, brandId: "brand-x", campaignId: "c1" });
     await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId: org, brandId: "brand-x", campaignId: "c1" });
@@ -321,7 +321,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ orgId: org, groupBy: "brandIds" });
+      .query({ orgId: org, groupBy: "brandId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
