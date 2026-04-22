@@ -70,7 +70,7 @@ describe("serviceAuth middleware", () => {
         "x-user-id": "user-1",
         "x-run-id": "run-1",
         "x-campaign-id": "camp-1",
-        "x-brand-id": "brand-a,brand-b",
+        "x-brand-id": "brand-a",
         "x-feature-slug": "feat-1",
         "x-workflow-slug": "wf-1",
       });
@@ -85,13 +85,13 @@ describe("serviceAuth middleware", () => {
         userId: "user-1",
         runId: "run-1",
         campaignId: "camp-1",
-        brandIds: ["brand-a", "brand-b"],
+        brandId: "brand-a",
         featureSlug: "feat-1",
         workflowSlug: "wf-1",
       });
     });
 
-    it("parses single brand ID into array", () => {
+    it("parses single brand ID as string", () => {
       const req = mockReq({
         "x-org-id": "org-1",
         "x-brand-id": "brand-a",
@@ -101,10 +101,10 @@ describe("serviceAuth middleware", () => {
 
       requireOrgId(req as Request, res, next);
 
-      expect((req as any).orgContext.brandIds).toEqual(["brand-a"]);
+      expect((req as any).orgContext.brandId).toBe("brand-a");
     });
 
-    it("sets brandIds to undefined when header is absent", () => {
+    it("sets brandId to undefined when header is absent", () => {
       const req = mockReq({
         "x-org-id": "org-1",
       });
@@ -113,20 +113,20 @@ describe("serviceAuth middleware", () => {
 
       requireOrgId(req as Request, res, next);
 
-      expect((req as any).orgContext.brandIds).toBeUndefined();
+      expect((req as any).orgContext.brandId).toBeUndefined();
     });
 
-    it("trims whitespace from comma-separated brand IDs", () => {
+    it("passes comma-separated brand IDs as-is (single string)", () => {
       const req = mockReq({
         "x-org-id": "org-1",
-        "x-brand-id": " brand-a , brand-b , brand-c ",
+        "x-brand-id": "brand-a,brand-b,brand-c",
       });
       const res = mockRes();
       const next = vi.fn();
 
       requireOrgId(req as Request, res, next);
 
-      expect((req as any).orgContext.brandIds).toEqual(["brand-a", "brand-b", "brand-c"]);
+      expect((req as any).orgContext.brandId).toBe("brand-a,brand-b,brand-c");
     });
   });
 });
