@@ -29,7 +29,7 @@ const EmailHeaderSchema = z.object({
 
 export const SendEmailRequestSchema = z
   .object({
-    brandId: z.array(z.string()).optional().openapi({ description: "Brand ID(s)" }),
+    brandId: z.string().optional().openapi({ description: "Brand ID(s), comma-separated for multiple" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     featureSlug: z.string().optional().openapi({ description: "Feature slug for tracking" }),
     workflowSlug: z.string().optional().openapi({ description: "Workflow slug for tracking/grouping" }),
@@ -75,7 +75,7 @@ export const BatchSendRequestSchema = z
     emails: z
       .array(
         z.object({
-          brandId: z.array(z.string()).optional(),
+          brandId: z.string().optional(),
           campaignId: z.string().optional(),
           featureSlug: z.string().optional(),
           workflowSlug: z.string().optional(),
@@ -216,7 +216,7 @@ const GlobalScopeSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandId: z.array(z.string()).optional().openapi({ description: "Brand UUID(s) — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.", example: ["b1a2c3d4-5678-90ab-cdef-111111111111"] }),
+    brandId: z.string().optional().openapi({ description: "Brand UUID(s), comma-separated — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.", example: "b1a2c3d4-5678-90ab-cdef-111111111111" }),
     campaignId: z.string().optional().openapi({ description: "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandId.", example: "c1a2b3d4-5678-90ab-cdef-222222222222" }),
     items: z.array(
       z.object({

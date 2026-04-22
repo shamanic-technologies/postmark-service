@@ -9,7 +9,7 @@ import {
 describe("Zod schemas", () => {
   describe("SendEmailRequestSchema", () => {
     const validRequest = {
-      brandId: ["brand_789"],
+      brandId: "brand_789",
       campaignId: "camp_345",
       from: "sender@example.com",
       to: "recipient@example.com",
@@ -102,7 +102,7 @@ describe("Zod schemas", () => {
 
   describe("BatchSendRequestSchema", () => {
     const validEmail = {
-      brandId: ["brand_789"],
+      brandId: "brand_789",
       campaignId: "camp_345",
       from: "sender@example.com",
       to: "recipient@example.com",
