@@ -139,11 +139,8 @@
         "type": "object",
         "properties": {
           "brandId": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Brand ID(s)"
+            "type": "string",
+            "description": "Brand ID(s), comma-separated for multiple"
           },
           "campaignId": {
             "type": "string",
@@ -298,10 +295,7 @@
               "type": "object",
               "properties": {
                 "brandId": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "type": "string"
                 },
                 "campaignId": {
                   "type": "string"
@@ -755,14 +749,9 @@
         "type": "object",
         "properties": {
           "brandId": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Brand UUID(s) — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
-            "example": [
-              "b1a2c3d4-5678-90ab-cdef-111111111111"
-            ]
+            "type": "string",
+            "description": "Brand UUID(s), comma-separated — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.",
+            "example": "b1a2c3d4-5678-90ab-cdef-111111111111"
           },
           "campaignId": {
             "type": "string",

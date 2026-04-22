@@ -275,12 +275,13 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
     });
   }
 
-  const { brandId, campaignId, items } = parsed.data;
+  const { brandId: brandIdRaw, campaignId, items } = parsed.data;
+  const brandIds = brandIdRaw ? brandIdRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
 
   // Mode resolution: campaignId takes precedence over brandId
   const mode: "brand" | "campaign" | "global" = campaignId
     ? "campaign"
-    : brandId && brandId.length > 0
+    : brandIds.length > 0
       ? "brand"
       : "global";
 
@@ -389,7 +390,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
 
       if (mode === "brand") {
         // Brand-filtered rows
-        const brandRows = emailRows.filter((s) => s.brandIds?.some((id) => brandId!.includes(id)));
+        const brandRows = emailRows.filter((s) => s.brandIds?.some((id) => brandIds.includes(id)));
 
         // Group by campaignId for byCampaign breakdown
         const campaignGroups = new Map<string, SendingRow[]>();
