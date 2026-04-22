@@ -104,14 +104,14 @@ describe("GET /stats", () => {
     expect(response.body.stats.emailsSent).toBe(1);
   });
 
-  it("should filter by brandIds", async () => {
+  it("should filter by brandId", async () => {
     await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: "brand-x", campaignId: "c1" });
     await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: "brand-y", campaignId: "c2" });
 
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: "brand-x" });
+      .query({ brandId: "brand-x" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -138,7 +138,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ orgId: "org-1", brandIds: "brand-a" });
+      .query({ orgId: "org-1", brandId: "brand-a" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(1);
@@ -152,7 +152,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: "b1" });
+      .query({ brandId: "b1" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsDelivered).toBe(1);
@@ -177,7 +177,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: brand });
+      .query({ brandId: brand });
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
@@ -194,7 +194,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: "b1" });
+      .query({ brandId: "b1" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.repliesPositive).toBe(0);
@@ -218,7 +218,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: "non-existent-brand" });
+      .query({ brandId: "non-existent-brand" });
 
     expect(response.status).toBe(200);
     const { stats } = response.body;
@@ -239,7 +239,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: brand });
+      .query({ brandId: brand });
 
     expect(response.status).toBe(200);
     // 3 messages but only 2 unique recipients
@@ -256,7 +256,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: "b1", workflowSlugs: "wf-alpha" });
+      .query({ brandId: "b1", workflowSlugs: "wf-alpha" });
 
     expect(response.status).toBe(200);
     expect(response.body.stats.emailsSent).toBe(2);
@@ -293,7 +293,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: brand, groupBy: "campaignId" });
+      .query({ brandId: brand, groupBy: "campaignId" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toBeDefined();
@@ -361,7 +361,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: brand, groupBy: "recipientEmail" });
+      .query({ brandId: brand, groupBy: "recipientEmail" });
 
     expect(response.status).toBe(200);
     expect(response.body.groups).toHaveLength(2);
@@ -383,7 +383,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: brand, groupBy: "campaignId" });
+      .query({ brandId: brand, groupBy: "campaignId" });
 
     expect(response.status).toBe(200);
     const c1 = response.body.groups.find((g: any) => g.key === "c1");
@@ -415,7 +415,7 @@ describe("GET /stats", () => {
     const response = await request(app)
       .get("/orgs/stats")
       .set(getAuthHeaders())
-      .query({ brandIds: "b1", groupBy: "invalidField" });
+      .query({ brandId: "b1", groupBy: "invalidField" });
 
     expect(response.status).toBe(400);
   });

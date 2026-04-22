@@ -29,7 +29,7 @@ const EmailHeaderSchema = z.object({
 
 export const SendEmailRequestSchema = z
   .object({
-    brandIds: z.array(z.string()).optional().openapi({ description: "Brand IDs" }),
+    brandId: z.array(z.string()).optional().openapi({ description: "Brand ID(s)" }),
     campaignId: z.string().optional().openapi({ description: "Campaign ID" }),
     featureSlug: z.string().optional().openapi({ description: "Feature slug for tracking" }),
     workflowSlug: z.string().optional().openapi({ description: "Workflow slug for tracking/grouping" }),
@@ -75,7 +75,7 @@ export const BatchSendRequestSchema = z
     emails: z
       .array(
         z.object({
-          brandIds: z.array(z.string()).optional(),
+          brandId: z.array(z.string()).optional(),
           campaignId: z.string().optional(),
           featureSlug: z.string().optional(),
           workflowSlug: z.string().optional(),
@@ -216,8 +216,8 @@ const GlobalScopeSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandIds: z.array(z.string()).optional().openapi({ description: "Brand UUIDs — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.", example: ["b1a2c3d4-5678-90ab-cdef-111111111111"] }),
-    campaignId: z.string().optional().openapi({ description: "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandIds.", example: "c1a2b3d4-5678-90ab-cdef-222222222222" }),
+    brandId: z.array(z.string()).optional().openapi({ description: "Brand UUID(s) — activates brand mode: returns byCampaign breakdown + aggregated brand scope. Ignored if campaignId is also provided.", example: ["b1a2c3d4-5678-90ab-cdef-111111111111"] }),
+    campaignId: z.string().optional().openapi({ description: "Campaign UUID — activates campaign mode: returns campaign-scoped status. Takes precedence over brandId.", example: "c1a2b3d4-5678-90ab-cdef-222222222222" }),
     items: z.array(
       z.object({
         email: z.string().email().openapi({ description: "Recipient email address to look up", example: "alice@example.com" }),
@@ -252,7 +252,7 @@ export const StatsQuerySchema = z
   .object({
     runIds: z.string().optional().openapi({ description: "Comma-separated run IDs" }),
     orgId: z.string().optional().openapi({ description: "Filter by organization ID" }),
-    brandIds: z.string().optional().openapi({ description: "Filter by brand IDs (comma-separated)" }),
+    brandId: z.string().optional().openapi({ description: "Filter by brand ID (comma-separated for multiple)" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
     workflowSlugs: z.string().optional().openapi({ description: "Filter by workflow slugs (comma-separated)" }),
     featureSlugs: z.string().optional().openapi({ description: "Filter by feature slugs (comma-separated)" }),
@@ -574,12 +574,12 @@ registry.registerPath({
   description: [
     "Check delivery status for a batch of email addresses. The response shape depends on the body filters:",
     "",
-    "| brandIds | campaignId | Mode     | Active fields                  |",
-    "|----------|------------|----------|--------------------------------|",
-    "| absent   | absent     | Global   | global                         |",
-    "| present  | absent     | Brand    | byCampaign + brand + global    |",
-    "| absent   | present    | Campaign | campaign + global              |",
-    "| present  | present    | Campaign | campaign + global (brandIds ignored) |",
+    "| brandId | campaignId | Mode     | Active fields                  |",
+    "|---------|------------|----------|--------------------------------|",
+    "| absent  | absent     | Global   | global                         |",
+    "| present | absent     | Brand    | byCampaign + brand + global    |",
+    "| absent  | present    | Campaign | campaign + global              |",
+    "| present | present    | Campaign | campaign + global (brandId ignored) |",
     "",
     "Non-applicable fields are null. Headers (x-brand-id, x-campaign-id, etc.) are for tracing/logging only — they do NOT drive filtering logic. Filters are in the request body.",
     "",
@@ -613,7 +613,7 @@ registry.registerPath({
   path: "/orgs/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandIds, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {

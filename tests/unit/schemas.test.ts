@@ -9,7 +9,7 @@ import {
 describe("Zod schemas", () => {
   describe("SendEmailRequestSchema", () => {
     const validRequest = {
-      brandIds: ["brand_789"],
+      brandId: ["brand_789"],
       campaignId: "camp_345",
       from: "sender@example.com",
       to: "recipient@example.com",
@@ -73,8 +73,8 @@ describe("Zod schemas", () => {
       }
     });
 
-    it("should accept request without brandIds, campaignId", () => {
-      const { brandIds, campaignId, ...minimal } = validRequest;
+    it("should accept request without brandId, campaignId", () => {
+      const { brandId, campaignId, ...minimal } = validRequest;
       const result = SendEmailRequestSchema.safeParse(minimal);
       expect(result.success).toBe(true);
     });
@@ -102,7 +102,7 @@ describe("Zod schemas", () => {
 
   describe("BatchSendRequestSchema", () => {
     const validEmail = {
-      brandIds: ["brand_789"],
+      brandId: ["brand_789"],
       campaignId: "camp_345",
       from: "sender@example.com",
       to: "recipient@example.com",
@@ -178,7 +178,7 @@ describe("Zod schemas", () => {
     it("should accept multiple filters", () => {
       const result = StatsQuerySchema.safeParse({
         runIds: "run_1",
-        brandIds: "brand_123",
+        brandId: "brand_123",
         campaignId: "camp_456",
       });
       expect(result.success).toBe(true);
@@ -246,7 +246,7 @@ describe("Zod schemas", () => {
 
     it("should accept featureSlugs alongside other filters", () => {
       const result = StatsQuerySchema.safeParse({
-        brandIds: "brand_123",
+        brandId: "brand_123",
         featureSlugs: "sales-cold-email-outreach",
         groupBy: "workflowSlug",
       });
@@ -293,7 +293,7 @@ describe("Zod schemas", () => {
   });
 
   describe("StatusRequestSchema", () => {
-    it("should accept valid request with campaignId and items (brandIds now from header)", () => {
+    it("should accept valid request with campaignId and items (brandId now from header)", () => {
       const result = StatusRequestSchema.safeParse({
         campaignId: "camp_456",
         items: [{ leadId: "lead_1", email: "a@test.com" }],
