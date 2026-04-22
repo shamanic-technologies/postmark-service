@@ -16,6 +16,17 @@ Email sending and tracking service using Postmark. Handles delivery via broadcas
 - `npm run db:migrate` — run migrations
 - `npm run db:push` — push schema to database
 
+## brandId convention
+
+`brandId` is **always a string** — single UUID or comma-separated CSV (`"uuid1,uuid2,uuid3"`). This applies everywhere: request body, query params, and headers. **Never use `z.array(z.string())`** for brandId in Zod schemas.
+
+The receiving handler is responsible for splitting the CSV internally:
+```ts
+const brandIds = brandIdRaw.split(",").map(s => s.trim()).filter(Boolean);
+```
+
+The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens at the handler boundary, not in the schema.
+
 ## Architecture
 
 - `src/schemas.ts` — Zod schemas (source of truth for validation + OpenAPI)
