@@ -1070,6 +1070,54 @@
           "workflows"
         ]
       },
+      "TransferBrandResponse": {
+        "type": "object",
+        "properties": {
+          "updatedTables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tableName": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "tableName",
+                "count"
+              ]
+            }
+          }
+        },
+        "required": [
+          "updatedTables"
+        ]
+      },
+      "TransferBrandRequest": {
+        "type": "object",
+        "properties": {
+          "brandId": {
+            "type": "string",
+            "description": "Brand UUID to transfer"
+          },
+          "sourceOrgId": {
+            "type": "string",
+            "description": "Current org UUID that owns the brand"
+          },
+          "targetOrgId": {
+            "type": "string",
+            "description": "Target org UUID to transfer the brand to"
+          }
+        },
+        "required": [
+          "brandId",
+          "sourceOrgId",
+          "targetOrgId"
+        ]
+      },
       "WebhookUrlResponse": {
         "type": "object",
         "properties": {
@@ -1850,6 +1898,51 @@
           },
           "500": {
             "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/transfer-brand": {
+      "post": {
+        "summary": "Transfer brand between orgs",
+        "description": "Re-assigns solo-brand postmark_sendings rows from sourceOrgId to targetOrgId. Skips co-branding rows (multiple brand IDs). Idempotent.",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferBrandRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transfer results per table",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferBrandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
             "content": {
               "application/json": {
                 "schema": {
