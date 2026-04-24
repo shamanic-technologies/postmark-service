@@ -363,6 +363,27 @@ const WebhookUrlResponseSchema = z
   })
   .openapi("WebhookUrlResponse");
 
+// ===== Transfer Brand =====
+
+export const TransferBrandRequestSchema = z
+  .object({
+    brandId: z.string().openapi({ description: "Brand UUID to transfer" }),
+    sourceOrgId: z.string().openapi({ description: "Current org UUID that owns the brand" }),
+    targetOrgId: z.string().openapi({ description: "Target org UUID to transfer the brand to" }),
+  })
+  .openapi("TransferBrandRequest");
+
+const TransferBrandResponseSchema = z
+  .object({
+    updatedTables: z.array(
+      z.object({
+        tableName: z.string(),
+        count: z.number(),
+      })
+    ),
+  })
+  .openapi("TransferBrandResponse");
+
 // ===== Error schema =====
 
 const ErrorResponseSchema = z
@@ -679,6 +700,33 @@ registry.registerPath({
     },
     500: {
       description: "Server error",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// --- Transfer Brand ---
+
+registry.registerPath({
+  method: "post",
+  path: "/internal/transfer-brand",
+  summary: "Transfer brand between orgs",
+  description:
+    "Re-assigns solo-brand postmark_sendings rows from sourceOrgId to targetOrgId. Skips co-branding rows (multiple brand IDs). Idempotent.",
+  tags: ["Email Status"],
+  security: [{ apiKey: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: TransferBrandRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Transfer results per table",
+      content: { "application/json": { schema: TransferBrandResponseSchema } },
+    },
+    400: {
+      description: "Invalid request",
       content: { "application/json": { schema: ErrorResponseSchema } },
     },
   },

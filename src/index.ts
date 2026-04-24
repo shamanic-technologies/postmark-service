@@ -14,6 +14,7 @@ import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
 import webhooksRoutes from "./routes/webhooks";
 import performanceRoutes from "./routes/performance";
+import transferRoutes from "./routes/transfer";
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -72,6 +73,7 @@ app.use("/public", apiKeyAuth, performanceRoutes);
 
 // ── Internal (API key only) ───────────────────────────────────────────────────
 app.use("/internal", apiKeyAuth, statusRoutes.internal);
+app.use("/internal", apiKeyAuth, transferRoutes);
 
 // ── Org-scoped (API key + x-org-id required) ─────────────────────────────────
 app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
