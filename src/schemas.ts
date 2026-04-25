@@ -367,9 +367,10 @@ const WebhookUrlResponseSchema = z
 
 export const TransferBrandRequestSchema = z
   .object({
-    brandId: z.string().openapi({ description: "Brand UUID to transfer" }),
+    sourceBrandId: z.string().openapi({ description: "Brand UUID to transfer from the source org" }),
     sourceOrgId: z.string().openapi({ description: "Current org UUID that owns the brand" }),
     targetOrgId: z.string().openapi({ description: "Target org UUID to transfer the brand to" }),
+    targetBrandId: z.string().optional().openapi({ description: "Brand UUID in the target org to rewrite to (when target org already has a brand for the same domain)" }),
   })
   .openapi("TransferBrandRequest");
 
