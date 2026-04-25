@@ -1099,9 +1099,9 @@
       "TransferBrandRequest": {
         "type": "object",
         "properties": {
-          "brandId": {
+          "sourceBrandId": {
             "type": "string",
-            "description": "Brand UUID to transfer"
+            "description": "Brand UUID to transfer from the source org"
           },
           "sourceOrgId": {
             "type": "string",
@@ -1110,10 +1110,14 @@
           "targetOrgId": {
             "type": "string",
             "description": "Target org UUID to transfer the brand to"
+          },
+          "targetBrandId": {
+            "type": "string",
+            "description": "Brand UUID in the target org to rewrite to (when target org already has a brand for the same domain)"
           }
         },
         "required": [
-          "brandId",
+          "sourceBrandId",
           "sourceOrgId",
           "targetOrgId"
         ]

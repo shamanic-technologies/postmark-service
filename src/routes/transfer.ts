@@ -18,20 +18,29 @@ router.post("/transfer-brand", async (req: Request, res: Response) => {
     return;
   }
 
-  const { brandId, sourceOrgId, targetOrgId } = parsed.data;
+  const { sourceBrandId, sourceOrgId, targetOrgId, targetBrandId } = parsed.data;
 
   console.log(
-    `[postmark-service] Transfer brand ${brandId} from org ${sourceOrgId} to org ${targetOrgId}`
+    `[postmark-service] Transfer brand ${sourceBrandId} from org ${sourceOrgId} to org ${targetOrgId}${targetBrandId ? ` (rewrite to ${targetBrandId})` : ""}`
   );
 
-  // Update postmark_sendings where org_id = sourceOrgId AND brand_ids has exactly one element AND that element is brandId
-  const result = await db.execute(sql`
-    UPDATE postmark_sendings
-    SET org_id = ${targetOrgId}
-    WHERE org_id = ${sourceOrgId}
-      AND array_length(brand_ids, 1) = 1
-      AND brand_ids[1] = ${brandId}
-  `);
+  // Update postmark_sendings where org_id = sourceOrgId AND brand_ids has exactly one element AND that element is sourceBrandId
+  // When targetBrandId is present, also rewrite the brand reference
+  const result = targetBrandId
+    ? await db.execute(sql`
+        UPDATE postmark_sendings
+        SET org_id = ${targetOrgId}, brand_ids = ARRAY[${targetBrandId}]
+        WHERE org_id = ${sourceOrgId}
+          AND array_length(brand_ids, 1) = 1
+          AND brand_ids[1] = ${sourceBrandId}
+      `)
+    : await db.execute(sql`
+        UPDATE postmark_sendings
+        SET org_id = ${targetOrgId}
+        WHERE org_id = ${sourceOrgId}
+          AND array_length(brand_ids, 1) = 1
+          AND brand_ids[1] = ${sourceBrandId}
+      `);
 
   const updatedCount = Number(result.rowCount ?? 0);
 
