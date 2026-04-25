@@ -24,25 +24,28 @@ router.post("/transfer-brand", async (req: Request, res: Response) => {
     `[postmark-service] Transfer brand ${sourceBrandId} from org ${sourceOrgId} to org ${targetOrgId}${targetBrandId ? ` (rewrite to ${targetBrandId})` : ""}`
   );
 
-  // Update postmark_sendings where org_id = sourceOrgId AND brand_ids has exactly one element AND that element is sourceBrandId
-  // When targetBrandId is present, also rewrite the brand reference
-  const result = targetBrandId
-    ? await db.execute(sql`
-        UPDATE postmark_sendings
-        SET org_id = ${targetOrgId}, brand_ids = ARRAY[${targetBrandId}]
-        WHERE org_id = ${sourceOrgId}
-          AND array_length(brand_ids, 1) = 1
-          AND brand_ids[1] = ${sourceBrandId}
-      `)
-    : await db.execute(sql`
-        UPDATE postmark_sendings
-        SET org_id = ${targetOrgId}
-        WHERE org_id = ${sourceOrgId}
-          AND array_length(brand_ids, 1) = 1
-          AND brand_ids[1] = ${sourceBrandId}
-      `);
+  // Step 1: Move solo-brand rows from sourceOrg to targetOrg
+  const step1 = await db.execute(sql`
+    UPDATE postmark_sendings
+    SET org_id = ${targetOrgId}
+    WHERE org_id = ${sourceOrgId}
+      AND array_length(brand_ids, 1) = 1
+      AND brand_ids[1] = ${sourceBrandId}
+  `);
+  const movedCount = Number(step1.rowCount ?? 0);
 
-  const updatedCount = Number(result.rowCount ?? 0);
+  // Step 2: If targetBrandId provided, rewrite all references to sourceBrandId (no org filter)
+  let rewrittenCount = 0;
+  if (targetBrandId) {
+    const step2 = await db.execute(sql`
+      UPDATE postmark_sendings
+      SET brand_ids = array_replace(brand_ids, ${sourceBrandId}, ${targetBrandId})
+      WHERE ${sourceBrandId} = ANY(brand_ids)
+    `);
+    rewrittenCount = Number(step2.rowCount ?? 0);
+  }
+
+  const updatedCount = movedCount + rewrittenCount;
 
   console.log(
     `[postmark-service] Transfer complete: ${updatedCount} rows updated in postmark_sendings`

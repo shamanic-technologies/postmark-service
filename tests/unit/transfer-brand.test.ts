@@ -102,7 +102,7 @@ describe("POST /internal/transfer-brand", () => {
     expect(res.body.error).toBe("Invalid request");
   });
 
-  it("should execute update and return row count (no targetBrandId)", async () => {
+  it("should execute step 1 only when no targetBrandId", async () => {
     mockExecute.mockResolvedValueOnce({ rowCount: 5 });
 
     const res = await request(app)
@@ -114,11 +114,14 @@ describe("POST /internal/transfer-brand", () => {
     expect(res.body).toEqual({
       updatedTables: [{ tableName: "postmark_sendings", count: 5 }],
     });
-    expect(mockExecute).toHaveBeenCalledOnce();
+    expect(mockExecute).toHaveBeenCalledTimes(1);
   });
 
-  it("should execute update with brand rewrite when targetBrandId present", async () => {
+  it("should execute two separate steps when targetBrandId present", async () => {
+    // Step 1: move rows (org reassignment)
     mockExecute.mockResolvedValueOnce({ rowCount: 3 });
+    // Step 2: rewrite brand references (no org filter)
+    mockExecute.mockResolvedValueOnce({ rowCount: 5 });
 
     const res = await request(app)
       .post("/internal/transfer-brand")
@@ -132,9 +135,9 @@ describe("POST /internal/transfer-brand", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      updatedTables: [{ tableName: "postmark_sendings", count: 3 }],
+      updatedTables: [{ tableName: "postmark_sendings", count: 8 }],
     });
-    expect(mockExecute).toHaveBeenCalledOnce();
+    expect(mockExecute).toHaveBeenCalledTimes(2);
   });
 
   it("should return count 0 when no rows match (idempotent)", async () => {
