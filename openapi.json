@@ -138,10 +138,6 @@
       "SendEmailRequest": {
         "type": "object",
         "properties": {
-          "brandId": {
-            "type": "string",
-            "description": "Brand ID(s), comma-separated for multiple"
-          },
           "campaignId": {
             "type": "string",
             "description": "Campaign ID"
@@ -294,9 +290,6 @@
             "items": {
               "type": "object",
               "properties": {
-                "brandId": {
-                  "type": "string"
-                },
                 "campaignId": {
                   "type": "string"
                 },
