@@ -106,9 +106,11 @@ describe("runs-service BLOCKING behavior", () => {
 
     await request(app)
       .post("/orgs/send")
-      .set(getAuthHeaders({ orgId: "org_abc", userId: "user_xyz", runId: "run_xyz" }))
+      .set({
+        ...getAuthHeaders({ orgId: "org_abc", userId: "user_xyz", runId: "run_xyz" }),
+        "x-brand-id": "brand_1",
+      })
       .send({
-        brandId: "brand_1",
         campaignId: "campaign_1",
         from: "sender@test.com",
         to: "recipient@test.com",
