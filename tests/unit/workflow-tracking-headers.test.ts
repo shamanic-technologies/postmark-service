@@ -126,7 +126,7 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
       expect(valuesCall.workflowSlug).toBe("wf-from-header");
     });
 
-    it("should prefer body values over header values", async () => {
+    it("should prefer body values over header values (except brandId — header only)", async () => {
       await request(app)
         .post("/orgs/send")
         .set({
@@ -141,27 +141,26 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
           subject: "Test",
           textBody: "Hello",
           campaignId: "camp-from-body",
-          brandId: "brand-from-body",
           featureSlug: "feat-from-body",
           workflowSlug: "wf-from-body",
         });
 
-      // createRun should receive body values (not header values)
+      // createRun should receive body values for campaignId/featureSlug/workflowSlug, header for brandId
       expect(createRun).toHaveBeenCalledWith(
         expect.objectContaining({
           campaignId: "camp-from-body",
-          brandId: "brand-from-body",
+          brandId: "brand-from-header",
           featureSlug: "feat-from-body",
           workflowSlug: "wf-from-body",
         }),
         expect.any(Object)
       );
 
-      // DB insert should have body values
+      // DB insert should have body values for campaignId/featureSlug/workflowSlug, header for brandIds
       const insertCall = vi.mocked(db.insert).mock.results[0].value;
       const valuesCall = insertCall.values.mock.calls[0][0];
       expect(valuesCall.campaignId).toBe("camp-from-body");
-      expect(valuesCall.brandIds).toEqual(["brand-from-body"]);
+      expect(valuesCall.brandIds).toEqual(["brand-from-header"]);
       expect(valuesCall.featureSlug).toBe("feat-from-body");
       expect(valuesCall.workflowSlug).toBe("wf-from-body");
     });
