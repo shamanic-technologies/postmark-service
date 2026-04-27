@@ -33,7 +33,7 @@ describe("GET /stats — featureSlug filters", () => {
       .query({ featureSlugs: "feat-alpha" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   it("should group by featureSlug", async () => {
@@ -52,7 +52,7 @@ describe("GET /stats — featureSlug filters", () => {
 
     const feat1 = response.body.groups.find((g: any) => g.key === "feat-1");
     const feat2 = response.body.groups.find((g: any) => g.key === "feat-2");
-    expect(feat1.stats.emailsSent).toBe(2);
-    expect(feat2.stats.emailsSent).toBe(1);
+    expect(feat1.recipientStats.sent).toBe(2);
+    expect(feat2.recipientStats.sent).toBe(1);
   });
 });

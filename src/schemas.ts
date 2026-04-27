@@ -272,13 +272,14 @@ const RepliesDetailSchema = z.object({
   outOfOffice: z.number(),
 });
 
-const StatsObjectSchema = z.object({
-  emailsContacted: z.number(),
-  emailsSent: z.number(),
-  emailsDelivered: z.number(),
-  emailsOpened: z.number(),
-  emailsClicked: z.number(),
-  emailsBounced: z.number(),
+const StepStatsSchema = z.object({
+  step: z.number(),
+  sent: z.number(),
+  delivered: z.number(),
+  opened: z.number(),
+  bounced: z.number(),
+  clicked: z.number(),
+  unsubscribed: z.number(),
   repliesPositive: z.number(),
   repliesNegative: z.number(),
   repliesNeutral: z.number(),
@@ -286,10 +287,35 @@ const StatsObjectSchema = z.object({
   repliesDetail: RepliesDetailSchema,
 });
 
+const RecipientStatsSchema = z.object({
+  contacted: z.number().openapi({ description: "Unique recipients with any sending in scope" }),
+  sent: z.number().openapi({ description: "Unique recipients with at least one accepted email" }),
+  delivered: z.number().openapi({ description: "Unique recipients with at least one delivered email" }),
+  opened: z.number().openapi({ description: "Unique recipients who opened at least one email" }),
+  bounced: z.number().openapi({ description: "Unique recipients with at least one bounced email" }),
+  clicked: z.number().openapi({ description: "Unique recipients who clicked at least one link" }),
+  unsubscribed: z.number().openapi({ description: "Unique recipients who unsubscribed" }),
+  repliesPositive: z.number(),
+  repliesNegative: z.number(),
+  repliesNeutral: z.number(),
+  repliesAutoReply: z.number(),
+  repliesDetail: RepliesDetailSchema,
+});
+
+const EmailStatsSchema = z.object({
+  sent: z.number().openapi({ description: "Total distinct emails sent (by messageId)" }),
+  delivered: z.number().openapi({ description: "Total distinct emails delivered" }),
+  opened: z.number().openapi({ description: "Total distinct emails opened at least once" }),
+  clicked: z.number().openapi({ description: "Total distinct emails clicked at least once" }),
+  bounced: z.number().openapi({ description: "Total distinct emails bounced" }),
+  unsubscribed: z.number().openapi({ description: "Total distinct emails that triggered unsubscribe" }),
+  stepStats: z.array(StepStatsSchema).openapi({ description: "Per-step breakdown (always empty for Postmark — no step concept)" }),
+});
+
 export const StatsResponseSchema = z
   .object({
-    stats: StatsObjectSchema,
-    recipients: z.number(),
+    recipientStats: RecipientStatsSchema,
+    emailStats: EmailStatsSchema,
   })
   .openapi("StatsResponse");
 
@@ -300,8 +326,8 @@ export const GroupedStatsResponseSchema = z
     groups: z.array(
       z.object({
         key: z.string(),
-        stats: StatsObjectSchema,
-        recipients: z.number(),
+        recipientStats: RecipientStatsSchema,
+        emailStats: EmailStatsSchema,
       })
     ),
   })

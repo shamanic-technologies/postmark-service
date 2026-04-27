@@ -472,14 +472,13 @@ function buildStatsConditions(data: {
 }
 
 /**
- * Compute stats by unique recipient with full implication chain.
+ * Compute recipientStats by unique recipient with full implication chain.
  * Each recipient is counted once per metric — if ANY of their messages has the status, they count.
  */
 function computeRecipientStats(
   sendings: { messageId: string | null; toEmail: string; errorCode?: number | null }[],
   eventMaps: Awaited<ReturnType<typeof fetchEventMaps>>,
 ) {
-  // Group messages by recipient
   const byRecipient = new Map<string, typeof sendings>();
   for (const s of sendings) {
     let group = byRecipient.get(s.toEmail);
@@ -490,12 +489,13 @@ function computeRecipientStats(
     group.push(s);
   }
 
-  let emailsContacted = 0;
-  let emailsSent = 0;
-  let emailsDelivered = 0;
-  let emailsOpened = 0;
-  let emailsClicked = 0;
-  let emailsBounced = 0;
+  let contacted = 0;
+  let sent = 0;
+  let delivered = 0;
+  let opened = 0;
+  let clicked = 0;
+  let bounced = 0;
+  let unsubscribed = 0;
 
   for (const [, msgs] of byRecipient) {
     let rContacted = false;
@@ -504,6 +504,7 @@ function computeRecipientStats(
     let rOpened = false;
     let rClicked = false;
     let rBounced = false;
+    let rUnsub = false;
 
     for (const s of msgs) {
       const status = computeMessageStatus(
@@ -516,42 +517,90 @@ function computeRecipientStats(
       if (status.opened) rOpened = true;
       if (status.clicked) rClicked = true;
       if (status.bounced) rBounced = true;
+      if (status.unsubscribed) rUnsub = true;
     }
 
-    if (rContacted) emailsContacted++;
-    if (rSent) emailsSent++;
-    if (rDelivered) emailsDelivered++;
-    if (rOpened) emailsOpened++;
-    if (rClicked) emailsClicked++;
-    if (rBounced) emailsBounced++;
+    if (rContacted) contacted++;
+    if (rSent) sent++;
+    if (rDelivered) delivered++;
+    if (rOpened) opened++;
+    if (rClicked) clicked++;
+    if (rBounced) bounced++;
+    if (rUnsub) unsubscribed++;
   }
 
-  return { emailsContacted, emailsSent, emailsDelivered, emailsOpened, emailsClicked, emailsBounced };
+  return { contacted, sent, delivered, opened, clicked, bounced, unsubscribed };
 }
 
-function buildStatsObject(recipientStats: ReturnType<typeof computeRecipientStats>) {
+/**
+ * Compute emailStats by unique message (messageId).
+ * Each message is counted once per metric.
+ */
+function computeEmailStats(
+  sendings: { messageId: string | null; toEmail: string; errorCode?: number | null }[],
+  eventMaps: Awaited<ReturnType<typeof fetchEventMaps>>,
+) {
+  let sent = 0;
+  let delivered = 0;
+  let opened = 0;
+  let clicked = 0;
+  let bounced = 0;
+  let unsubscribed = 0;
+
+  for (const s of sendings) {
+    const status = computeMessageStatus(
+      { errorCode: s.errorCode ?? null, messageId: s.messageId },
+      eventMaps,
+    );
+    if (status.sent) sent++;
+    if (status.delivered) delivered++;
+    if (status.opened) opened++;
+    if (status.clicked) clicked++;
+    if (status.bounced) bounced++;
+    if (status.unsubscribed) unsubscribed++;
+  }
+
+  return { sent, delivered, opened, clicked, bounced, unsubscribed };
+}
+
+const EMPTY_REPLIES_DETAIL = {
+  interested: 0,
+  meetingBooked: 0,
+  closed: 0,
+  notInterested: 0,
+  wrongPerson: 0,
+  unsubscribe: 0,
+  neutral: 0,
+  autoReply: 0,
+  outOfOffice: 0,
+};
+
+function buildRecipientStatsObject(rs: ReturnType<typeof computeRecipientStats>) {
   return {
-    emailsContacted: recipientStats.emailsContacted,
-    emailsSent: recipientStats.emailsSent,
-    emailsDelivered: recipientStats.emailsDelivered,
-    emailsOpened: recipientStats.emailsOpened,
-    emailsClicked: recipientStats.emailsClicked,
-    emailsBounced: recipientStats.emailsBounced,
+    contacted: rs.contacted,
+    sent: rs.sent,
+    delivered: rs.delivered,
+    opened: rs.opened,
+    bounced: rs.bounced,
+    clicked: rs.clicked,
+    unsubscribed: rs.unsubscribed,
     repliesPositive: 0,
     repliesNegative: 0,
     repliesNeutral: 0,
     repliesAutoReply: 0,
-    repliesDetail: {
-      interested: 0,
-      meetingBooked: 0,
-      closed: 0,
-      notInterested: 0,
-      wrongPerson: 0,
-      unsubscribe: 0,
-      neutral: 0,
-      autoReply: 0,
-      outOfOffice: 0,
-    },
+    repliesDetail: EMPTY_REPLIES_DETAIL,
+  };
+}
+
+function buildEmailStatsObject(es: ReturnType<typeof computeEmailStats>) {
+  return {
+    sent: es.sent,
+    delivered: es.delivered,
+    opened: es.opened,
+    clicked: es.clicked,
+    bounced: es.bounced,
+    unsubscribed: es.unsubscribed,
+    stepStats: [] as never[],
   };
 }
 
@@ -604,11 +653,12 @@ async function handleStats(req: Request, res: Response) {
         .filter((id): id is string => id !== null);
 
       const eventMaps = await fetchEventMaps(messageIds);
-      const recipientStats = computeRecipientStats(sendings, eventMaps);
+      const rs = computeRecipientStats(sendings, eventMaps);
+      const es = computeEmailStats(sendings, eventMaps);
 
       return res.json({
-        stats: buildStatsObject(recipientStats),
-        recipients: recipientStats.emailsSent,
+        recipientStats: buildRecipientStatsObject(rs),
+        emailStats: buildEmailStatsObject(es),
       });
     }
 
@@ -665,11 +715,12 @@ async function handleStats(req: Request, res: Response) {
     const eventMaps = await fetchEventMaps(allMessageIds);
 
     const groups = Array.from(grouped.entries()).map(([key, groupSendings]) => {
-      const recipientStats = computeRecipientStats(groupSendings, eventMaps);
+      const rs = computeRecipientStats(groupSendings, eventMaps);
+      const es = computeEmailStats(groupSendings, eventMaps);
       return {
         key,
-        stats: buildStatsObject(recipientStats),
-        recipients: recipientStats.emailsSent,
+        recipientStats: buildRecipientStatsObject(rs),
+        emailStats: buildEmailStatsObject(es),
       };
     });
 

@@ -72,7 +72,7 @@ describe("GET /stats", () => {
       .query({ runIds: runId });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
   it("should filter by multiple runIds (comma-separated)", async () => {
@@ -88,7 +88,7 @@ describe("GET /stats", () => {
       .query({ runIds: `${runId1},${runId2}` });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   it("should filter by orgId", async () => {
@@ -101,7 +101,7 @@ describe("GET /stats", () => {
       .query({ orgId: "org-abc" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
   it("should filter by brandId", async () => {
@@ -114,7 +114,7 @@ describe("GET /stats", () => {
       .query({ brandId: "brand-x" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
   it("should filter by campaignId", async () => {
@@ -127,7 +127,7 @@ describe("GET /stats", () => {
       .query({ campaignId: "camp-1" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
   it("should AND multiple filters together", async () => {
@@ -141,10 +141,10 @@ describe("GET /stats", () => {
       .query({ orgId: "org-1", brandId: "brand-a" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
-  it("should include emailsDelivered in response", async () => {
+  it("should include delivered in response", async () => {
     const msgId = randomUUID();
     await insertTestSending({ messageId: msgId, brandId: "b1", campaignId: "c1" });
     await insertTestDelivery(msgId);
@@ -155,7 +155,8 @@ describe("GET /stats", () => {
       .query({ brandId: "b1" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsDelivered).toBe(1);
+    expect(response.body.recipientStats.delivered).toBe(1);
+    expect(response.body.emailStats.delivered).toBe(1);
   });
 
   it("should count opens, bounces, and deliveries correctly by unique recipient", async () => {
@@ -180,12 +181,17 @@ describe("GET /stats", () => {
       .query({ brandId: brand });
 
     expect(response.status).toBe(200);
-    const { stats } = response.body;
-    expect(stats.emailsContacted).toBe(3);
-    expect(stats.emailsSent).toBe(3);
-    expect(stats.emailsDelivered).toBe(2);
-    expect(stats.emailsOpened).toBe(1);
-    expect(stats.emailsBounced).toBe(1);
+    const { recipientStats, emailStats } = response.body;
+    expect(recipientStats.contacted).toBe(3);
+    expect(recipientStats.sent).toBe(3);
+    expect(recipientStats.delivered).toBe(2);
+    expect(recipientStats.opened).toBe(1);
+    expect(recipientStats.bounced).toBe(1);
+    // emailStats counts per message, not per recipient
+    expect(emailStats.sent).toBe(3);
+    expect(emailStats.delivered).toBe(2);
+    expect(emailStats.opened).toBe(1);
+    expect(emailStats.bounced).toBe(1);
   });
 
   it("should return hardcoded 0 for reply metrics", async () => {
@@ -197,11 +203,11 @@ describe("GET /stats", () => {
       .query({ brandId: "b1" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.repliesPositive).toBe(0);
-    expect(response.body.stats.repliesNegative).toBe(0);
-    expect(response.body.stats.repliesNeutral).toBe(0);
-    expect(response.body.stats.repliesAutoReply).toBe(0);
-    expect(response.body.stats.repliesDetail).toEqual({
+    expect(response.body.recipientStats.repliesPositive).toBe(0);
+    expect(response.body.recipientStats.repliesNegative).toBe(0);
+    expect(response.body.recipientStats.repliesNeutral).toBe(0);
+    expect(response.body.recipientStats.repliesAutoReply).toBe(0);
+    expect(response.body.recipientStats.repliesDetail).toEqual({
       interested: 0,
       meetingBooked: 0,
       closed: 0,
@@ -221,16 +227,18 @@ describe("GET /stats", () => {
       .query({ brandId: "non-existent-brand" });
 
     expect(response.status).toBe(200);
-    const { stats } = response.body;
-    expect(stats.emailsContacted).toBe(0);
-    expect(stats.emailsSent).toBe(0);
-    expect(stats.emailsDelivered).toBe(0);
-    expect(stats.emailsOpened).toBe(0);
-    expect(stats.emailsClicked).toBe(0);
-    expect(stats.emailsBounced).toBe(0);
+    const { recipientStats, emailStats } = response.body;
+    expect(recipientStats.contacted).toBe(0);
+    expect(recipientStats.sent).toBe(0);
+    expect(recipientStats.delivered).toBe(0);
+    expect(recipientStats.opened).toBe(0);
+    expect(recipientStats.clicked).toBe(0);
+    expect(recipientStats.bounced).toBe(0);
+    expect(emailStats.sent).toBe(0);
+    expect(emailStats.stepStats).toEqual([]);
   });
 
-  it("should count by unique recipient (not by message count)", async () => {
+  it("should count by unique recipient in recipientStats (not by message count)", async () => {
     const brand = "brand-recipients";
     await insertTestSending({ messageId: randomUUID(), toEmail: "alice@test.com", brandId: brand, campaignId: "c1" });
     await insertTestSending({ messageId: randomUUID(), toEmail: "bob@test.com", brandId: brand, campaignId: "c1" });
@@ -242,10 +250,11 @@ describe("GET /stats", () => {
       .query({ brandId: brand });
 
     expect(response.status).toBe(200);
-    // 3 messages but only 2 unique recipients
-    expect(response.body.stats.emailsContacted).toBe(2);
-    expect(response.body.stats.emailsSent).toBe(2);
-    expect(response.body.recipients).toBe(2);
+    // recipientStats: 3 messages but only 2 unique recipients
+    expect(response.body.recipientStats.contacted).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
+    // emailStats: counts per message
+    expect(response.body.emailStats.sent).toBe(3);
   });
 
   it("should filter by workflowSlugs", async () => {
@@ -259,7 +268,7 @@ describe("GET /stats", () => {
       .query({ brandId: "b1", workflowSlugs: "wf-alpha" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   it("should accept workflowSlugs as the sole filter", async () => {
@@ -271,7 +280,7 @@ describe("GET /stats", () => {
       .query({ workflowSlugs: "wf-solo" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
   // ─── groupBy tests ────────────────────────────────────────────────────────
@@ -303,13 +312,13 @@ describe("GET /stats", () => {
     const campB = response.body.groups.find((g: any) => g.key === "camp-b");
 
     expect(campA).toBeDefined();
-    expect(campA.stats.emailsSent).toBe(2);
-    expect(campA.stats.emailsDelivered).toBe(2);
-    expect(campA.stats.emailsOpened).toBe(1);
+    expect(campA.recipientStats.sent).toBe(2);
+    expect(campA.recipientStats.delivered).toBe(2);
+    expect(campA.recipientStats.opened).toBe(1);
 
     expect(campB).toBeDefined();
-    expect(campB.stats.emailsSent).toBe(1);
-    expect(campB.stats.emailsDelivered).toBe(0);
+    expect(campB.recipientStats.sent).toBe(1);
+    expect(campB.recipientStats.delivered).toBe(0);
   });
 
   it("should group by brandId", async () => {
@@ -328,8 +337,8 @@ describe("GET /stats", () => {
 
     const brandX = response.body.groups.find((g: any) => g.key === "brand-x");
     const brandY = response.body.groups.find((g: any) => g.key === "brand-y");
-    expect(brandX.stats.emailsSent).toBe(2);
-    expect(brandY.stats.emailsSent).toBe(1);
+    expect(brandX.recipientStats.sent).toBe(2);
+    expect(brandY.recipientStats.sent).toBe(1);
   });
 
   it("should group by workflowSlug", async () => {
@@ -348,8 +357,8 @@ describe("GET /stats", () => {
 
     const wf1 = response.body.groups.find((g: any) => g.key === "wf-1");
     const wf2 = response.body.groups.find((g: any) => g.key === "wf-2");
-    expect(wf1.stats.emailsSent).toBe(2);
-    expect(wf2.stats.emailsSent).toBe(1);
+    expect(wf1.recipientStats.sent).toBe(2);
+    expect(wf2.recipientStats.sent).toBe(1);
   });
 
   it("should group by recipientEmail", async () => {
@@ -368,13 +377,14 @@ describe("GET /stats", () => {
 
     const alice = response.body.groups.find((g: any) => g.key === "alice@test.com");
     const bob = response.body.groups.find((g: any) => g.key === "bob@test.com");
-    // Grouped by recipient so each group has 1 unique recipient
-    expect(alice.stats.emailsSent).toBe(1);
-    expect(alice.recipients).toBe(1);
-    expect(bob.stats.emailsSent).toBe(1);
+    // recipientStats: grouped by recipient so each group has 1 unique recipient
+    expect(alice.recipientStats.sent).toBe(1);
+    // emailStats: alice has 2 messages
+    expect(alice.emailStats.sent).toBe(2);
+    expect(bob.recipientStats.sent).toBe(1);
   });
 
-  it("should include recipients per group", async () => {
+  it("should include recipientStats per group", async () => {
     const brand = "brand-group-recip";
     await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", brandId: brand, campaignId: "c1" });
     await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", brandId: brand, campaignId: "c1" });
@@ -388,8 +398,8 @@ describe("GET /stats", () => {
     expect(response.status).toBe(200);
     const c1 = response.body.groups.find((g: any) => g.key === "c1");
     const c2 = response.body.groups.find((g: any) => g.key === "c2");
-    expect(c1.recipients).toBe(2); // a + b
-    expect(c2.recipients).toBe(1); // a
+    expect(c1.recipientStats.sent).toBe(2); // a + b
+    expect(c2.recipientStats.sent).toBe(1); // a
   });
 
   it("should handle null group keys", async () => {
@@ -407,8 +417,8 @@ describe("GET /stats", () => {
 
     const nullGroup = response.body.groups.find((g: any) => g.key === "");
     const wf1 = response.body.groups.find((g: any) => g.key === "wf-1");
-    expect(nullGroup.stats.emailsSent).toBe(1);
-    expect(wf1.stats.emailsSent).toBe(1);
+    expect(nullGroup.recipientStats.sent).toBe(1);
+    expect(wf1.recipientStats.sent).toBe(1);
   });
 
   it("should reject invalid groupBy value", async () => {
