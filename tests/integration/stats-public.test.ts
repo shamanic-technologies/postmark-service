@@ -43,8 +43,8 @@ describe("GET /internal/stats", () => {
       .query({ brandId: brandId });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsContacted).toBeGreaterThanOrEqual(1);
-    expect(response.body.stats.emailsSent).toBeGreaterThanOrEqual(1);
+    expect(response.body.recipientStats.contacted).toBeGreaterThanOrEqual(1);
+    expect(response.body.recipientStats.sent).toBeGreaterThanOrEqual(1);
   });
 
   it("should return 400 without any filters", async () => {
@@ -76,7 +76,7 @@ describe("GET /internal/stats", () => {
       .query({ brandId: "brand-pub-x" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
   it("should support groupBy", async () => {
@@ -111,12 +111,12 @@ describe("GET /internal/stats", () => {
       .query({ brandId: brand });
 
     expect(response.status).toBe(200);
-    const { stats } = response.body;
-    expect(stats.emailsContacted).toBe(2);
-    expect(stats.emailsSent).toBe(2);
-    expect(stats.emailsDelivered).toBe(1);
-    expect(stats.emailsOpened).toBe(1);
-    expect(stats.emailsBounced).toBe(1);
+    const { recipientStats } = response.body;
+    expect(recipientStats.contacted).toBe(2);
+    expect(recipientStats.sent).toBe(2);
+    expect(recipientStats.delivered).toBe(1);
+    expect(recipientStats.opened).toBe(1);
+    expect(recipientStats.bounced).toBe(1);
   });
 
   it("should filter by featureSlugs (comma-separated plural)", async () => {
@@ -131,7 +131,7 @@ describe("GET /internal/stats", () => {
       .query({ featureSlugs: "sales-cold-email-outreach,marketing-newsletter" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   it("should filter by workflowSlugs (comma-separated plural)", async () => {
@@ -146,7 +146,7 @@ describe("GET /internal/stats", () => {
       .query({ workflowSlugs: "wf-alpha,wf-beta" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   it("should support groupBy workflowSlug with featureSlugs filter", async () => {
@@ -176,7 +176,7 @@ describe("GET /internal/stats", () => {
       .query({ featureSlugs: "sales-cold-email-outreach" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(1);
+    expect(response.body.recipientStats.sent).toBe(1);
   });
 
   it("should reject invalid groupBy", async () => {

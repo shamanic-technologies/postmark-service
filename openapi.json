@@ -779,26 +779,36 @@
       "StatsResponse": {
         "type": "object",
         "properties": {
-          "stats": {
+          "recipientStats": {
             "type": "object",
             "properties": {
-              "emailsContacted": {
-                "type": "number"
+              "contacted": {
+                "type": "number",
+                "description": "Unique recipients with any sending in scope"
               },
-              "emailsSent": {
-                "type": "number"
+              "sent": {
+                "type": "number",
+                "description": "Unique recipients with at least one accepted email"
               },
-              "emailsDelivered": {
-                "type": "number"
+              "delivered": {
+                "type": "number",
+                "description": "Unique recipients with at least one delivered email"
               },
-              "emailsOpened": {
-                "type": "number"
+              "opened": {
+                "type": "number",
+                "description": "Unique recipients who opened at least one email"
               },
-              "emailsClicked": {
-                "type": "number"
+              "bounced": {
+                "type": "number",
+                "description": "Unique recipients with at least one bounced email"
               },
-              "emailsBounced": {
-                "type": "number"
+              "clicked": {
+                "type": "number",
+                "description": "Unique recipients who clicked at least one link"
+              },
+              "unsubscribed": {
+                "type": "number",
+                "description": "Unique recipients who unsubscribed"
               },
               "repliesPositive": {
                 "type": "number"
@@ -857,12 +867,13 @@
               }
             },
             "required": [
-              "emailsContacted",
-              "emailsSent",
-              "emailsDelivered",
-              "emailsOpened",
-              "emailsClicked",
-              "emailsBounced",
+              "contacted",
+              "sent",
+              "delivered",
+              "opened",
+              "bounced",
+              "clicked",
+              "unsubscribed",
               "repliesPositive",
               "repliesNegative",
               "repliesNeutral",
@@ -870,45 +881,57 @@
               "repliesDetail"
             ]
           },
-          "recipients": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "stats",
-          "recipients"
-        ]
-      },
-      "GroupedStatsResponse": {
-        "type": "object",
-        "properties": {
-          "groups": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "key": {
-                  "type": "string"
-                },
-                "stats": {
+          "emailStats": {
+            "type": "object",
+            "properties": {
+              "sent": {
+                "type": "number",
+                "description": "Total distinct emails sent (by messageId)"
+              },
+              "delivered": {
+                "type": "number",
+                "description": "Total distinct emails delivered"
+              },
+              "opened": {
+                "type": "number",
+                "description": "Total distinct emails opened at least once"
+              },
+              "clicked": {
+                "type": "number",
+                "description": "Total distinct emails clicked at least once"
+              },
+              "bounced": {
+                "type": "number",
+                "description": "Total distinct emails bounced"
+              },
+              "unsubscribed": {
+                "type": "number",
+                "description": "Total distinct emails that triggered unsubscribe"
+              },
+              "stepStats": {
+                "type": "array",
+                "items": {
                   "type": "object",
                   "properties": {
-                    "emailsContacted": {
+                    "step": {
                       "type": "number"
                     },
-                    "emailsSent": {
+                    "sent": {
                       "type": "number"
                     },
-                    "emailsDelivered": {
+                    "delivered": {
                       "type": "number"
                     },
-                    "emailsOpened": {
+                    "opened": {
                       "type": "number"
                     },
-                    "emailsClicked": {
+                    "bounced": {
                       "type": "number"
                     },
-                    "emailsBounced": {
+                    "clicked": {
+                      "type": "number"
+                    },
+                    "unsubscribed": {
                       "type": "number"
                     },
                     "repliesPositive": {
@@ -968,12 +991,13 @@
                     }
                   },
                   "required": [
-                    "emailsContacted",
-                    "emailsSent",
-                    "emailsDelivered",
-                    "emailsOpened",
-                    "emailsClicked",
-                    "emailsBounced",
+                    "step",
+                    "sent",
+                    "delivered",
+                    "opened",
+                    "bounced",
+                    "clicked",
+                    "unsubscribed",
                     "repliesPositive",
                     "repliesNegative",
                     "repliesNeutral",
@@ -981,14 +1005,280 @@
                     "repliesDetail"
                   ]
                 },
-                "recipients": {
-                  "type": "number"
+                "description": "Per-step breakdown (always empty for Postmark — no step concept)"
+              }
+            },
+            "required": [
+              "sent",
+              "delivered",
+              "opened",
+              "clicked",
+              "bounced",
+              "unsubscribed",
+              "stepStats"
+            ]
+          }
+        },
+        "required": [
+          "recipientStats",
+          "emailStats"
+        ]
+      },
+      "GroupedStatsResponse": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "recipientStats": {
+                  "type": "object",
+                  "properties": {
+                    "contacted": {
+                      "type": "number",
+                      "description": "Unique recipients with any sending in scope"
+                    },
+                    "sent": {
+                      "type": "number",
+                      "description": "Unique recipients with at least one accepted email"
+                    },
+                    "delivered": {
+                      "type": "number",
+                      "description": "Unique recipients with at least one delivered email"
+                    },
+                    "opened": {
+                      "type": "number",
+                      "description": "Unique recipients who opened at least one email"
+                    },
+                    "bounced": {
+                      "type": "number",
+                      "description": "Unique recipients with at least one bounced email"
+                    },
+                    "clicked": {
+                      "type": "number",
+                      "description": "Unique recipients who clicked at least one link"
+                    },
+                    "unsubscribed": {
+                      "type": "number",
+                      "description": "Unique recipients who unsubscribed"
+                    },
+                    "repliesPositive": {
+                      "type": "number"
+                    },
+                    "repliesNegative": {
+                      "type": "number"
+                    },
+                    "repliesNeutral": {
+                      "type": "number"
+                    },
+                    "repliesAutoReply": {
+                      "type": "number"
+                    },
+                    "repliesDetail": {
+                      "type": "object",
+                      "properties": {
+                        "interested": {
+                          "type": "number"
+                        },
+                        "meetingBooked": {
+                          "type": "number"
+                        },
+                        "closed": {
+                          "type": "number"
+                        },
+                        "notInterested": {
+                          "type": "number"
+                        },
+                        "wrongPerson": {
+                          "type": "number"
+                        },
+                        "unsubscribe": {
+                          "type": "number"
+                        },
+                        "neutral": {
+                          "type": "number"
+                        },
+                        "autoReply": {
+                          "type": "number"
+                        },
+                        "outOfOffice": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "interested",
+                        "meetingBooked",
+                        "closed",
+                        "notInterested",
+                        "wrongPerson",
+                        "unsubscribe",
+                        "neutral",
+                        "autoReply",
+                        "outOfOffice"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "contacted",
+                    "sent",
+                    "delivered",
+                    "opened",
+                    "bounced",
+                    "clicked",
+                    "unsubscribed",
+                    "repliesPositive",
+                    "repliesNegative",
+                    "repliesNeutral",
+                    "repliesAutoReply",
+                    "repliesDetail"
+                  ]
+                },
+                "emailStats": {
+                  "type": "object",
+                  "properties": {
+                    "sent": {
+                      "type": "number",
+                      "description": "Total distinct emails sent (by messageId)"
+                    },
+                    "delivered": {
+                      "type": "number",
+                      "description": "Total distinct emails delivered"
+                    },
+                    "opened": {
+                      "type": "number",
+                      "description": "Total distinct emails opened at least once"
+                    },
+                    "clicked": {
+                      "type": "number",
+                      "description": "Total distinct emails clicked at least once"
+                    },
+                    "bounced": {
+                      "type": "number",
+                      "description": "Total distinct emails bounced"
+                    },
+                    "unsubscribed": {
+                      "type": "number",
+                      "description": "Total distinct emails that triggered unsubscribe"
+                    },
+                    "stepStats": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "step": {
+                            "type": "number"
+                          },
+                          "sent": {
+                            "type": "number"
+                          },
+                          "delivered": {
+                            "type": "number"
+                          },
+                          "opened": {
+                            "type": "number"
+                          },
+                          "bounced": {
+                            "type": "number"
+                          },
+                          "clicked": {
+                            "type": "number"
+                          },
+                          "unsubscribed": {
+                            "type": "number"
+                          },
+                          "repliesPositive": {
+                            "type": "number"
+                          },
+                          "repliesNegative": {
+                            "type": "number"
+                          },
+                          "repliesNeutral": {
+                            "type": "number"
+                          },
+                          "repliesAutoReply": {
+                            "type": "number"
+                          },
+                          "repliesDetail": {
+                            "type": "object",
+                            "properties": {
+                              "interested": {
+                                "type": "number"
+                              },
+                              "meetingBooked": {
+                                "type": "number"
+                              },
+                              "closed": {
+                                "type": "number"
+                              },
+                              "notInterested": {
+                                "type": "number"
+                              },
+                              "wrongPerson": {
+                                "type": "number"
+                              },
+                              "unsubscribe": {
+                                "type": "number"
+                              },
+                              "neutral": {
+                                "type": "number"
+                              },
+                              "autoReply": {
+                                "type": "number"
+                              },
+                              "outOfOffice": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "interested",
+                              "meetingBooked",
+                              "closed",
+                              "notInterested",
+                              "wrongPerson",
+                              "unsubscribe",
+                              "neutral",
+                              "autoReply",
+                              "outOfOffice"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "sent",
+                          "delivered",
+                          "opened",
+                          "bounced",
+                          "clicked",
+                          "unsubscribed",
+                          "repliesPositive",
+                          "repliesNegative",
+                          "repliesNeutral",
+                          "repliesAutoReply",
+                          "repliesDetail"
+                        ]
+                      },
+                      "description": "Per-step breakdown (always empty for Postmark — no step concept)"
+                    }
+                  },
+                  "required": [
+                    "sent",
+                    "delivered",
+                    "opened",
+                    "clicked",
+                    "bounced",
+                    "unsubscribed",
+                    "stepStats"
+                  ]
                 }
               },
               "required": [
                 "key",
-                "stats",
-                "recipients"
+                "recipientStats",
+                "emailStats"
               ]
             }
           }
@@ -1585,7 +1875,7 @@
     "/orgs/stats": {
       "get": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, and/or featureSlugs. When groupBy is provided, returns grouped results. Requires x-org-id header.",
         "tags": [
           "Email Status"
         ],
@@ -1658,33 +1948,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)"
-            },
-            "required": false,
-            "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)",
-            "name": "workflowDynastySlug",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)"
-            },
-            "required": false,
-            "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)",
-            "name": "featureDynastySlug",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
               "enum": [
                 "brandId",
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
-                "workflowDynastySlug",
-                "featureDynastySlug",
                 "recipientEmail"
               ],
               "description": "Group results by dimension"
@@ -1802,33 +2070,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)"
-            },
-            "required": false,
-            "description": "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)",
-            "name": "workflowDynastySlug",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)"
-            },
-            "required": false,
-            "description": "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)",
-            "name": "featureDynastySlug",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
               "enum": [
                 "brandId",
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
-                "workflowDynastySlug",
-                "featureDynastySlug",
                 "recipientEmail"
               ],
               "description": "Group results by dimension"

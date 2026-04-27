@@ -244,7 +244,7 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 // ===== Stats =====
 
-export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "workflowDynastySlug", "featureDynastySlug", "recipientEmail"]);
+export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail"]);
 
 export const StatsQuerySchema = z
   .object({
@@ -254,8 +254,6 @@ export const StatsQuerySchema = z
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
     workflowSlugs: z.string().optional().openapi({ description: "Filter by workflow slugs (comma-separated)" }),
     featureSlugs: z.string().optional().openapi({ description: "Filter by feature slugs (comma-separated)" }),
-    workflowDynastySlug: z.string().optional().openapi({ description: "Filter by workflow dynasty slug (resolves to all versioned slugs via workflow-service)" }),
-    featureDynastySlug: z.string().optional().openapi({ description: "Filter by feature dynasty slug (resolves to all versioned slugs via features-service)" }),
     groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
   })
   .openapi("StatsQuery");
@@ -274,13 +272,14 @@ const RepliesDetailSchema = z.object({
   outOfOffice: z.number(),
 });
 
-const StatsObjectSchema = z.object({
-  emailsContacted: z.number(),
-  emailsSent: z.number(),
-  emailsDelivered: z.number(),
-  emailsOpened: z.number(),
-  emailsClicked: z.number(),
-  emailsBounced: z.number(),
+const StepStatsSchema = z.object({
+  step: z.number(),
+  sent: z.number(),
+  delivered: z.number(),
+  opened: z.number(),
+  bounced: z.number(),
+  clicked: z.number(),
+  unsubscribed: z.number(),
   repliesPositive: z.number(),
   repliesNegative: z.number(),
   repliesNeutral: z.number(),
@@ -288,10 +287,35 @@ const StatsObjectSchema = z.object({
   repliesDetail: RepliesDetailSchema,
 });
 
+const RecipientStatsSchema = z.object({
+  contacted: z.number().openapi({ description: "Unique recipients with any sending in scope" }),
+  sent: z.number().openapi({ description: "Unique recipients with at least one accepted email" }),
+  delivered: z.number().openapi({ description: "Unique recipients with at least one delivered email" }),
+  opened: z.number().openapi({ description: "Unique recipients who opened at least one email" }),
+  bounced: z.number().openapi({ description: "Unique recipients with at least one bounced email" }),
+  clicked: z.number().openapi({ description: "Unique recipients who clicked at least one link" }),
+  unsubscribed: z.number().openapi({ description: "Unique recipients who unsubscribed" }),
+  repliesPositive: z.number(),
+  repliesNegative: z.number(),
+  repliesNeutral: z.number(),
+  repliesAutoReply: z.number(),
+  repliesDetail: RepliesDetailSchema,
+});
+
+const EmailStatsSchema = z.object({
+  sent: z.number().openapi({ description: "Total distinct emails sent (by messageId)" }),
+  delivered: z.number().openapi({ description: "Total distinct emails delivered" }),
+  opened: z.number().openapi({ description: "Total distinct emails opened at least once" }),
+  clicked: z.number().openapi({ description: "Total distinct emails clicked at least once" }),
+  bounced: z.number().openapi({ description: "Total distinct emails bounced" }),
+  unsubscribed: z.number().openapi({ description: "Total distinct emails that triggered unsubscribe" }),
+  stepStats: z.array(StepStatsSchema).openapi({ description: "Per-step breakdown (always empty for Postmark — no step concept)" }),
+});
+
 export const StatsResponseSchema = z
   .object({
-    stats: StatsObjectSchema,
-    recipients: z.number(),
+    recipientStats: RecipientStatsSchema,
+    emailStats: EmailStatsSchema,
   })
   .openapi("StatsResponse");
 
@@ -302,8 +326,8 @@ export const GroupedStatsResponseSchema = z
     groups: z.array(
       z.object({
         key: z.string(),
-        stats: StatsObjectSchema,
-        recipients: z.number(),
+        recipientStats: RecipientStatsSchema,
+        emailStats: EmailStatsSchema,
       })
     ),
   })
@@ -633,7 +657,7 @@ registry.registerPath({
   path: "/orgs/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, and/or featureDynastySlug. Dynasty slug filters resolve to all versioned slugs via the respective service. When groupBy is provided, returns grouped results. Requires x-org-id header.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, and/or featureSlugs. When groupBy is provided, returns grouped results. Requires x-org-id header.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
