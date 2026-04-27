@@ -57,7 +57,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
       .query({ featureSlugs: "feat-alpha" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   it("should group by featureSlug", async () => {
@@ -76,8 +76,8 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
 
     const feat1 = response.body.groups.find((g: any) => g.key === "feat-1");
     const feat2 = response.body.groups.find((g: any) => g.key === "feat-2");
-    expect(feat1.stats.emailsSent).toBe(2);
-    expect(feat2.stats.emailsSent).toBe(1);
+    expect(feat1.recipientStats.sent).toBe(2);
+    expect(feat2.recipientStats.sent).toBe(1);
   });
 
   // ─── featureDynastySlug filter ───────────────────────────────────────────
@@ -95,7 +95,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
       .query({ featureDynastySlug: "feat-alpha" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
     expect(mockResolveFeature).toHaveBeenCalledWith("feat-alpha", expect.any(Object));
   });
 
@@ -108,7 +108,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
       .query({ featureDynastySlug: "nonexistent-dynasty" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(0);
+    expect(response.body.recipientStats.sent).toBe(0);
   });
 
   it("should combine featureDynastySlug with other filters", async () => {
@@ -124,7 +124,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
       .query({ featureDynastySlug: "feat-alpha", brandId: "brand-x" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   // ─── workflowDynastySlug filter ──────────────────────────────────────────
@@ -142,7 +142,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
       .query({ workflowDynastySlug: "cold-email-sequoia" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(2);
+    expect(response.body.recipientStats.sent).toBe(2);
     expect(mockResolveWorkflow).toHaveBeenCalledWith("cold-email-sequoia", expect.any(Object));
   });
 
@@ -155,7 +155,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
       .query({ workflowDynastySlug: "nonexistent-dynasty" });
 
     expect(response.status).toBe(200);
-    expect(response.body.stats.emailsSent).toBe(0);
+    expect(response.body.recipientStats.sent).toBe(0);
   });
 
   it("should support grouped response with dynasty slug filters", async () => {
@@ -175,8 +175,8 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
 
     const brandA = response.body.groups.find((g: any) => g.key === "brand-a");
     const brandB = response.body.groups.find((g: any) => g.key === "brand-b");
-    expect(brandA.stats.emailsSent).toBe(1);
-    expect(brandB.stats.emailsSent).toBe(1);
+    expect(brandA.recipientStats.sent).toBe(1);
+    expect(brandB.recipientStats.sent).toBe(1);
   });
 
   // ─── workflowDynastySlug merges with workflowSlugs ──────────────────────
@@ -195,7 +195,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
 
     expect(response.status).toBe(200);
     // Dynasty resolves to wf-a + wf-a-v2, merged with wf-other from query
-    expect(response.body.stats.emailsSent).toBe(3);
+    expect(response.body.recipientStats.sent).toBe(3);
   });
 
   // ─── groupBy workflowDynastySlug ──────────────────────────────────────────
@@ -230,8 +230,8 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
 
     const coldEmail = response.body.groups.find((g: any) => g.key === "cold-email");
     const warmIntro = response.body.groups.find((g: any) => g.key === "warm-intro");
-    expect(coldEmail.stats.emailsSent).toBe(2);
-    expect(warmIntro.stats.emailsSent).toBe(1);
+    expect(coldEmail.recipientStats.sent).toBe(2);
+    expect(warmIntro.recipientStats.sent).toBe(1);
 
     expect(mockFetchAllWorkflowDynasties).toHaveBeenCalledOnce();
     expect(mockBuildSlugToDynastyMap).toHaveBeenCalledOnce();
@@ -267,8 +267,8 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
 
     const alpha = response.body.groups.find((g: any) => g.key === "feat-alpha");
     const beta = response.body.groups.find((g: any) => g.key === "feat-beta");
-    expect(alpha.stats.emailsSent).toBe(2);
-    expect(beta.stats.emailsSent).toBe(1);
+    expect(alpha.recipientStats.sent).toBe(2);
+    expect(beta.recipientStats.sent).toBe(1);
 
     expect(mockFetchAllFeatureDynasties).toHaveBeenCalledOnce();
   });
@@ -298,7 +298,7 @@ describe("GET /stats — featureSlug and dynasty slug filters", () => {
 
     const coldEmail = response.body.groups.find((g: any) => g.key === "cold-email");
     const orphan = response.body.groups.find((g: any) => g.key === "orphan-wf");
-    expect(coldEmail.stats.emailsSent).toBe(1);
-    expect(orphan.stats.emailsSent).toBe(1);
+    expect(coldEmail.recipientStats.sent).toBe(1);
+    expect(orphan.recipientStats.sent).toBe(1);
   });
 });
