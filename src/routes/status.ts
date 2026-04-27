@@ -10,13 +10,6 @@ import {
 } from "../db/schema";
 import { eq, inArray, and, arrayContains, sql, SQL } from "drizzle-orm";
 import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
-import {
-  resolveFeatureDynastySlugs,
-  resolveWorkflowDynastySlugs,
-  fetchAllFeatureDynasties,
-  fetchAllWorkflowDynasties,
-  buildSlugToDynastyMap,
-} from "../lib/dynasty-client";
 
 // ── Internal routes (API key only, no identity headers) ───────────────────────
 
@@ -579,48 +572,18 @@ async function handleStats(req: Request, res: Response) {
     brandId: brandIdRaw,
     workflowSlugs: workflowSlugsRaw,
     featureSlugs: featureSlugsRaw,
-    workflowDynastySlug,
-    featureDynastySlug,
     ...filters
   } = parsed.data;
   const runIds = runIdsRaw ? runIdsRaw.split(",").filter(Boolean) : undefined;
   const brandId = brandIdRaw ? brandIdRaw.split(",").filter(Boolean) : undefined;
-  const workflowSlugsFromQuery = workflowSlugsRaw ? workflowSlugsRaw.split(",").filter(Boolean) : undefined;
-  const featureSlugsFromQuery = featureSlugsRaw ? featureSlugsRaw.split(",").filter(Boolean) : undefined;
-
-  // Resolve dynasty slugs → versioned slug lists via external services
-  const identityHeaders = {
-    orgId: (req.headers["x-org-id"] as string) || "",
-    userId: (req.headers["x-user-id"] as string) || "",
-    runId: (req.headers["x-run-id"] as string) || "",
-  };
-
-  let workflowSlugs: string[] | undefined = workflowSlugsFromQuery;
-  let featureSlugs: string[] | undefined = featureSlugsFromQuery;
-
-  const emptyStats = { emailsContacted: 0, emailsSent: 0, emailsDelivered: 0, emailsOpened: 0, emailsClicked: 0, emailsBounced: 0 };
-
-  if (workflowDynastySlug) {
-    const dynastySlugs = await resolveWorkflowDynastySlugs(workflowDynastySlug, identityHeaders);
-    if (dynastySlugs.length === 0 && !workflowSlugs) {
-      return res.json(groupBy ? { groups: [] } : { stats: buildStatsObject(emptyStats), recipients: 0 });
-    }
-    workflowSlugs = workflowSlugs ? [...workflowSlugs, ...dynastySlugs] : dynastySlugs;
-  }
-
-  if (featureDynastySlug) {
-    const dynastySlugs = await resolveFeatureDynastySlugs(featureDynastySlug, identityHeaders);
-    if (dynastySlugs.length === 0 && !featureSlugs) {
-      return res.json(groupBy ? { groups: [] } : { stats: buildStatsObject(emptyStats), recipients: 0 });
-    }
-    featureSlugs = featureSlugs ? [...featureSlugs, ...dynastySlugs] : dynastySlugs;
-  }
+  const workflowSlugs = workflowSlugsRaw ? workflowSlugsRaw.split(",").filter(Boolean) : undefined;
+  const featureSlugs = featureSlugsRaw ? featureSlugsRaw.split(",").filter(Boolean) : undefined;
 
   const conditions = buildStatsConditions({ ...filters, runIds, brandId, workflowSlugs, featureSlugs });
 
   if (conditions.length === 0) {
     return res.status(400).json({
-      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlugs, featureSlugs, workflowDynastySlug, or featureDynastySlug)",
+      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlugs, or featureSlugs)",
     });
   }
 
@@ -650,18 +613,7 @@ async function handleStats(req: Request, res: Response) {
     }
 
     // ─── Grouped response ────────────────────────────────────────────
-    const isDynastyGroupBy = groupBy === "workflowDynastySlug" || groupBy === "featureDynastySlug";
     const isBrandGroupBy = groupBy === "brandId";
-
-    // For dynasty groupBy, fetch all dynasties and build reverse map
-    let slugToDynastyMap: Map<string, string> | undefined;
-    if (groupBy === "workflowDynastySlug") {
-      const dynasties = await fetchAllWorkflowDynasties(identityHeaders);
-      slugToDynastyMap = buildSlugToDynastyMap(dynasties);
-    } else if (groupBy === "featureDynastySlug") {
-      const dynasties = await fetchAllFeatureDynasties(identityHeaders);
-      slugToDynastyMap = buildSlugToDynastyMap(dynasties);
-    }
 
     // brandId groupBy requires unnesting the brand_ids array
     type SendingRow = { messageId: string | null; toEmail: string; errorCode: number | null; groupKey: string | null };
@@ -680,9 +632,7 @@ async function handleStats(req: Request, res: Response) {
         groupKey: r.brand_id,
       }));
     } else {
-      const dbColumn = isDynastyGroupBy
-        ? (groupBy === "workflowDynastySlug" ? postmarkSendings.workflowSlug : postmarkSendings.featureSlug)
-        : GROUP_BY_COLUMN_MAP[groupBy];
+      const dbColumn = GROUP_BY_COLUMN_MAP[groupBy];
 
       sendings = await db
         .select({
@@ -695,11 +645,10 @@ async function handleStats(req: Request, res: Response) {
         .where(and(...conditions));
     }
 
-    // Group sendings by dimension key (resolving to dynasty slug when needed)
+    // Group sendings by dimension key
     const grouped = new Map<string, SendingRow[]>();
     for (const s of sendings) {
-      const rawKey = s.groupKey ?? "";
-      const key = slugToDynastyMap ? (slugToDynastyMap.get(rawKey) ?? rawKey) : rawKey;
+      const key = s.groupKey ?? "";
       let group = grouped.get(key);
       if (!group) {
         group = [];
