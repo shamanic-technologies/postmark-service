@@ -24,11 +24,11 @@ import { createInboundPayload, createDeliveryPayload } from "../fixtures/postmar
 
 describe("POST /webhooks/postmark — Inbound forwarding", () => {
   const app = createTestApp();
-  const originalUrl = process.env.EMAIL_GATEWAY_URL;
+  const originalUrl = process.env.EMAIL_GATEWAY_SERVICE_URL;
   const originalKey = process.env.EMAIL_GATEWAY_SERVICE_API_KEY;
 
   beforeEach(() => {
-    process.env.EMAIL_GATEWAY_URL = "http://email-gateway.test";
+    process.env.EMAIL_GATEWAY_SERVICE_URL = "http://email-gateway.test";
     process.env.EMAIL_GATEWAY_SERVICE_API_KEY = "test-gateway-key";
     vi.restoreAllMocks();
     dbInsert.mockReset().mockReturnThis();
@@ -39,9 +39,9 @@ describe("POST /webhooks/postmark — Inbound forwarding", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     if (originalUrl !== undefined) {
-      process.env.EMAIL_GATEWAY_URL = originalUrl;
+      process.env.EMAIL_GATEWAY_SERVICE_URL = originalUrl;
     } else {
-      delete process.env.EMAIL_GATEWAY_URL;
+      delete process.env.EMAIL_GATEWAY_SERVICE_URL;
     }
     if (originalKey !== undefined) {
       process.env.EMAIL_GATEWAY_SERVICE_API_KEY = originalKey;

@@ -19,7 +19,7 @@ export class GatewayForwardError extends Error {
 
 export function validateEmailGatewayConfig(): void {
   const missing: string[] = [];
-  if (!process.env.EMAIL_GATEWAY_URL) missing.push("EMAIL_GATEWAY_URL");
+  if (!process.env.EMAIL_GATEWAY_SERVICE_URL) missing.push("EMAIL_GATEWAY_SERVICE_URL");
   if (!process.env.EMAIL_GATEWAY_SERVICE_API_KEY) {
     missing.push("EMAIL_GATEWAY_SERVICE_API_KEY");
   }
@@ -31,11 +31,11 @@ export function validateEmailGatewayConfig(): void {
 }
 
 export async function forwardInboundToGateway(payload: unknown): Promise<void> {
-  const baseUrl = process.env.EMAIL_GATEWAY_URL;
+  const baseUrl = process.env.EMAIL_GATEWAY_SERVICE_URL;
   const apiKey = process.env.EMAIL_GATEWAY_SERVICE_API_KEY;
   if (!baseUrl || !apiKey) {
     throw new GatewayForwardError(
-      "EMAIL_GATEWAY_URL or EMAIL_GATEWAY_SERVICE_API_KEY not configured"
+      "EMAIL_GATEWAY_SERVICE_URL or EMAIL_GATEWAY_SERVICE_API_KEY not configured"
     );
   }
 
