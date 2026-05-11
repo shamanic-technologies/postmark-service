@@ -784,7 +784,7 @@ registry.registerPath({
   path: "/webhooks/postmark",
   summary: "Postmark webhook handler",
   description:
-    "Public Postmark webhook endpoint. Persists Delivery, Bounce, Open, Click, SpamComplaint, SubscriptionChange events to local storage. RecordType=Inbound is forwarded byte-for-byte to email-gateway at ${EMAIL_GATEWAY_URL}/inbound/postmark with x-api-key auth; non-2xx or network errors return 502 so Postmark's own retry kicks in (no outbox, no queue).",
+    "Public Postmark webhook endpoint. Persists Delivery, Bounce, Open, Click, SpamComplaint, SubscriptionChange events to local storage. RecordType=Inbound is forwarded byte-for-byte to email-gateway at ${EMAIL_GATEWAY_SERVICE_URL}/inbound/postmark with x-api-key auth; non-2xx or network errors return 502 so Postmark's own retry kicks in (no outbox, no queue).",
   tags: ["Webhooks"],
   responses: {
     200: {
