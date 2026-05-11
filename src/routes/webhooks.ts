@@ -8,6 +8,10 @@ import {
   postmarkSpamComplaints,
   postmarkSubscriptionChanges,
 } from "../db/schema";
+import {
+  forwardInboundToGateway,
+  GatewayForwardError,
+} from "../lib/email-gateway-client";
 
 const router = Router();
 
@@ -43,6 +47,9 @@ router.post("/postmark", async (req: Request, res: Response) => {
 
   try {
     switch (recordType) {
+      case "Inbound":
+        await forwardInboundToGateway(payload);
+        break;
       case "Delivery":
         await handleDelivery(payload);
         break;
@@ -62,12 +69,19 @@ router.post("/postmark", async (req: Request, res: Response) => {
         await handleSubscriptionChange(payload);
         break;
       default:
-        console.warn(`Unknown RecordType: ${recordType}`);
+        console.warn(`[postmark-service] Unknown RecordType: ${recordType}`);
     }
 
     res.status(200).json({ success: true, recordType });
   } catch (error: any) {
-    console.error(`Error handling ${recordType} webhook:`, error);
+    if (error instanceof GatewayForwardError) {
+      console.error(`[postmark-service] Inbound forward failed: ${error.message}`);
+      return res.status(error.statusCode).json({
+        error: "Failed to forward Inbound webhook to email-gateway",
+        details: error.message,
+      });
+    }
+    console.error(`[postmark-service] Error handling ${recordType} webhook:`, error);
     res.status(500).json({
       error: "Failed to process webhook",
       details: error.message,

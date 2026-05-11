@@ -377,6 +377,13 @@ const WebhookResponseSchema = z
   })
   .openapi("WebhookResponse");
 
+const WebhookErrorResponseSchema = z
+  .object({
+    error: z.string(),
+    details: z.string().optional(),
+  })
+  .openapi("WebhookErrorResponse");
+
 const WebhookUrlResponseSchema = z
   .object({
     webhookUrl: z.string().url(),
@@ -777,12 +784,21 @@ registry.registerPath({
   path: "/webhooks/postmark",
   summary: "Postmark webhook handler",
   description:
-    "Receives Postmark webhook events (Delivery, Bounce, Open, Click, SpamComplaint, SubscriptionChange)",
+    "Public Postmark webhook endpoint. Persists Delivery, Bounce, Open, Click, SpamComplaint, SubscriptionChange events to local storage. RecordType=Inbound is forwarded byte-for-byte to email-gateway at ${EMAIL_GATEWAY_URL}/inbound/postmark with x-api-key auth; non-2xx or network errors return 502 so Postmark's own retry kicks in (no outbox, no queue).",
   tags: ["Webhooks"],
   responses: {
     200: {
-      description: "Webhook processed",
+      description: "Webhook processed (or Inbound forwarded successfully)",
       content: { "application/json": { schema: WebhookResponseSchema } },
+    },
+    400: {
+      description: "Missing RecordType",
+      content: { "application/json": { schema: WebhookErrorResponseSchema } },
+    },
+    502: {
+      description:
+        "Inbound forward to email-gateway failed (non-2xx response or network error). Postmark will retry.",
+      content: { "application/json": { schema: WebhookErrorResponseSchema } },
     },
   },
 });
