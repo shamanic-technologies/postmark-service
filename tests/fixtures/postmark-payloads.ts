@@ -110,6 +110,25 @@ export function createSubscriptionChangePayload(messageId: string) {
   };
 }
 
+export function createInboundPayload(messageId: string) {
+  return {
+    RecordType: "Inbound",
+    MessageID: messageId,
+    From: "journalist@example.com",
+    FromFull: { Email: "journalist@example.com", Name: "Jane Reporter" },
+    To: "haro@inbox.example.com",
+    ToFull: [{ Email: "haro@inbox.example.com", Name: "" }],
+    Subject: "Pitch reply",
+    TextBody: "Thanks for the pitch, please send more info.",
+    HtmlBody: "<p>Thanks for the pitch, please send more info.</p>",
+    Date: new Date().toISOString(),
+    MailboxHash: "",
+    Tag: "",
+    Headers: [],
+    Attachments: [],
+  };
+}
+
 export function createInvalidPayload() {
   return {
     // Missing RecordType

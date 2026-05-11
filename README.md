@@ -15,7 +15,7 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 - **POST /stats** - Aggregated stats with filters: runIds, clerkOrgId, brandId, appId, campaignId (at least one required). Returns emailsSent, emailsDelivered, emailsOpened, emailsClicked, emailsBounced, and reply metrics.
 
 ### Webhooks
-- **POST /webhooks/postmark** - Receives Postmark webhook events (delivery, bounce, open, click, spam complaint, subscription change)
+- **POST /webhooks/postmark** - Public Postmark webhook endpoint. Persists Delivery, Bounce, Open, Click, SpamComplaint, SubscriptionChange events to local storage. `RecordType=Inbound` is forwarded byte-for-byte to `${EMAIL_GATEWAY_URL}/inbound/postmark` with header `x-api-key: ${EMAIL_GATEWAY_SERVICE_API_KEY}`. On non-2xx or network error from email-gateway, the route returns **502** — Postmark's own 45-min retry handles redelivery. No outbox, no queue. Idempotency is the downstream consumer's responsibility.
 
 ### OpenAPI
 - **GET /openapi.json** - Returns the OpenAPI 3.0 specification (no auth required)
