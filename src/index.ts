@@ -8,6 +8,7 @@ import path from "path";
 import fs from "fs";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { apiKeyAuth, requireOrgId } from "./middleware/serviceAuth";
+import { validateEmailGatewayConfig } from "./lib/email-gateway-client";
 import { db } from "./db";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
@@ -81,6 +82,13 @@ app.use("/orgs", apiKeyAuth, requireOrgId, statusRoutes.orgs);
 
 // Only start server if not in test environment
 if (process.env.NODE_ENV !== "test") {
+  try {
+    validateEmailGatewayConfig();
+  } catch (err: any) {
+    console.error(`[postmark-service] ${err.message}`);
+    process.exit(1);
+  }
+
   migrate(db, { migrationsFolder: "./drizzle" })
     .then(() => {
       console.log("Migrations complete");
