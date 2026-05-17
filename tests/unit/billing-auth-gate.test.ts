@@ -137,7 +137,7 @@ describe("billing credit authorization gate", () => {
         keySource: "platform",
       });
       vi.mocked(authorizeCredits).mockRejectedValue(
-        new Error("billing-service POST /v1/credits/authorize failed: 502 - Bad Gateway")
+        new Error("billing-service POST /v1/customer_balance/authorize failed: 502 - Bad Gateway")
       );
 
       const res = await request(app)

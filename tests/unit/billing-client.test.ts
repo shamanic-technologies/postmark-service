@@ -46,7 +46,7 @@ describe("billing-client", () => {
       // Verify billing authorize call with items
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url, opts] = mockFetch.mock.calls[0];
-      expect(url).toBe("http://billing:3012/v1/credits/authorize");
+      expect(url).toBe("http://billing:3012/v1/customer_balance/authorize");
       const body = JSON.parse(opts.body);
       expect(body.items).toEqual([{ costName: "postmark-email-send", quantity: 3 }]);
       expect(body.description).toBe("postmark-email-send × 3");
@@ -102,7 +102,7 @@ describe("billing-client", () => {
           runId: "run-1",
           items: [{ costName: "postmark-email-send", quantity: 1 }],
         })
-      ).rejects.toThrow("billing-service POST /v1/credits/authorize failed: 502");
+      ).rejects.toThrow("billing-service POST /v1/customer_balance/authorize failed: 502");
     });
 
     it("should include identity headers", async () => {
