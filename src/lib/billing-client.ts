@@ -38,7 +38,7 @@ export async function authorizeCredits(params: {
     ...trackingHeaders,
   };
 
-  const response = await fetch(`${getBillingServiceUrl()}/v1/credits/authorize`, {
+  const response = await fetch(`${getBillingServiceUrl()}/v1/customer_balance/authorize`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -50,7 +50,7 @@ export async function authorizeCredits(params: {
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `billing-service POST /v1/credits/authorize failed: ${response.status} - ${errorText}`
+      `billing-service POST /v1/customer_balance/authorize failed: ${response.status} - ${errorText}`
     );
   }
 
