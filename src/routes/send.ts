@@ -11,6 +11,7 @@ import {
 } from "../lib/runs-client";
 import { authorizeCredits } from "../lib/billing-client";
 import { SendEmailRequestSchema, BatchSendRequestSchema } from "../schemas";
+import { upsertSilver } from "../lib/silver";
 
 const router = Router();
 
@@ -158,6 +159,9 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           metadata: body.metadata,
         })
         .returning();
+
+      // 7b. Initialize silver row so subsequent webhooks UPSERT against an existing row.
+      if (result.messageId) await upsertSilver(result.messageId);
 
       // 8. Log costs and complete run
       if (result.success) {
@@ -359,6 +363,9 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             metadata: email.metadata,
           })
           .returning();
+
+        // 3b. Initialize silver row so subsequent webhooks UPSERT against an existing row.
+        if (result.messageId) await upsertSilver(result.messageId);
 
         // 4. Log costs and complete run
         if (result.success) {

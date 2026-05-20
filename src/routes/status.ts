@@ -1,13 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import {
-  postmarkSendings,
-  postmarkDeliveries,
-  postmarkBounces,
-  postmarkOpenings,
-  postmarkLinkClicks,
-  postmarkSubscriptionChanges,
-} from "../db/schema";
+import { postmarkMessages, postmarkSendings } from "../db/schema";
 import { eq, inArray, and, arrayContains, sql, SQL } from "drizzle-orm";
 import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
 
@@ -16,97 +9,30 @@ import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
 const internalRouter = Router();
 
 /**
- * Compute Layer 2 status for a single message from raw events.
- * Applies the full implication chain: contacted → sent → delivered → opened → clicked
+ * Shape the silver row into the wire-format Layer 2 status object.
+ * Identical to the legacy compute-at-read shape.
  */
-function computeMessageStatus(
-  sending: { errorCode: number | null; messageId: string | null },
-  events: {
-    deliveryMap: Map<string, Date | null>;
-    bouncedSet: Set<string>;
-    openedSet: Set<string>;
-    clickedSet: Set<string>;
-    unsubSet: Set<string>;
-  },
-) {
-  const mid = sending.messageId;
-  const hasDelivery = mid ? events.deliveryMap.has(mid) : false;
-  const hasBounce = mid ? events.bouncedSet.has(mid) : false;
-  const hasOpen = mid ? events.openedSet.has(mid) : false;
-  const hasClick = mid ? events.clickedSet.has(mid) : false;
-  const hasUnsub = mid ? events.unsubSet.has(mid) : false;
-
-  // Implication chain: click → open → delivered → sent → contacted
-  const clicked = hasClick;
-  const opened = hasOpen || clicked;
-  const delivered = (hasDelivery || opened) && !hasBounce;
-  const sent = (sending.errorCode === 0) || hasDelivery || opened || clicked || hasBounce;
-  const contacted = true;
-
-  const deliveredAt = mid ? events.deliveryMap.get(mid) ?? null : null;
-
+function silverToStatus(row: {
+  contacted: boolean;
+  sent: boolean;
+  delivered: boolean;
+  opened: boolean;
+  clicked: boolean;
+  bounced: boolean;
+  unsubscribed: boolean;
+  lastDeliveredAt: Date | null;
+}) {
   return {
-    contacted,
-    sent,
-    delivered,
-    opened,
-    clicked,
+    contacted: row.contacted,
+    sent: row.sent,
+    delivered: row.delivered,
+    opened: row.opened,
+    clicked: row.clicked,
     replied: false,
-    replyClassification: null,
-    bounced: hasBounce,
-    unsubscribed: hasUnsub,
-    lastDeliveredAt: deliveredAt?.toISOString() ?? null,
-  };
-}
-
-/**
- * Batch-query all events for a set of messageIds and return lookup maps.
- */
-async function fetchEventMaps(messageIds: string[]) {
-  if (messageIds.length === 0) {
-    return {
-      deliveryMap: new Map<string, Date | null>(),
-      bouncedSet: new Set<string>(),
-      openedSet: new Set<string>(),
-      clickedSet: new Set<string>(),
-      unsubSet: new Set<string>(),
-    };
-  }
-
-  const [deliveries, bounces, openings, clicks, subscriptionChanges] = await Promise.all([
-    db.select({ messageId: postmarkDeliveries.messageId, deliveredAt: postmarkDeliveries.deliveredAt })
-      .from(postmarkDeliveries)
-      .where(inArray(postmarkDeliveries.messageId, messageIds)),
-    db.select({ messageId: postmarkBounces.messageId })
-      .from(postmarkBounces)
-      .where(inArray(postmarkBounces.messageId, messageIds)),
-    db.select({ messageId: postmarkOpenings.messageId })
-      .from(postmarkOpenings)
-      .where(inArray(postmarkOpenings.messageId, messageIds)),
-    db.select({ messageId: postmarkLinkClicks.messageId })
-      .from(postmarkLinkClicks)
-      .where(inArray(postmarkLinkClicks.messageId, messageIds)),
-    db.select({ messageId: postmarkSubscriptionChanges.messageId, suppressSending: postmarkSubscriptionChanges.suppressSending })
-      .from(postmarkSubscriptionChanges)
-      .where(inArray(postmarkSubscriptionChanges.messageId, messageIds)),
-  ]);
-
-  const deliveryMap = new Map<string, Date | null>();
-  for (const d of deliveries) {
-    if (d.messageId) deliveryMap.set(d.messageId, d.deliveredAt);
-  }
-
-  return {
-    deliveryMap,
-    bouncedSet: new Set(bounces.map((b) => b.messageId).filter((id): id is string => !!id)),
-    openedSet: new Set(openings.map((o) => o.messageId).filter((id): id is string => !!id)),
-    clickedSet: new Set(clicks.map((c) => c.messageId).filter((id): id is string => !!id)),
-    unsubSet: new Set(
-      subscriptionChanges
-        .filter((sc) => sc.suppressSending === true)
-        .map((sc) => sc.messageId)
-        .filter((id): id is string => !!id)
-    ),
+    replyClassification: null as string | null,
+    bounced: row.bounced,
+    unsubscribed: row.unsubscribed,
+    lastDeliveredAt: row.lastDeliveredAt?.toISOString() ?? null,
   };
 }
 
@@ -122,31 +48,35 @@ internalRouter.get("/status/:messageId", async (req: Request, res: Response) => 
   }
 
   try {
-    const [sending] = await db
+    const [row] = await db
       .select()
+      .from(postmarkMessages)
+      .where(eq(postmarkMessages.messageId, messageId))
+      .limit(1);
+
+    if (!row) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // sending.id is on the bronze table; fetch it for backward-compat in the response shape.
+    const [sending] = await db
+      .select({ id: postmarkSendings.id })
       .from(postmarkSendings)
       .where(eq(postmarkSendings.messageId, messageId))
       .limit(1);
 
-    if (!sending) {
-      return res.status(404).json({ error: "Message not found" });
-    }
-
-    const events = await fetchEventMaps([messageId]);
-    const status = computeMessageStatus(sending, events);
-
     res.json({
       messageId,
       sending: {
-        id: sending.id,
-        to: sending.toEmail,
-        from: sending.fromEmail,
-        subject: sending.subject,
-        submittedAt: sending.submittedAt,
-        orgId: sending.orgId,
-        runId: sending.runId,
+        id: sending?.id ?? "",
+        to: row.toEmail,
+        from: row.fromEmail,
+        subject: row.subject,
+        submittedAt: row.submittedAt,
+        orgId: row.orgId,
+        runId: row.runId,
       },
-      status,
+      status: silverToStatus(row),
     });
   } catch (error: any) {
     console.error("[postmark-service] Error getting message status:", error);
@@ -172,24 +102,21 @@ internalRouter.get("/status/by-org/:orgId", async (req: Request, res: Response) 
   try {
     const query = db
       .select()
-      .from(postmarkSendings)
-      .where(eq(postmarkSendings.orgId, orgId))
-      .orderBy(postmarkSendings.createdAt);
+      .from(postmarkMessages)
+      .where(eq(postmarkMessages.orgId, orgId))
+      .orderBy(postmarkMessages.createdAt);
 
-    const sendings = limitParam ? await query.limit(limitParam) : await query;
-
-    const messageIds = sendings.map((s) => s.messageId).filter((id): id is string => id !== null);
-    const events = await fetchEventMaps(messageIds);
+    const rows = limitParam ? await query.limit(limitParam) : await query;
 
     res.json({
       orgId,
-      count: sendings.length,
-      emails: sendings.map((s) => ({
-        messageId: s.messageId,
-        to: s.toEmail,
-        subject: s.subject,
-        submittedAt: s.submittedAt,
-        status: computeMessageStatus(s, events),
+      count: rows.length,
+      emails: rows.map((r) => ({
+        messageId: r.messageId,
+        to: r.toEmail,
+        subject: r.subject,
+        submittedAt: r.submittedAt,
+        status: silverToStatus(r),
       })),
     });
   } catch (error: any) {
@@ -213,24 +140,21 @@ internalRouter.get("/status/by-run/:runId", async (req: Request, res: Response) 
   }
 
   try {
-    const sendings = await db
+    const rows = await db
       .select()
-      .from(postmarkSendings)
-      .where(eq(postmarkSendings.runId, runId))
-      .orderBy(postmarkSendings.createdAt);
-
-    const messageIds = sendings.map((s) => s.messageId).filter((id): id is string => id !== null);
-    const events = await fetchEventMaps(messageIds);
+      .from(postmarkMessages)
+      .where(eq(postmarkMessages.runId, runId))
+      .orderBy(postmarkMessages.createdAt);
 
     res.json({
       runId,
-      total: sendings.length,
-      emails: sendings.map((s) => ({
-        messageId: s.messageId,
-        to: s.toEmail,
-        subject: s.subject,
-        submittedAt: s.submittedAt,
-        status: computeMessageStatus(s, events),
+      total: rows.length,
+      emails: rows.map((r) => ({
+        messageId: r.messageId,
+        to: r.toEmail,
+        subject: r.subject,
+        submittedAt: r.submittedAt,
+        status: silverToStatus(r),
       })),
     });
   } catch (error: any) {
@@ -269,9 +193,8 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
   }
 
   const { brandId: brandIdRaw, campaignId, items } = parsed.data;
-  const brandIds = brandIdRaw ? brandIdRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const brandIds = brandIdRaw ? brandIdRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
-  // Mode resolution: campaignId takes precedence over brandId
   const mode: "brand" | "campaign" | "global" = campaignId
     ? "campaign"
     : brandIds.length > 0
@@ -279,38 +202,35 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       : "global";
 
   try {
-    // 1. Collect unique emails
     const allEmails = [...new Set(items.map((i) => i.email))];
-
-    // 2. Query all sendings matching any email in this org
     const orgId = (req as any).orgContext?.orgId as string | undefined;
-    const sendingConditions: SQL[] = [inArray(postmarkSendings.toEmail, allEmails)];
+
+    const conditions: SQL[] = [inArray(postmarkMessages.toEmail, allEmails)];
     if (orgId) {
-      sendingConditions.push(eq(postmarkSendings.orgId, orgId));
+      conditions.push(eq(postmarkMessages.orgId, orgId));
     }
 
-    const sendings = await db
+    const rows = await db
       .select({
-        messageId: postmarkSendings.messageId,
-        toEmail: postmarkSendings.toEmail,
-        errorCode: postmarkSendings.errorCode,
-        campaignId: postmarkSendings.campaignId,
-        brandIds: postmarkSendings.brandIds,
+        messageId: postmarkMessages.messageId,
+        toEmail: postmarkMessages.toEmail,
+        campaignId: postmarkMessages.campaignId,
+        brandIds: postmarkMessages.brandIds,
+        contacted: postmarkMessages.contacted,
+        sent: postmarkMessages.sent,
+        delivered: postmarkMessages.delivered,
+        opened: postmarkMessages.opened,
+        clicked: postmarkMessages.clicked,
+        bounced: postmarkMessages.bounced,
+        unsubscribed: postmarkMessages.unsubscribed,
+        lastDeliveredAt: postmarkMessages.lastDeliveredAt,
       })
-      .from(postmarkSendings)
-      .where(and(...sendingConditions));
+      .from(postmarkMessages)
+      .where(and(...conditions));
 
-    // 3. Batch-query events for all messageIds
-    const allMessageIds = sendings
-      .map((s) => s.messageId)
-      .filter((id): id is string => id !== null);
+    type Row = (typeof rows)[number];
 
-    const events = await fetchEventMaps(allMessageIds);
-
-    // 4. Scope aggregation helper — BOOL_OR of per-message Layer 2 status
-    type SendingRow = typeof sendings[number];
-
-    function aggregateScope(rows: SendingRow[]) {
+    function aggregateScope(group: Row[]) {
       let contacted = false;
       let sent = false;
       let delivered = false;
@@ -320,17 +240,16 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       let unsubscribed = false;
       let lastDeliveredAt: Date | null = null;
 
-      for (const s of rows) {
-        const msgStatus = computeMessageStatus(s, events);
-        if (msgStatus.contacted) contacted = true;
-        if (msgStatus.sent) sent = true;
-        if (msgStatus.delivered) delivered = true;
-        if (msgStatus.opened) opened = true;
-        if (msgStatus.clicked) clicked = true;
-        if (msgStatus.bounced) bounced = true;
-        if (msgStatus.unsubscribed) unsubscribed = true;
-        if (msgStatus.lastDeliveredAt) {
-          const dt = new Date(msgStatus.lastDeliveredAt);
+      for (const r of group) {
+        if (r.contacted) contacted = true;
+        if (r.sent) sent = true;
+        if (r.delivered) delivered = true;
+        if (r.opened) opened = true;
+        if (r.clicked) clicked = true;
+        if (r.bounced) bounced = true;
+        if (r.unsubscribed) unsubscribed = true;
+        if (r.lastDeliveredAt) {
+          const dt = r.lastDeliveredAt instanceof Date ? r.lastDeliveredAt : new Date(r.lastDeliveredAt);
           if (!lastDeliveredAt || dt > lastDeliveredAt) lastDeliveredAt = dt;
         }
       }
@@ -342,33 +261,25 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         opened,
         clicked,
         replied: false,
-        replyClassification: null,
+        replyClassification: null as string | null,
         bounced,
         unsubscribed,
         lastDeliveredAt: lastDeliveredAt?.toISOString() ?? null,
       };
     }
 
-    // 5. Global scope helper — only bounced/unsubscribed across all org sendings
-    function aggregateGlobal(rows: SendingRow[]) {
+    function aggregateGlobal(group: Row[]) {
       let bounced = false;
       let unsubscribed = false;
-
-      for (const s of rows) {
-        if (s.messageId) {
-          if (events.bouncedSet.has(s.messageId)) bounced = true;
-          if (events.unsubSet.has(s.messageId)) unsubscribed = true;
-        }
+      for (const r of group) {
+        if (r.bounced) bounced = true;
+        if (r.unsubscribed) unsubscribed = true;
       }
-
       return { email: { bounced, unsubscribed } };
     }
 
-    // 7. Build results per item
     const results = items.map((item) => {
-      const emailRows = sendings.filter((s) => s.toEmail === item.email);
-
-      // Global — all sendings for this email in the org
+      const emailRows = rows.filter((r) => r.toEmail === item.email);
       const global = aggregateGlobal(emailRows);
 
       if (mode === "campaign") {
@@ -376,31 +287,29 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
           email: item.email,
           byCampaign: null,
           brand: null,
-          campaign: aggregateScope(emailRows.filter((s) => s.campaignId === campaignId)),
+          campaign: aggregateScope(emailRows.filter((r) => r.campaignId === campaignId)),
           global,
         };
       }
 
       if (mode === "brand") {
-        // Brand-filtered rows
-        const brandRows = emailRows.filter((s) => s.brandIds?.some((id) => brandIds.includes(id)));
+        const brandRows = emailRows.filter((r) => r.brandIds?.some((id) => brandIds.includes(id)));
 
-        // Group by campaignId for byCampaign breakdown
-        const campaignGroups = new Map<string, SendingRow[]>();
-        for (const row of brandRows) {
-          if (row.campaignId) {
-            let group = campaignGroups.get(row.campaignId);
-            if (!group) {
-              group = [];
-              campaignGroups.set(row.campaignId, group);
+        const campaignGroups = new Map<string, Row[]>();
+        for (const r of brandRows) {
+          if (r.campaignId) {
+            let g = campaignGroups.get(r.campaignId);
+            if (!g) {
+              g = [];
+              campaignGroups.set(r.campaignId, g);
             }
-            group.push(row);
+            g.push(r);
           }
         }
 
         const byCampaign: Record<string, ReturnType<typeof aggregateScope>> = {};
-        for (const [cId, rows] of campaignGroups) {
-          byCampaign[cId] = aggregateScope(rows);
+        for (const [cId, group] of campaignGroups) {
+          byCampaign[cId] = aggregateScope(group);
         }
 
         return {
@@ -412,7 +321,6 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         };
       }
 
-      // Global-only mode
       return {
         email: item.email,
         byCampaign: null,
@@ -435,10 +343,10 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
 // ─── Stats helpers ────────────────────────────────────────────────────────────
 
 const GROUP_BY_COLUMN_MAP = {
-  campaignId: postmarkSendings.campaignId,
-  workflowSlug: postmarkSendings.workflowSlug,
-  featureSlug: postmarkSendings.featureSlug,
-  recipientEmail: postmarkSendings.toEmail,
+  campaignId: postmarkMessages.campaignId,
+  workflowSlug: postmarkMessages.workflowSlug,
+  featureSlug: postmarkMessages.featureSlug,
+  recipientEmail: postmarkMessages.toEmail,
 } as const;
 
 function buildStatsConditions(data: {
@@ -451,116 +359,24 @@ function buildStatsConditions(data: {
 }): SQL[] {
   const conditions: SQL[] = [];
   if (Array.isArray(data.runIds) && data.runIds.length > 0) {
-    conditions.push(inArray(postmarkSendings.runId, data.runIds));
+    conditions.push(inArray(postmarkMessages.runId, data.runIds));
   }
   if (data.orgId) {
-    conditions.push(eq(postmarkSendings.orgId, data.orgId));
+    conditions.push(eq(postmarkMessages.orgId, data.orgId));
   }
   if (data.brandId && data.brandId.length > 0) {
-    conditions.push(arrayContains(postmarkSendings.brandIds, data.brandId));
+    conditions.push(arrayContains(postmarkMessages.brandIds, data.brandId));
   }
   if (data.campaignId) {
-    conditions.push(eq(postmarkSendings.campaignId, data.campaignId));
+    conditions.push(eq(postmarkMessages.campaignId, data.campaignId));
   }
   if (data.workflowSlugs && data.workflowSlugs.length > 0) {
-    conditions.push(inArray(postmarkSendings.workflowSlug, data.workflowSlugs));
+    conditions.push(inArray(postmarkMessages.workflowSlug, data.workflowSlugs));
   }
   if (data.featureSlugs && data.featureSlugs.length > 0) {
-    conditions.push(inArray(postmarkSendings.featureSlug, data.featureSlugs));
+    conditions.push(inArray(postmarkMessages.featureSlug, data.featureSlugs));
   }
   return conditions;
-}
-
-/**
- * Compute recipientStats by unique recipient with full implication chain.
- * Each recipient is counted once per metric — if ANY of their messages has the status, they count.
- */
-function computeRecipientStats(
-  sendings: { messageId: string | null; toEmail: string; errorCode?: number | null }[],
-  eventMaps: Awaited<ReturnType<typeof fetchEventMaps>>,
-) {
-  const byRecipient = new Map<string, typeof sendings>();
-  for (const s of sendings) {
-    let group = byRecipient.get(s.toEmail);
-    if (!group) {
-      group = [];
-      byRecipient.set(s.toEmail, group);
-    }
-    group.push(s);
-  }
-
-  let contacted = 0;
-  let sent = 0;
-  let delivered = 0;
-  let opened = 0;
-  let clicked = 0;
-  let bounced = 0;
-  let unsubscribed = 0;
-
-  for (const [, msgs] of byRecipient) {
-    let rContacted = false;
-    let rSent = false;
-    let rDelivered = false;
-    let rOpened = false;
-    let rClicked = false;
-    let rBounced = false;
-    let rUnsub = false;
-
-    for (const s of msgs) {
-      const status = computeMessageStatus(
-        { errorCode: s.errorCode ?? null, messageId: s.messageId },
-        eventMaps,
-      );
-      if (status.contacted) rContacted = true;
-      if (status.sent) rSent = true;
-      if (status.delivered) rDelivered = true;
-      if (status.opened) rOpened = true;
-      if (status.clicked) rClicked = true;
-      if (status.bounced) rBounced = true;
-      if (status.unsubscribed) rUnsub = true;
-    }
-
-    if (rContacted) contacted++;
-    if (rSent) sent++;
-    if (rDelivered) delivered++;
-    if (rOpened) opened++;
-    if (rClicked) clicked++;
-    if (rBounced) bounced++;
-    if (rUnsub) unsubscribed++;
-  }
-
-  return { contacted, sent, delivered, opened, clicked, bounced, unsubscribed };
-}
-
-/**
- * Compute emailStats by unique message (messageId).
- * Each message is counted once per metric.
- */
-function computeEmailStats(
-  sendings: { messageId: string | null; toEmail: string; errorCode?: number | null }[],
-  eventMaps: Awaited<ReturnType<typeof fetchEventMaps>>,
-) {
-  let sent = 0;
-  let delivered = 0;
-  let opened = 0;
-  let clicked = 0;
-  let bounced = 0;
-  let unsubscribed = 0;
-
-  for (const s of sendings) {
-    const status = computeMessageStatus(
-      { errorCode: s.errorCode ?? null, messageId: s.messageId },
-      eventMaps,
-    );
-    if (status.sent) sent++;
-    if (status.delivered) delivered++;
-    if (status.opened) opened++;
-    if (status.clicked) clicked++;
-    if (status.bounced) bounced++;
-    if (status.unsubscribed) unsubscribed++;
-  }
-
-  return { sent, delivered, opened, clicked, bounced, unsubscribed };
 }
 
 const EMPTY_REPLIES_DETAIL = {
@@ -575,15 +391,50 @@ const EMPTY_REPLIES_DETAIL = {
   outOfOffice: 0,
 };
 
-function buildRecipientStatsObject(rs: ReturnType<typeof computeRecipientStats>) {
+interface AggregateRow {
+  recipients_contacted: number;
+  recipients_sent: number;
+  recipients_delivered: number;
+  recipients_opened: number;
+  recipients_clicked: number;
+  recipients_bounced: number;
+  recipients_unsubscribed: number;
+  emails_sent: number;
+  emails_delivered: number;
+  emails_opened: number;
+  emails_clicked: number;
+  emails_bounced: number;
+  emails_unsubscribed: number;
+  [key: string]: unknown;
+}
+
+function aggregateExprs() {
+  return sql`
+    COUNT(DISTINCT "to_email") FILTER (WHERE "contacted")::int AS recipients_contacted,
+    COUNT(DISTINCT "to_email") FILTER (WHERE "sent")::int AS recipients_sent,
+    COUNT(DISTINCT "to_email") FILTER (WHERE "delivered")::int AS recipients_delivered,
+    COUNT(DISTINCT "to_email") FILTER (WHERE "opened")::int AS recipients_opened,
+    COUNT(DISTINCT "to_email") FILTER (WHERE "clicked")::int AS recipients_clicked,
+    COUNT(DISTINCT "to_email") FILTER (WHERE "bounced")::int AS recipients_bounced,
+    COUNT(DISTINCT "to_email") FILTER (WHERE "unsubscribed")::int AS recipients_unsubscribed,
+    COUNT(*) FILTER (WHERE "sent")::int AS emails_sent,
+    COUNT(*) FILTER (WHERE "delivered")::int AS emails_delivered,
+    COUNT(*) FILTER (WHERE "opened")::int AS emails_opened,
+    COUNT(*) FILTER (WHERE "clicked")::int AS emails_clicked,
+    COUNT(*) FILTER (WHERE "bounced")::int AS emails_bounced,
+    COUNT(*) FILTER (WHERE "unsubscribed")::int AS emails_unsubscribed
+  `;
+}
+
+function buildRecipientStatsObject(row: AggregateRow) {
   return {
-    contacted: rs.contacted,
-    sent: rs.sent,
-    delivered: rs.delivered,
-    opened: rs.opened,
-    bounced: rs.bounced,
-    clicked: rs.clicked,
-    unsubscribed: rs.unsubscribed,
+    contacted: row.recipients_contacted,
+    sent: row.recipients_sent,
+    delivered: row.recipients_delivered,
+    opened: row.recipients_opened,
+    bounced: row.recipients_bounced,
+    clicked: row.recipients_clicked,
+    unsubscribed: row.recipients_unsubscribed,
     repliesPositive: 0,
     repliesNegative: 0,
     repliesNeutral: 0,
@@ -592,15 +443,33 @@ function buildRecipientStatsObject(rs: ReturnType<typeof computeRecipientStats>)
   };
 }
 
-function buildEmailStatsObject(es: ReturnType<typeof computeEmailStats>) {
+function buildEmailStatsObject(row: AggregateRow) {
   return {
-    sent: es.sent,
-    delivered: es.delivered,
-    opened: es.opened,
-    clicked: es.clicked,
-    bounced: es.bounced,
-    unsubscribed: es.unsubscribed,
+    sent: row.emails_sent,
+    delivered: row.emails_delivered,
+    opened: row.emails_opened,
+    clicked: row.emails_clicked,
+    bounced: row.emails_bounced,
+    unsubscribed: row.emails_unsubscribed,
     stepStats: [] as never[],
+  };
+}
+
+function emptyAggregate(): AggregateRow {
+  return {
+    recipients_contacted: 0,
+    recipients_sent: 0,
+    recipients_delivered: 0,
+    recipients_opened: 0,
+    recipients_clicked: 0,
+    recipients_bounced: 0,
+    recipients_unsubscribed: 0,
+    emails_sent: 0,
+    emails_delivered: 0,
+    emails_opened: 0,
+    emails_clicked: 0,
+    emails_bounced: 0,
+    emails_unsubscribed: 0,
   };
 }
 
@@ -636,95 +505,53 @@ async function handleStats(req: Request, res: Response) {
     });
   }
 
+  const whereClause = sql.join(conditions, sql` AND `);
+
   try {
     if (!groupBy) {
-      // ─── Flat response ──────────────────────────────────────────────
-      const sendings = await db
-        .select({
-          messageId: postmarkSendings.messageId,
-          toEmail: postmarkSendings.toEmail,
-          errorCode: postmarkSendings.errorCode,
-        })
-        .from(postmarkSendings)
-        .where(and(...conditions));
-
-      const messageIds = sendings
-        .map((s) => s.messageId)
-        .filter((id): id is string => id !== null);
-
-      const eventMaps = await fetchEventMaps(messageIds);
-      const rs = computeRecipientStats(sendings, eventMaps);
-      const es = computeEmailStats(sendings, eventMaps);
-
+      const { rows } = await db.execute<AggregateRow>(sql`
+        SELECT ${aggregateExprs()}
+        FROM "postmark_messages"
+        WHERE ${whereClause}
+      `);
+      const agg = rows[0] ?? emptyAggregate();
       return res.json({
-        recipientStats: buildRecipientStatsObject(rs),
-        emailStats: buildEmailStatsObject(es),
+        recipientStats: buildRecipientStatsObject(agg),
+        emailStats: buildEmailStatsObject(agg),
       });
     }
 
-    // ─── Grouped response ────────────────────────────────────────────
-    const isBrandGroupBy = groupBy === "brandId";
-
-    // brandId groupBy requires unnesting the brand_ids array
-    type SendingRow = { messageId: string | null; toEmail: string; errorCode: number | null; groupKey: string | null };
-    let sendings: SendingRow[];
-
-    if (isBrandGroupBy) {
-      const rows = await db.execute<{ message_id: string | null; to_email: string; error_code: number | null; brand_id: string | null }>(
-        sql`SELECT "postmark_sendings"."message_id", "postmark_sendings"."to_email", "postmark_sendings"."error_code", unnest("postmark_sendings"."brand_ids") AS brand_id
-            FROM "postmark_sendings"
-            ${conditions.length > 0 ? sql`WHERE ${and(...conditions)}` : sql``}`
-      );
-      sendings = rows.rows.map((r) => ({
-        messageId: r.message_id,
-        toEmail: r.to_email,
-        errorCode: r.error_code,
-        groupKey: r.brand_id,
-      }));
-    } else {
-      const dbColumn = GROUP_BY_COLUMN_MAP[groupBy];
-
-      sendings = await db
-        .select({
-          messageId: postmarkSendings.messageId,
-          toEmail: postmarkSendings.toEmail,
-          errorCode: postmarkSendings.errorCode,
-          groupKey: dbColumn,
-        })
-        .from(postmarkSendings)
-        .where(and(...conditions));
+    if (groupBy === "brandId") {
+      const { rows } = await db.execute<AggregateRow & { group_key: string }>(sql`
+        SELECT unnest("brand_ids") AS group_key, ${aggregateExprs()}
+        FROM "postmark_messages"
+        WHERE ${whereClause}
+        GROUP BY group_key
+      `);
+      return res.json({
+        groups: rows.map((r) => ({
+          key: r.group_key,
+          recipientStats: buildRecipientStatsObject(r),
+          emailStats: buildEmailStatsObject(r),
+        })),
+      });
     }
 
-    // Group sendings by dimension key
-    const grouped = new Map<string, SendingRow[]>();
-    for (const s of sendings) {
-      const key = s.groupKey ?? "";
-      let group = grouped.get(key);
-      if (!group) {
-        group = [];
-        grouped.set(key, group);
-      }
-      group.push(s);
-    }
+    const groupColumn = GROUP_BY_COLUMN_MAP[groupBy];
+    const { rows } = await db.execute<AggregateRow & { group_key: string | null }>(sql`
+      SELECT ${groupColumn} AS group_key, ${aggregateExprs()}
+      FROM "postmark_messages"
+      WHERE ${whereClause}
+      GROUP BY ${groupColumn}
+    `);
 
-    // Fetch all events once
-    const allMessageIds = sendings
-      .map((s) => s.messageId)
-      .filter((id): id is string => id !== null);
-
-    const eventMaps = await fetchEventMaps(allMessageIds);
-
-    const groups = Array.from(grouped.entries()).map(([key, groupSendings]) => {
-      const rs = computeRecipientStats(groupSendings, eventMaps);
-      const es = computeEmailStats(groupSendings, eventMaps);
-      return {
-        key,
-        recipientStats: buildRecipientStatsObject(rs),
-        emailStats: buildEmailStatsObject(es),
-      };
+    return res.json({
+      groups: rows.map((r) => ({
+        key: r.group_key ?? "",
+        recipientStats: buildRecipientStatsObject(r),
+        emailStats: buildEmailStatsObject(r),
+      })),
     });
-
-    return res.json({ groups });
   } catch (error: any) {
     console.error("[postmark-service] Error getting stats:", error);
     res.status(500).json({

@@ -8,7 +8,9 @@ import {
   jsonb,
   bigint,
   uniqueIndex,
-  index
+  index,
+  date,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -49,6 +51,81 @@ export const postmarkSendings = pgTable(
     index("idx_sendings_workflow").on(table.workflowSlug),
     index("idx_sendings_lead").on(table.leadId),
     index("idx_sendings_campaign_email").on(table.campaignId, table.toEmail),
+    index("idx_sendings_feature_created").on(table.featureSlug, table.createdAt.desc()),
+  ]
+);
+
+/**
+ * Silver — Materialized Layer 2 status per message.
+ * One row per messageId. UPSERTed by upsertSilver(messageId) on webhook ingest.
+ * Reads (stats/status endpoints) hit this table directly — never the bronze event tables.
+ */
+export const postmarkMessages = pgTable(
+  "postmark_messages",
+  {
+    messageId: uuid("message_id").primaryKey(),
+    toEmail: text("to_email").notNull(),
+    fromEmail: text("from_email"),
+    subject: text("subject"),
+    orgId: text("org_id"),
+    userId: text("user_id"),
+    runId: text("run_id"),
+    campaignId: text("campaign_id"),
+    brandIds: text("brand_ids").array(),
+    featureSlug: text("feature_slug"),
+    workflowSlug: text("workflow_slug"),
+    leadId: text("lead_id"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    errorCode: integer("error_code"),
+    // Layer 2 booleans
+    contacted: boolean("contacted").notNull().default(false),
+    sent: boolean("sent").notNull().default(false),
+    delivered: boolean("delivered").notNull().default(false),
+    opened: boolean("opened").notNull().default(false),
+    clicked: boolean("clicked").notNull().default(false),
+    bounced: boolean("bounced").notNull().default(false),
+    unsubscribed: boolean("unsubscribed").notNull().default(false),
+    lastDeliveredAt: timestamp("last_delivered_at", { withTimezone: true }),
+    sourceAttribution: jsonb("source_attribution"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastRebuiltAt: timestamp("last_rebuilt_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_messages_org").on(table.orgId),
+    index("idx_messages_org_campaign").on(table.orgId, table.campaignId),
+    index("idx_messages_run").on(table.runId),
+    index("idx_messages_campaign").on(table.campaignId),
+    index("idx_messages_brand_ids").using("gin", table.brandIds),
+    index("idx_messages_workflow").on(table.workflowSlug),
+    index("idx_messages_feature_created").on(table.featureSlug, table.createdAt.desc()),
+    index("idx_messages_to_email").on(table.toEmail),
+    index("idx_messages_lead").on(table.leadId),
+  ]
+);
+
+/**
+ * Gold — Daily rollup per (feature_slug, group_dim, group_key, day).
+ * group_dim: "workflow_slug" | "brand_id" | "total".
+ * Refreshed every 5 minutes for the trailing 7 days. Public leaderboard reads from here.
+ */
+export const postmarkStatsDaily = pgTable(
+  "postmark_stats_daily",
+  {
+    featureSlug: text("feature_slug").notNull(),
+    groupDim: text("group_dim").notNull(),
+    groupKey: text("group_key").notNull(),
+    day: date("day").notNull(),
+    sent: integer("sent").notNull().default(0),
+    delivered: integer("delivered").notNull().default(0),
+    opened: integer("opened").notNull().default(0),
+    clicked: integer("clicked").notNull().default(0),
+    bounced: integer("bounced").notNull().default(0),
+    recipients: integer("recipients").notNull().default(0),
+    refreshedAt: timestamp("refreshed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.featureSlug, table.groupDim, table.groupKey, table.day] }),
+    index("idx_stats_daily_feature_day").on(table.featureSlug, table.day.desc()),
   ]
 );
 
@@ -228,3 +305,7 @@ export type PostmarkSpamComplaint = typeof postmarkSpamComplaints.$inferSelect;
 export type NewPostmarkSpamComplaint = typeof postmarkSpamComplaints.$inferInsert;
 export type PostmarkSubscriptionChange = typeof postmarkSubscriptionChanges.$inferSelect;
 export type NewPostmarkSubscriptionChange = typeof postmarkSubscriptionChanges.$inferInsert;
+export type PostmarkMessage = typeof postmarkMessages.$inferSelect;
+export type NewPostmarkMessage = typeof postmarkMessages.$inferInsert;
+export type PostmarkStatsDaily = typeof postmarkStatsDaily.$inferSelect;
+export type NewPostmarkStatsDaily = typeof postmarkStatsDaily.$inferInsert;

@@ -19,6 +19,12 @@ vi.mock("../../src/lib/key-client", () => ({
   getAppKey: vi.fn(),
 }));
 
+// Mock silver materialization — this test exercises the webhook router only,
+// not the bronze-to-silver UPSERT.
+vi.mock("../../src/lib/silver", () => ({
+  upsertSilver: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { createTestApp } from "../helpers/test-app";
 import { createInboundPayload, createDeliveryPayload } from "../fixtures/postmark-payloads";
 
