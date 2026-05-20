@@ -16,14 +16,15 @@ import {
   randomUUID,
 } from "../helpers/test-db";
 
+// Single pool for the whole file — closing it in one describe's afterAll would break the next describe.
+afterAll(async () => {
+  await cleanTestData();
+  await closeDb();
+});
+
 describe("upsertSilver — idempotency & implication chain (integration)", () => {
   beforeEach(async () => {
     await cleanTestData();
-  });
-
-  afterAll(async () => {
-    await cleanTestData();
-    await closeDb();
   });
 
   it("sending insert produces silver row with contacted=true, sent=true (errorCode=0)", async () => {
@@ -118,11 +119,6 @@ describe("upsertSilver — idempotency & implication chain (integration)", () =>
 describe("refreshStatsDaily — gold rollup (integration)", () => {
   beforeEach(async () => {
     await cleanTestData();
-  });
-
-  afterAll(async () => {
-    await cleanTestData();
-    await closeDb();
   });
 
   it("builds total + workflow_slug + brand_id rollups from silver", async () => {
