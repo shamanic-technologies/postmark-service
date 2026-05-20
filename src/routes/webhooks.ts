@@ -12,6 +12,7 @@ import {
   forwardInboundToGateway,
   GatewayForwardError,
 } from "../lib/email-gateway-client";
+import { upsertSilver } from "../lib/silver";
 
 const router = Router();
 
@@ -102,6 +103,7 @@ async function handleDelivery(payload: any) {
     metadata: payload.Metadata,
     headers: payload.Headers,
   }).onConflictDoNothing();
+  if (payload.MessageID) await upsertSilver(payload.MessageID);
 }
 
 async function handleBounce(payload: any) {
@@ -127,6 +129,7 @@ async function handleBounce(payload: any) {
     messageStream: payload.MessageStream,
     metadata: payload.Metadata,
   }).onConflictDoNothing();
+  if (payload.MessageID) await upsertSilver(payload.MessageID);
 }
 
 async function handleOpen(payload: any) {
@@ -146,6 +149,7 @@ async function handleOpen(payload: any) {
     client: payload.Client,
     geo: payload.Geo,
   });
+  if (payload.MessageID) await upsertSilver(payload.MessageID);
 }
 
 async function handleClick(payload: any) {
@@ -165,6 +169,7 @@ async function handleClick(payload: any) {
     client: payload.Client,
     geo: payload.Geo,
   });
+  if (payload.MessageID) await upsertSilver(payload.MessageID);
 }
 
 async function handleSpamComplaint(payload: any) {
@@ -195,6 +200,9 @@ async function handleSubscriptionChange(payload: any) {
     suppressSending: payload.SuppressSending,
     changedAt: payload.ChangedAt ? new Date(payload.ChangedAt) : null,
   }).onConflictDoNothing();
+  // SubscriptionChange can arrive without a MessageID (org-level unsubscribe);
+  // silver only tracks per-message state, so we no-op those.
+  if (payload.MessageID) await upsertSilver(payload.MessageID);
 }
 
 export default router;

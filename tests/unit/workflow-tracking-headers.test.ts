@@ -43,6 +43,12 @@ vi.mock("../../src/db", () => ({
   },
 }));
 
+// Mock silver materialization — the unit test only exercises the send pipeline,
+// not the bronze-to-silver upsert path which has its own integration tests.
+vi.mock("../../src/lib/silver", () => ({
+  upsertSilver: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { createRun, updateRun, addCosts } from "../../src/lib/runs-client";
 import { sendEmail } from "../../src/lib/postmark-client";
 import { getOrgKey, getStreamId, getFromAddress } from "../../src/lib/key-client";

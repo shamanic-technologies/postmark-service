@@ -1,144 +1,60 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import {
-  postmarkSendings,
-  postmarkDeliveries,
-  postmarkBounces,
-  postmarkOpenings,
-  postmarkLinkClicks,
-} from "../db/schema";
-import { inArray } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 const router = Router();
+
+interface LeaderboardRow {
+  workflow_slug: string;
+  recipients_contacted: number;
+  recipients_sent: number;
+  recipients_delivered: number;
+  recipients_opened: number;
+  recipients_clicked: number;
+  recipients_bounced: number;
+  [key: string]: unknown;
+}
 
 /**
  * GET /public/performance/leaderboard
  *
  * Returns global workflow performance stats. API key only, no identity headers.
- * All metrics use unique-recipient counting with full implication chain.
+ * All metrics use unique-recipient counting; the Layer 2 implication chain is already
+ * baked into the silver `postmark_messages` booleans.
  */
 router.get("/performance/leaderboard", async (_req: Request, res: Response) => {
   try {
-    const sendings = await db
-      .select({
-        messageId: postmarkSendings.messageId,
-        toEmail: postmarkSendings.toEmail,
-        errorCode: postmarkSendings.errorCode,
-        workflowSlug: postmarkSendings.workflowSlug,
-      })
-      .from(postmarkSendings);
+    const { rows } = await db.execute<LeaderboardRow>(sql`
+      SELECT
+        "workflow_slug",
+        COUNT(DISTINCT "to_email") FILTER (WHERE "contacted")::int AS recipients_contacted,
+        COUNT(DISTINCT "to_email") FILTER (WHERE "sent")::int AS recipients_sent,
+        COUNT(DISTINCT "to_email") FILTER (WHERE "delivered")::int AS recipients_delivered,
+        COUNT(DISTINCT "to_email") FILTER (WHERE "opened")::int AS recipients_opened,
+        COUNT(DISTINCT "to_email") FILTER (WHERE "clicked")::int AS recipients_clicked,
+        COUNT(DISTINCT "to_email") FILTER (WHERE "bounced")::int AS recipients_bounced
+      FROM "postmark_messages"
+      WHERE "workflow_slug" IS NOT NULL
+      GROUP BY "workflow_slug"
+      ORDER BY recipients_sent DESC
+    `);
 
-    // Group by workflowSlug
-    const grouped = new Map<string, typeof sendings>();
-    for (const s of sendings) {
-      const key = s.workflowSlug ?? "";
-      let group = grouped.get(key);
-      if (!group) {
-        group = [];
-        grouped.set(key, group);
-      }
-      group.push(s);
-    }
-
-    const allMessageIds = sendings
-      .map((s) => s.messageId)
-      .filter((id): id is string => id !== null);
-
-    // Fetch all events in parallel
-    const [allDeliveries, allOpenings, allClicks, allBounces] =
-      allMessageIds.length > 0
-        ? await Promise.all([
-            db
-              .select({ messageId: postmarkDeliveries.messageId })
-              .from(postmarkDeliveries)
-              .where(inArray(postmarkDeliveries.messageId, allMessageIds)),
-            db
-              .select({ messageId: postmarkOpenings.messageId })
-              .from(postmarkOpenings)
-              .where(inArray(postmarkOpenings.messageId, allMessageIds)),
-            db
-              .select({ messageId: postmarkLinkClicks.messageId })
-              .from(postmarkLinkClicks)
-              .where(inArray(postmarkLinkClicks.messageId, allMessageIds)),
-            db
-              .select({ messageId: postmarkBounces.messageId })
-              .from(postmarkBounces)
-              .where(inArray(postmarkBounces.messageId, allMessageIds)),
-          ])
-        : [[], [], [], []];
-
-    // Build lookup sets
-    const deliveredSet = new Set(allDeliveries.map((d) => d.messageId));
-    const openedSet = new Set(allOpenings.map((o) => o.messageId));
-    const clickedSet = new Set(allClicks.map((c) => c.messageId));
-    const bouncedSet = new Set(allBounces.map((b) => b.messageId));
-
-    const workflows = Array.from(grouped.entries())
-      .filter(([key]) => key !== "") // exclude sendings with no workflowSlug
-      .map(([key, groupSendings]) => {
-        // Count by unique recipient with implications
-        const byRecipient = new Map<string, typeof groupSendings>();
-        for (const s of groupSendings) {
-          let recip = byRecipient.get(s.toEmail);
-          if (!recip) {
-            recip = [];
-            byRecipient.set(s.toEmail, recip);
-          }
-          recip.push(s);
-        }
-
-        let emailsContacted = 0;
-        let emailsSent = 0;
-        let emailsDelivered = 0;
-        let emailsOpened = 0;
-        let emailsClicked = 0;
-        let emailsBounced = 0;
-
-        for (const [, msgs] of byRecipient) {
-          let rSent = false;
-          let rDelivered = false;
-          let rOpened = false;
-          let rClicked = false;
-          let rBounced = false;
-
-          for (const s of msgs) {
-            const mid = s.messageId;
-            const hasDelivery = mid ? deliveredSet.has(mid) : false;
-            const hasBounce = mid ? bouncedSet.has(mid) : false;
-            const hasOpen = mid ? openedSet.has(mid) : false;
-            const hasClick = mid ? clickedSet.has(mid) : false;
-
-            // Implication chain
-            if (hasClick) rClicked = true;
-            if (hasOpen || hasClick) rOpened = true;
-            if ((hasDelivery || hasOpen || hasClick) && !hasBounce) rDelivered = true;
-            if (s.errorCode === 0 || hasDelivery || hasOpen || hasClick || hasBounce) rSent = true;
-            if (hasBounce) rBounced = true;
-          }
-
-          emailsContacted++;
-          if (rSent) emailsSent++;
-          if (rDelivered) emailsDelivered++;
-          if (rOpened) emailsOpened++;
-          if (rClicked) emailsClicked++;
-          if (rBounced) emailsBounced++;
-        }
-
-        return {
-          workflowSlug: key,
-          emailsContacted,
-          emailsSent,
-          emailsDelivered,
-          emailsOpened,
-          emailsClicked,
-          emailsBounced,
-          openRate: emailsSent > 0 ? emailsOpened / emailsSent : 0,
-          clickRate: emailsSent > 0 ? emailsClicked / emailsSent : 0,
-          bounceRate: emailsSent > 0 ? emailsBounced / emailsSent : 0,
-          deliveryRate: emailsSent > 0 ? emailsDelivered / emailsSent : 0,
-        };
-      })
-      .sort((a, b) => b.emailsSent - a.emailsSent);
+    const workflows = rows.map((r) => {
+      const emailsSent = r.recipients_sent;
+      return {
+        workflowSlug: r.workflow_slug,
+        emailsContacted: r.recipients_contacted,
+        emailsSent,
+        emailsDelivered: r.recipients_delivered,
+        emailsOpened: r.recipients_opened,
+        emailsClicked: r.recipients_clicked,
+        emailsBounced: r.recipients_bounced,
+        openRate: emailsSent > 0 ? r.recipients_opened / emailsSent : 0,
+        clickRate: emailsSent > 0 ? r.recipients_clicked / emailsSent : 0,
+        bounceRate: emailsSent > 0 ? r.recipients_bounced / emailsSent : 0,
+        deliveryRate: emailsSent > 0 ? r.recipients_delivered / emailsSent : 0,
+      };
+    });
 
     res.json({ workflows });
   } catch (error: any) {

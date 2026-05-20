@@ -41,6 +41,11 @@ vi.mock("../../src/db", () => ({
   },
 }));
 
+// Mock silver materialization — see workflow-tracking-headers.test.ts for rationale.
+vi.mock("../../src/lib/silver", () => ({
+  upsertSilver: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { getOrgKey } from "../../src/lib/key-client";
 import { authorizeCredits } from "../../src/lib/billing-client";
 import { sendEmail } from "../../src/lib/postmark-client";
