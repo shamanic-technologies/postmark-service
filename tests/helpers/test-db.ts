@@ -7,14 +7,19 @@ import {
   postmarkLinkClicks,
   postmarkSpamComplaints,
   postmarkSubscriptionChanges,
+  postmarkMessages,
+  postmarkStatsDaily,
 } from "../../src/db/schema";
 import { sql } from "drizzle-orm";
+import { upsertSilver } from "../../src/lib/silver";
 
 /**
  * Clean all test data from the database
  */
 export async function cleanTestData() {
   // Delete in order of dependencies (no FKs in this schema, but good practice)
+  await db.delete(postmarkStatsDaily);
+  await db.delete(postmarkMessages);
   await db.delete(postmarkLinkClicks);
   await db.delete(postmarkOpenings);
   await db.delete(postmarkSpamComplaints);
@@ -61,6 +66,9 @@ export async function insertTestSending(data: {
     })
     .returning();
 
+  // Mirror the production write path: silver is materialized on bronze insert.
+  if (sending.messageId) await upsertSilver(sending.messageId);
+
   return sending;
 }
 
@@ -78,7 +86,8 @@ export async function insertTestDelivery(messageId: string, recipient?: string) 
       messageStream: "broadcast",
     })
     .returning();
-  
+
+  await upsertSilver(messageId);
   return delivery;
 }
 
@@ -99,7 +108,8 @@ export async function insertTestBounce(messageId: string, email?: string) {
       messageStream: "broadcast",
     })
     .returning();
-  
+
+  await upsertSilver(messageId);
   return bounce;
 }
 
@@ -119,7 +129,8 @@ export async function insertTestOpening(messageId: string, recipient?: string) {
       messageStream: "broadcast",
     })
     .returning();
-  
+
+  await upsertSilver(messageId);
   return opening;
 }
 
@@ -141,6 +152,7 @@ export async function insertTestLinkClick(messageId: string, recipient?: string)
     })
     .returning();
 
+  await upsertSilver(messageId);
   return click;
 }
 
@@ -164,6 +176,7 @@ export async function insertTestSubscriptionChange(
     })
     .returning();
 
+  await upsertSilver(messageId);
   return change;
 }
 

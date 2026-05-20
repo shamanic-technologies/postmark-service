@@ -40,19 +40,23 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 - `src/lib/runs-client.ts` — Runs service HTTP client
 - `src/db/schema.ts` — Drizzle table definitions
 - `src/db/index.ts` — Database connection
+- `src/lib/silver.ts` — `upsertSilver(messageId)` + `recomputeLayer2()` — single chokepoint for Layer 2
+- `src/lib/gold.ts` — `refreshStatsDaily({windowDays})` — rebuild gold rollup
+- `src/jobs/stats-daily-cron.ts` — 5-minute gold refresh, started post-`listen()`
+- `scripts/backfill-silver.ts` — one-shot bronze → silver + gold rebuild
 - `scripts/generate-openapi.ts` — OpenAPI spec generation script
 - `tests/` — Test files (unit/, integration/, fixtures/, helpers/)
 - `openapi.json` — Auto-generated, do NOT edit manually
 
-## Delivery Status Architecture
+## Delivery Status Architecture (bronze / silver / gold)
 
-### Core principle: all endpoints expose Layer 2
+### Core principle: all endpoints read from silver / gold — never bronze
 
-Every endpoint that returns status or stats exposes **Layer 2** — consolidated status computed from raw events using the implication chain. No endpoint ever exposes Layer 1 raw events (no `delivery: {}`, `bounce: {}`, `openings[]`, `clicks[]`). Layer 2 is computed the same way everywhere — no special cases, no inconsistencies between endpoints.
+Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized) or the **gold** rollup `postmark_stats_daily`. Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. This is what keeps queries cheap regardless of geography between Railway and Neon.
 
-### Layer 1 — Raw Postmark events (internal storage only)
+### Bronze — Layer 1: raw Postmark events (write-only)
 
-Append-only storage of every webhook received from Postmark. One row per event, never updated, never deleted. Each event type has its own table with type-specific columns. **Never exposed to consumers.**
+Append-only storage of every webhook received from Postmark. One row per event, never updated, never deleted. Each event type has its own table with type-specific columns. **Read endpoints never touch these tables.**
 
 | Table | Webhook event | Unique per message? | Key extra columns |
 |-------|--------------|--------------------|--------------------|
@@ -64,11 +68,19 @@ Append-only storage of every webhook received from Postmark. One row per event, 
 | `postmark_spam_complaints` | SpamComplaint | yes | `email`, `from_address` |
 | `postmark_subscription_changes` | SubscriptionChange | yes | `suppress_sending`, `origin`, `changed_at` |
 
-Webhook handlers (`src/routes/webhooks.ts`) are pure "dump into DB" — no business logic, no status derivation.
+Webhook handlers (`src/routes/webhooks.ts`) are pure "dump into bronze, then `upsertSilver(messageId)`" — no business logic, no status derivation. `upsertSilver` is the single chokepoint where Layer 2 is recomputed from bronze and written to silver.
 
-### Layer 2 — Consolidated status (the only thing consumers see)
+### Silver — Layer 2: materialized status (`postmark_messages`)
 
-Computed at query time from Layer 1 events. The implication chain ensures that downstream events automatically set upstream statuses (e.g. a click implies opened, delivered, sent, contacted). This handles missing or delayed webhooks.
+One row per `message_id`. Columns are typed booleans for the Layer 2 implication chain plus denormalized scope fields (`org_id`, `campaign_id`, `brand_ids[]`, `feature_slug`, `workflow_slug`, `run_id`, `lead_id`). Every read endpoint queries this table directly.
+
+- Maintained by `src/lib/silver.ts::upsertSilver(messageId)`, invoked after each bronze write (send handler + every webhook handler).
+- Backfillable from bronze via `scripts/backfill-silver.ts` — idempotent, paginated, safe to re-run.
+- Indexes cover the common filter shapes: `(org_id, campaign_id)`, `(run_id)`, `(workflow_slug)`, `(feature_slug, created_at DESC)`, GIN on `brand_ids`, `(to_email)`.
+
+The implication chain that used to be computed at query time is now computed once in `recomputeLayer2()` (`src/lib/silver.ts`) and stored. Stats endpoints become single SQL `COUNT(*) FILTER (...)` aggregates over silver — no JOINs to event tables, no JS-side bool-OR loops.
+
+**Implication chain:** `contacted → sent → delivered → opened → clicked`
 
 **Implication chain:** `contacted → sent → delivered → opened → clicked`
 
@@ -121,6 +133,35 @@ The implication chain applies to counting too — if a recipient has a click but
 | `recipients` | Same as `emailsSent` |
 
 Note: unlike instantly-service which computes `delivered = sent - bounced` (because they lack a delivery signal), postmark-service uses the **real Postmark delivery webhook** plus implications. This is more accurate.
+
+### Gold — Layer 3: rollup (`postmark_stats_daily`)
+
+Pre-aggregated counts keyed by `(feature_slug, group_dim, group_key, day)` where `group_dim ∈ { "total" | "workflow_slug" | "brand_id" }`. Used by the public cross-org feature leaderboard, which scans no other table at read time.
+
+- Rebuilt every 5 minutes by `src/jobs/stats-daily-cron.ts` (running `refreshStatsDaily({ windowDays: 7 })`).
+- Cron is started **after** `app.listen()` — never on the boot path. Refresh is single-transaction, full-window DELETE+INSERT — idempotent.
+- Reading the leaderboard is one SQL SELECT against gold; no fan-out, no JOINs.
+
+### Write path summary
+
+```
+POST /send              → INSERT bronze.postmark_sendings → upsertSilver(messageId)
+POST /webhooks/postmark → INSERT bronze.postmark_<event>  → upsertSilver(messageId)
+cron (every 5 min)      → refreshStatsDaily({ windowDays: 7 }) → wipe + rebuild gold window
+```
+
+### Read path summary
+
+```
+GET  /internal/status/:messageId    → SELECT FROM postmark_messages WHERE message_id
+GET  /internal/status/by-org/:orgId → SELECT FROM postmark_messages WHERE org_id
+GET  /internal/status/by-run/:runId → SELECT FROM postmark_messages WHERE run_id
+POST /orgs/status                   → SELECT FROM postmark_messages WHERE to_email IN (...) AND org_id
+GET  /orgs/stats, /internal/stats   → SELECT COUNT(*) FILTER (...) FROM postmark_messages WHERE <filters>
+GET  /public/performance/leaderboard→ SELECT FROM postmark_messages GROUP BY workflow_slug  (silver, global)
+```
+
+Public feature leaderboard endpoints (currently mounted upstream in features-service) hit gold via `postmark_stats_daily` when the cross-org feature dimension is requested.
 
 ### Status endpoint modes (`POST /orgs/status`)
 
