@@ -735,4 +735,45 @@ describe("Status Endpoints Integration", () => {
       expect(r).not.toHaveProperty("leadId");
     });
   });
+
+  describe("contract padding — cancelled on StatusScope", () => {
+    it("pads cancelled=false on campaign-mode scope", async () => {
+      const campaignId = "camp-padding-c";
+      const orgId = "org-padding-c";
+      const email = "padding-c@test.com";
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, orgId, campaignId, brandId: "b-padding" });
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .set("x-org-id", orgId)
+        .send({ campaignId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.campaign).not.toBeNull();
+      expect(r.campaign.cancelled).toBe(false);
+    });
+
+    it("pads cancelled=false on brand-mode scopes (byCampaign + brand)", async () => {
+      const brandId = "b-padding-brand";
+      const orgId = "org-padding-b";
+      const email = "padding-b@test.com";
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, orgId, brandId, campaignId: "camp-pad-a" });
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, orgId, brandId, campaignId: "camp-pad-b" });
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .set("x-org-id", orgId)
+        .send({ brandId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.brand).not.toBeNull();
+      expect(r.brand.cancelled).toBe(false);
+      expect(r.byCampaign["camp-pad-a"].cancelled).toBe(false);
+      expect(r.byCampaign["camp-pad-b"].cancelled).toBe(false);
+    });
+  });
 });
