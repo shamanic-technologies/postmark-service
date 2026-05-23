@@ -607,34 +607,244 @@
                   "type": "object",
                   "nullable": true,
                   "additionalProperties": {
-                    "$ref": "#/components/schemas/ScopeStatus"
+                    "type": "object",
+                    "properties": {
+                      "contacted": {
+                        "type": "boolean",
+                        "description": "Whether at least one sending exists in this scope"
+                      },
+                      "sent": {
+                        "type": "boolean",
+                        "description": "Whether an email was sent in this scope"
+                      },
+                      "delivered": {
+                        "type": "boolean",
+                        "description": "Whether an email was delivered in this scope (sent AND not bounced)"
+                      },
+                      "opened": {
+                        "type": "boolean",
+                        "description": "Whether the recipient opened any email in this scope"
+                      },
+                      "clicked": {
+                        "type": "boolean",
+                        "description": "Whether the recipient clicked any link in this scope"
+                      },
+                      "replied": {
+                        "type": "boolean",
+                        "description": "Whether the recipient replied in this scope (always false for postmark — no reply tracking)"
+                      },
+                      "replyClassification": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [
+                          "positive",
+                          "negative",
+                          "neutral",
+                          null
+                        ],
+                        "description": "Classification of most recent reply: positive / negative / neutral, or null if no reply (always null for postmark)"
+                      },
+                      "bounced": {
+                        "type": "boolean",
+                        "description": "Whether an email bounced in this scope"
+                      },
+                      "unsubscribed": {
+                        "type": "boolean",
+                        "description": "Whether the recipient unsubscribed in this scope"
+                      },
+                      "cancelled": {
+                        "type": "boolean",
+                        "description": "Whether the campaign was cancelled by the retry-stuck job. Optional in contract v1; required in v2 after postmark padding ships."
+                      },
+                      "lastDeliveredAt": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
+                      }
+                    },
+                    "required": [
+                      "contacted",
+                      "sent",
+                      "delivered",
+                      "opened",
+                      "clicked",
+                      "replied",
+                      "replyClassification",
+                      "bounced",
+                      "unsubscribed",
+                      "lastDeliveredAt"
+                    ]
                   },
                   "description": "Per-campaign breakdown (brand mode only). Keys are campaign UUIDs, values are scoped status. Null in campaign and global modes."
                 },
                 "brand": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ScopeStatus"
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "contacted": {
+                      "type": "boolean",
+                      "description": "Whether at least one sending exists in this scope"
                     },
-                    {
+                    "sent": {
+                      "type": "boolean",
+                      "description": "Whether an email was sent in this scope"
+                    },
+                    "delivered": {
+                      "type": "boolean",
+                      "description": "Whether an email was delivered in this scope (sent AND not bounced)"
+                    },
+                    "opened": {
+                      "type": "boolean",
+                      "description": "Whether the recipient opened any email in this scope"
+                    },
+                    "clicked": {
+                      "type": "boolean",
+                      "description": "Whether the recipient clicked any link in this scope"
+                    },
+                    "replied": {
+                      "type": "boolean",
+                      "description": "Whether the recipient replied in this scope (always false for postmark — no reply tracking)"
+                    },
+                    "replyClassification": {
+                      "type": "string",
                       "nullable": true,
-                      "description": "Aggregated status across all campaigns for the brand (brand mode only). BOOL_OR across campaigns. Null in campaign and global modes."
+                      "enum": [
+                        "positive",
+                        "negative",
+                        "neutral",
+                        null
+                      ],
+                      "description": "Classification of most recent reply: positive / negative / neutral, or null if no reply (always null for postmark)"
+                    },
+                    "bounced": {
+                      "type": "boolean",
+                      "description": "Whether an email bounced in this scope"
+                    },
+                    "unsubscribed": {
+                      "type": "boolean",
+                      "description": "Whether the recipient unsubscribed in this scope"
+                    },
+                    "cancelled": {
+                      "type": "boolean",
+                      "description": "Whether the campaign was cancelled by the retry-stuck job. Optional in contract v1; required in v2 after postmark padding ships."
+                    },
+                    "lastDeliveredAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
                     }
-                  ]
+                  },
+                  "required": [
+                    "contacted",
+                    "sent",
+                    "delivered",
+                    "opened",
+                    "clicked",
+                    "replied",
+                    "replyClassification",
+                    "bounced",
+                    "unsubscribed",
+                    "lastDeliveredAt"
+                  ],
+                  "description": "Aggregated status across all campaigns for the brand (brand mode only). BOOL_OR across campaigns. Null in campaign and global modes."
                 },
                 "campaign": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ScopeStatus"
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "contacted": {
+                      "type": "boolean",
+                      "description": "Whether at least one sending exists in this scope"
                     },
-                    {
+                    "sent": {
+                      "type": "boolean",
+                      "description": "Whether an email was sent in this scope"
+                    },
+                    "delivered": {
+                      "type": "boolean",
+                      "description": "Whether an email was delivered in this scope (sent AND not bounced)"
+                    },
+                    "opened": {
+                      "type": "boolean",
+                      "description": "Whether the recipient opened any email in this scope"
+                    },
+                    "clicked": {
+                      "type": "boolean",
+                      "description": "Whether the recipient clicked any link in this scope"
+                    },
+                    "replied": {
+                      "type": "boolean",
+                      "description": "Whether the recipient replied in this scope (always false for postmark — no reply tracking)"
+                    },
+                    "replyClassification": {
+                      "type": "string",
                       "nullable": true,
-                      "description": "Status scoped to the requested campaignId (campaign mode only). Null in brand and global modes."
+                      "enum": [
+                        "positive",
+                        "negative",
+                        "neutral",
+                        null
+                      ],
+                      "description": "Classification of most recent reply: positive / negative / neutral, or null if no reply (always null for postmark)"
+                    },
+                    "bounced": {
+                      "type": "boolean",
+                      "description": "Whether an email bounced in this scope"
+                    },
+                    "unsubscribed": {
+                      "type": "boolean",
+                      "description": "Whether the recipient unsubscribed in this scope"
+                    },
+                    "cancelled": {
+                      "type": "boolean",
+                      "description": "Whether the campaign was cancelled by the retry-stuck job. Optional in contract v1; required in v2 after postmark padding ships."
+                    },
+                    "lastDeliveredAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
                     }
-                  ]
+                  },
+                  "required": [
+                    "contacted",
+                    "sent",
+                    "delivered",
+                    "opened",
+                    "clicked",
+                    "replied",
+                    "replyClassification",
+                    "bounced",
+                    "unsubscribed",
+                    "lastDeliveredAt"
+                  ],
+                  "description": "Status scoped to the requested campaignId (campaign mode only). Null in brand and global modes."
                 },
                 "global": {
-                  "$ref": "#/components/schemas/GlobalScope"
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "bounced": {
+                          "type": "boolean",
+                          "description": "True if this email bounced anywhere in the org"
+                        },
+                        "unsubscribed": {
+                          "type": "boolean",
+                          "description": "True if this email unsubscribed anywhere in the org"
+                        }
+                      },
+                      "required": [
+                        "bounced",
+                        "unsubscribed"
+                      ],
+                      "description": "Global email signals (technical/legal)"
+                    }
+                  },
+                  "required": [
+                    "email"
+                  ],
+                  "description": "Org-wide email health flags. Always present in all modes."
                 }
               },
               "required": [
@@ -650,93 +860,6 @@
         "required": [
           "results"
         ]
-      },
-      "ScopeStatus": {
-        "type": "object",
-        "properties": {
-          "contacted": {
-            "type": "boolean",
-            "description": "True if at least one sending exists in this scope"
-          },
-          "sent": {
-            "type": "boolean",
-            "description": "True if at least one email was accepted by Postmark (errorCode=0), or implied by downstream events"
-          },
-          "delivered": {
-            "type": "boolean",
-            "description": "True if at least one email was delivered, or implied by open/click. False if bounced"
-          },
-          "opened": {
-            "type": "boolean",
-            "description": "True if at least one email was opened, or implied by click"
-          },
-          "clicked": {
-            "type": "boolean",
-            "description": "True if at least one link was clicked (never implied)"
-          },
-          "replied": {
-            "type": "boolean",
-            "description": "True if at least one reply was received (always false for Postmark — no reply tracking)"
-          },
-          "replyClassification": {
-            "type": "string",
-            "nullable": true,
-            "description": "Reply sentiment classification (always null for Postmark)"
-          },
-          "bounced": {
-            "type": "boolean",
-            "description": "True if at least one email bounced"
-          },
-          "unsubscribed": {
-            "type": "boolean",
-            "description": "True if the recipient unsubscribed via a sending in this scope"
-          },
-          "lastDeliveredAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time",
-            "description": "ISO timestamp of the most recent delivery in this scope"
-          }
-        },
-        "required": [
-          "contacted",
-          "sent",
-          "delivered",
-          "opened",
-          "clicked",
-          "replied",
-          "replyClassification",
-          "bounced",
-          "unsubscribed",
-          "lastDeliveredAt"
-        ]
-      },
-      "GlobalScope": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "object",
-            "properties": {
-              "bounced": {
-                "type": "boolean",
-                "description": "True if any email to this address bounced across all campaigns in the org"
-              },
-              "unsubscribed": {
-                "type": "boolean",
-                "description": "True if the recipient unsubscribed from any campaign in the org"
-              }
-            },
-            "required": [
-              "bounced",
-              "unsubscribed"
-            ],
-            "description": "Org-wide email health flags (not scoped to brand or campaign)"
-          }
-        },
-        "required": [
-          "email"
-        ],
-        "description": "Org-wide email health flags. Always present in all modes."
       },
       "StatusRequest": {
         "type": "object",
@@ -784,73 +907,94 @@
             "properties": {
               "contacted": {
                 "type": "number",
-                "description": "Unique recipients with any sending in scope"
+                "description": "Leads added to a campaign / send attempted"
               },
               "sent": {
                 "type": "number",
-                "description": "Unique recipients with at least one accepted email"
+                "description": "Leads with at least 1 email sent (COUNT DISTINCT lead)"
               },
               "delivered": {
                 "type": "number",
-                "description": "Unique recipients with at least one delivered email"
+                "description": "Leads delivered (sent - bounced)"
               },
               "opened": {
                 "type": "number",
-                "description": "Unique recipients who opened at least one email"
+                "description": "Leads who opened at least 1 email"
               },
               "bounced": {
                 "type": "number",
-                "description": "Unique recipients with at least one bounced email"
+                "description": "Leads with at least 1 bounce"
               },
               "clicked": {
                 "type": "number",
-                "description": "Unique recipients who clicked at least one link"
+                "description": "Leads who clicked at least 1 link"
               },
               "unsubscribed": {
                 "type": "number",
-                "description": "Unique recipients who unsubscribed"
+                "description": "Leads who unsubscribed"
+              },
+              "notSending": {
+                "type": "number",
+                "description": "Leads in campaigns currently flagged with Instantly's not_sending_status diagnostic. Optional in contract v1; will be required in v2 after postmark padding ships."
+              },
+              "cancelled": {
+                "type": "number",
+                "description": "Leads whose campaign was cancelled by the retry-stuck job (delivery_status='cancelled'). Optional in contract v1; will be required in v2 after postmark padding ships."
               },
               "repliesPositive": {
-                "type": "number"
+                "type": "number",
+                "description": "interested + meetingBooked + closed"
               },
               "repliesNegative": {
-                "type": "number"
+                "type": "number",
+                "description": "notInterested + wrongPerson + unsubscribe"
               },
               "repliesNeutral": {
-                "type": "number"
+                "type": "number",
+                "description": "neutral (lead_neutral events only)"
               },
               "repliesAutoReply": {
-                "type": "number"
+                "type": "number",
+                "description": "autoReply + outOfOffice"
               },
               "repliesDetail": {
                 "type": "object",
                 "properties": {
                   "interested": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_interested events"
                   },
                   "meetingBooked": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_meeting_booked events"
                   },
                   "closed": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_closed events"
                   },
                   "notInterested": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_not_interested events"
                   },
                   "wrongPerson": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_wrong_person events"
                   },
                   "unsubscribe": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_unsubscribed events"
                   },
                   "neutral": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_neutral events"
                   },
                   "autoReply": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "auto_reply_received events"
                   },
                   "outOfOffice": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "lead_out_of_office events"
                   }
                 },
                 "required": [
@@ -863,7 +1007,8 @@
                   "neutral",
                   "autoReply",
                   "outOfOffice"
-                ]
+                ],
+                "description": "Granular reply breakdown by classification"
               }
             },
             "required": [
@@ -886,27 +1031,27 @@
             "properties": {
               "sent": {
                 "type": "number",
-                "description": "Total distinct emails sent (by messageId)"
+                "description": "Total emails sent (COUNT *, all steps)"
               },
               "delivered": {
                 "type": "number",
-                "description": "Total distinct emails delivered"
+                "description": "Total emails delivered (sent - bounced)"
               },
               "opened": {
                 "type": "number",
-                "description": "Total distinct emails opened at least once"
+                "description": "Unique emails opened at least once (COUNT DISTINCT)"
               },
               "clicked": {
                 "type": "number",
-                "description": "Total distinct emails clicked at least once"
+                "description": "Unique emails with at least 1 click (COUNT DISTINCT)"
               },
               "bounced": {
                 "type": "number",
-                "description": "Total distinct emails bounced"
+                "description": "Total emails bounced"
               },
               "unsubscribed": {
                 "type": "number",
-                "description": "Total distinct emails that triggered unsubscribe"
+                "description": "Total unsubscribe events"
               },
               "stepStats": {
                 "type": "array",
@@ -914,67 +1059,87 @@
                   "type": "object",
                   "properties": {
                     "step": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "Step number (1-based)"
                     },
                     "sent": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "Emails sent at this step"
                     },
                     "delivered": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "Delivered at this step (sent - bounced)"
                     },
                     "opened": {
-                      "type": "number"
-                    },
-                    "bounced": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "Emails opened at this step"
                     },
                     "clicked": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "Link clicks at this step"
+                    },
+                    "bounced": {
+                      "type": "number",
+                      "description": "Emails bounced at this step"
                     },
                     "unsubscribed": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "Unsubscribes at this step"
                     },
                     "repliesPositive": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "interested + meetingBooked + closed"
                     },
                     "repliesNegative": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "notInterested + wrongPerson + unsubscribe"
                     },
                     "repliesNeutral": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "neutral (lead_neutral events only)"
                     },
                     "repliesAutoReply": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "autoReply + outOfOffice"
                     },
                     "repliesDetail": {
                       "type": "object",
                       "properties": {
                         "interested": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_interested events"
                         },
                         "meetingBooked": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_meeting_booked events"
                         },
                         "closed": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_closed events"
                         },
                         "notInterested": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_not_interested events"
                         },
                         "wrongPerson": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_wrong_person events"
                         },
                         "unsubscribe": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_unsubscribed events"
                         },
                         "neutral": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_neutral events"
                         },
                         "autoReply": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "auto_reply_received events"
                         },
                         "outOfOffice": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_out_of_office events"
                         }
                       },
                       "required": [
@@ -987,7 +1152,8 @@
                         "neutral",
                         "autoReply",
                         "outOfOffice"
-                      ]
+                      ],
+                      "description": "Granular reply breakdown by classification"
                     }
                   },
                   "required": [
@@ -995,8 +1161,8 @@
                     "sent",
                     "delivered",
                     "opened",
-                    "bounced",
                     "clicked",
+                    "bounced",
                     "unsubscribed",
                     "repliesPositive",
                     "repliesNegative",
@@ -1005,7 +1171,7 @@
                     "repliesDetail"
                   ]
                 },
-                "description": "Per-step breakdown (always empty for Postmark — no step concept)"
+                "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
               }
             },
             "required": [
@@ -1014,8 +1180,7 @@
               "opened",
               "clicked",
               "bounced",
-              "unsubscribed",
-              "stepStats"
+              "unsubscribed"
             ]
           }
         },
@@ -1040,73 +1205,94 @@
                   "properties": {
                     "contacted": {
                       "type": "number",
-                      "description": "Unique recipients with any sending in scope"
+                      "description": "Leads added to a campaign / send attempted"
                     },
                     "sent": {
                       "type": "number",
-                      "description": "Unique recipients with at least one accepted email"
+                      "description": "Leads with at least 1 email sent (COUNT DISTINCT lead)"
                     },
                     "delivered": {
                       "type": "number",
-                      "description": "Unique recipients with at least one delivered email"
+                      "description": "Leads delivered (sent - bounced)"
                     },
                     "opened": {
                       "type": "number",
-                      "description": "Unique recipients who opened at least one email"
+                      "description": "Leads who opened at least 1 email"
                     },
                     "bounced": {
                       "type": "number",
-                      "description": "Unique recipients with at least one bounced email"
+                      "description": "Leads with at least 1 bounce"
                     },
                     "clicked": {
                       "type": "number",
-                      "description": "Unique recipients who clicked at least one link"
+                      "description": "Leads who clicked at least 1 link"
                     },
                     "unsubscribed": {
                       "type": "number",
-                      "description": "Unique recipients who unsubscribed"
+                      "description": "Leads who unsubscribed"
+                    },
+                    "notSending": {
+                      "type": "number",
+                      "description": "Leads in campaigns currently flagged with Instantly's not_sending_status diagnostic. Optional in contract v1; will be required in v2 after postmark padding ships."
+                    },
+                    "cancelled": {
+                      "type": "number",
+                      "description": "Leads whose campaign was cancelled by the retry-stuck job (delivery_status='cancelled'). Optional in contract v1; will be required in v2 after postmark padding ships."
                     },
                     "repliesPositive": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "interested + meetingBooked + closed"
                     },
                     "repliesNegative": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "notInterested + wrongPerson + unsubscribe"
                     },
                     "repliesNeutral": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "neutral (lead_neutral events only)"
                     },
                     "repliesAutoReply": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "autoReply + outOfOffice"
                     },
                     "repliesDetail": {
                       "type": "object",
                       "properties": {
                         "interested": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_interested events"
                         },
                         "meetingBooked": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_meeting_booked events"
                         },
                         "closed": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_closed events"
                         },
                         "notInterested": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_not_interested events"
                         },
                         "wrongPerson": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_wrong_person events"
                         },
                         "unsubscribe": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_unsubscribed events"
                         },
                         "neutral": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_neutral events"
                         },
                         "autoReply": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "auto_reply_received events"
                         },
                         "outOfOffice": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "lead_out_of_office events"
                         }
                       },
                       "required": [
@@ -1119,7 +1305,8 @@
                         "neutral",
                         "autoReply",
                         "outOfOffice"
-                      ]
+                      ],
+                      "description": "Granular reply breakdown by classification"
                     }
                   },
                   "required": [
@@ -1142,27 +1329,27 @@
                   "properties": {
                     "sent": {
                       "type": "number",
-                      "description": "Total distinct emails sent (by messageId)"
+                      "description": "Total emails sent (COUNT *, all steps)"
                     },
                     "delivered": {
                       "type": "number",
-                      "description": "Total distinct emails delivered"
+                      "description": "Total emails delivered (sent - bounced)"
                     },
                     "opened": {
                       "type": "number",
-                      "description": "Total distinct emails opened at least once"
+                      "description": "Unique emails opened at least once (COUNT DISTINCT)"
                     },
                     "clicked": {
                       "type": "number",
-                      "description": "Total distinct emails clicked at least once"
+                      "description": "Unique emails with at least 1 click (COUNT DISTINCT)"
                     },
                     "bounced": {
                       "type": "number",
-                      "description": "Total distinct emails bounced"
+                      "description": "Total emails bounced"
                     },
                     "unsubscribed": {
                       "type": "number",
-                      "description": "Total distinct emails that triggered unsubscribe"
+                      "description": "Total unsubscribe events"
                     },
                     "stepStats": {
                       "type": "array",
@@ -1170,67 +1357,87 @@
                         "type": "object",
                         "properties": {
                           "step": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Step number (1-based)"
                           },
                           "sent": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Emails sent at this step"
                           },
                           "delivered": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Delivered at this step (sent - bounced)"
                           },
                           "opened": {
-                            "type": "number"
-                          },
-                          "bounced": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Emails opened at this step"
                           },
                           "clicked": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Link clicks at this step"
+                          },
+                          "bounced": {
+                            "type": "number",
+                            "description": "Emails bounced at this step"
                           },
                           "unsubscribed": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Unsubscribes at this step"
                           },
                           "repliesPositive": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "interested + meetingBooked + closed"
                           },
                           "repliesNegative": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "notInterested + wrongPerson + unsubscribe"
                           },
                           "repliesNeutral": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "neutral (lead_neutral events only)"
                           },
                           "repliesAutoReply": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "autoReply + outOfOffice"
                           },
                           "repliesDetail": {
                             "type": "object",
                             "properties": {
                               "interested": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_interested events"
                               },
                               "meetingBooked": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_meeting_booked events"
                               },
                               "closed": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_closed events"
                               },
                               "notInterested": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_not_interested events"
                               },
                               "wrongPerson": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_wrong_person events"
                               },
                               "unsubscribe": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_unsubscribed events"
                               },
                               "neutral": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_neutral events"
                               },
                               "autoReply": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "auto_reply_received events"
                               },
                               "outOfOffice": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "lead_out_of_office events"
                               }
                             },
                             "required": [
@@ -1243,7 +1450,8 @@
                               "neutral",
                               "autoReply",
                               "outOfOffice"
-                            ]
+                            ],
+                            "description": "Granular reply breakdown by classification"
                           }
                         },
                         "required": [
@@ -1251,8 +1459,8 @@
                           "sent",
                           "delivered",
                           "opened",
-                          "bounced",
                           "clicked",
+                          "bounced",
                           "unsubscribed",
                           "repliesPositive",
                           "repliesNegative",
@@ -1261,7 +1469,7 @@
                           "repliesDetail"
                         ]
                       },
-                      "description": "Per-step breakdown (always empty for Postmark — no step concept)"
+                      "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
                     }
                   },
                   "required": [
@@ -1270,8 +1478,7 @@
                     "opened",
                     "clicked",
                     "bounced",
-                    "unsubscribed",
-                    "stepStats"
+                    "unsubscribed"
                   ]
                 }
               },

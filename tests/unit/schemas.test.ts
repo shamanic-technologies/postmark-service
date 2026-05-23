@@ -4,7 +4,17 @@ import {
   BatchSendRequestSchema,
   StatsQuerySchema,
   StatusRequestSchema,
+  StatusScopeSchema,
+  GlobalStatusSchema,
+  RecipientStatsSchema,
+  EmailStatsSchema,
+  RepliesDetailSchema,
+  StepStatsSchema,
+  ChannelStatsSchema,
+  ProviderStatusSchema,
+  ReplyClassificationSchema,
 } from "../../src/schemas";
+import * as contract from "@shamanic-technologies/email-domain-contract";
 
 describe("Zod schemas", () => {
   describe("SendEmailRequestSchema", () => {
@@ -355,6 +365,89 @@ describe("Zod schemas", () => {
       if (result.success) {
         expect(result.data.workflowSlug).toBeUndefined();
       }
+    });
+  });
+
+  describe("Shared contract re-exports", () => {
+    it("re-exports identical schema instances from email-domain-contract", () => {
+      expect(ReplyClassificationSchema).toBe(contract.ReplyClassificationSchema);
+      expect(RepliesDetailSchema).toBe(contract.RepliesDetailSchema);
+      expect(RecipientStatsSchema).toBe(contract.RecipientStatsSchema);
+      expect(StepStatsSchema).toBe(contract.StepStatsSchema);
+      expect(EmailStatsSchema).toBe(contract.EmailStatsSchema);
+      expect(ChannelStatsSchema).toBe(contract.ChannelStatsSchema);
+      expect(StatusScopeSchema).toBe(contract.StatusScopeSchema);
+      expect(GlobalStatusSchema).toBe(contract.GlobalStatusSchema);
+      expect(ProviderStatusSchema).toBe(contract.ProviderStatusSchema);
+    });
+
+    const validScopeWithCancelled = {
+      contacted: true,
+      sent: true,
+      delivered: true,
+      opened: false,
+      clicked: false,
+      replied: false,
+      replyClassification: null,
+      bounced: false,
+      unsubscribed: false,
+      cancelled: false,
+      lastDeliveredAt: "2026-03-02T12:00:00.000Z",
+    };
+
+    it("StatusScopeSchema accepts payload with cancelled padded to false", () => {
+      const result = StatusScopeSchema.safeParse(validScopeWithCancelled);
+      expect(result.success).toBe(true);
+    });
+
+    it("StatusScopeSchema accepts payload without cancelled (optional in contract v1)", () => {
+      const { cancelled, ...withoutCancelled } = validScopeWithCancelled;
+      const result = StatusScopeSchema.safeParse(withoutCancelled);
+      expect(result.success).toBe(true);
+    });
+
+    const validRecipientStatsWithNotSending = {
+      contacted: 1,
+      sent: 1,
+      delivered: 1,
+      opened: 0,
+      bounced: 0,
+      clicked: 0,
+      unsubscribed: 0,
+      notSending: 0,
+      repliesPositive: 0,
+      repliesNegative: 0,
+      repliesNeutral: 0,
+      repliesAutoReply: 0,
+      repliesDetail: {
+        interested: 0,
+        meetingBooked: 0,
+        closed: 0,
+        notInterested: 0,
+        wrongPerson: 0,
+        unsubscribe: 0,
+        neutral: 0,
+        autoReply: 0,
+        outOfOffice: 0,
+      },
+    };
+
+    it("RecipientStatsSchema accepts payload with notSending padded to 0", () => {
+      const result = RecipientStatsSchema.safeParse(validRecipientStatsWithNotSending);
+      expect(result.success).toBe(true);
+    });
+
+    it("RecipientStatsSchema accepts payload without notSending (optional in contract v1)", () => {
+      const { notSending, ...withoutNotSending } = validRecipientStatsWithNotSending;
+      const result = RecipientStatsSchema.safeParse(withoutNotSending);
+      expect(result.success).toBe(true);
+    });
+
+    it("ReplyClassificationSchema accepts the three contract values", () => {
+      expect(ReplyClassificationSchema.safeParse("positive").success).toBe(true);
+      expect(ReplyClassificationSchema.safeParse("negative").success).toBe(true);
+      expect(ReplyClassificationSchema.safeParse("neutral").success).toBe(true);
+      expect(ReplyClassificationSchema.safeParse("other").success).toBe(false);
     });
   });
 });

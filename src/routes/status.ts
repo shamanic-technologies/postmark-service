@@ -264,6 +264,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         replyClassification: null as string | null,
         bounced,
         unsubscribed,
+        cancelled: false,
         lastDeliveredAt: lastDeliveredAt?.toISOString() ?? null,
       };
     }
@@ -435,6 +436,7 @@ function buildRecipientStatsObject(row: AggregateRow) {
     bounced: row.recipients_bounced,
     clicked: row.recipients_clicked,
     unsubscribed: row.recipients_unsubscribed,
+    notSending: 0,
     repliesPositive: 0,
     repliesNegative: 0,
     repliesNeutral: 0,
