@@ -429,4 +429,36 @@ describe("GET /stats", () => {
 
     expect(response.status).toBe(400);
   });
+
+  describe("contract padding — notSending on RecipientStats", () => {
+    it("pads notSending=0 on flat recipientStats", async () => {
+      const orgId = "org-notsending-flat";
+      await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId, brandId: "b1", campaignId: "c1" });
+
+      const response = await request(app)
+        .get("/orgs/stats")
+        .set(getAuthHeaders())
+        .query({ orgId });
+
+      expect(response.status).toBe(200);
+      expect(response.body.recipientStats.notSending).toBe(0);
+    });
+
+    it("pads notSending=0 on each group when groupBy is set", async () => {
+      const orgId = "org-notsending-grouped";
+      await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId, brandId: "b1", campaignId: "c1", workflowSlug: "wf-ns-a" });
+      await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId, brandId: "b1", campaignId: "c1", workflowSlug: "wf-ns-b" });
+
+      const response = await request(app)
+        .get("/orgs/stats")
+        .set(getAuthHeaders())
+        .query({ orgId, groupBy: "workflowSlug" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.groups.length).toBeGreaterThan(0);
+      for (const g of response.body.groups) {
+        expect(g.recipientStats.notSending).toBe(0);
+      }
+    });
+  });
 });

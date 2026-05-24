@@ -30,6 +30,7 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 ## Architecture
 
 - `src/schemas.ts` — Zod schemas (source of truth for validation + OpenAPI)
+- `src/zod-setup.ts` — Side-effect module that extends Zod with `.openapi()`. Import it BEFORE any module that creates `z.object(...).openapi("Name")` schemas.
 - `src/index.ts` — Express app setup, CORS, middleware
 - `src/routes/send.ts` — Email sending (single + batch)
 - `src/routes/status.ts` — Email status queries + aggregated stats
@@ -189,3 +190,15 @@ Every endpoint below returns Layer 2 only. No exceptions.
 | `GET /internal/status/by-org/{orgId}` | List of emails with Layer 2 status each | org-wide |
 | `GET /internal/status/by-run/{runId}` | List of emails with Layer 2 status each | single run |
 | `GET /public/performance/leaderboard` | Per-workflow aggregated counts + rates | global |
+
+## Shared contract
+
+Cross-provider canonical shapes (`StatusScope`, `RecipientStats`, `EmailStats`, `StepStats`, `RepliesDetail`, `ChannelStats`, `ProviderStatus`, `GlobalStatus`, `ReplyClassification`) live in [`@shamanic-technologies/email-domain-contract`](https://github.com/shamanic-technologies/email-domain-contract). Do NOT redeclare these schemas locally — re-export from the package via `src/schemas.ts`. Same convention as email-gateway-service and (pending) instantly-service.
+
+Two provider-specific fields are **optional in v1** of the contract: `cancelled` (on `StatusScope`) and `notSending` (on `RecipientStats`). They live on instantly responses today; postmark pads them with neutral defaults (`cancelled: false` in `aggregateScope()`, `notSending: 0` in `buildRecipientStatsObject()`) so consumers see a consistent shape across providers. Contract v2 will tighten them to required after instantly confirms its responses still match.
+
+## Zod 4 caveat — contract schemas + `.openapi()`
+
+`@asteasolutions/zod-to-openapi` attaches `.openapi()` to Zod schema instances at the time `extendZodWithOpenApi(z)` runs in the consumer. The contract package's schemas were instantiated before that point in the consumer's module graph (especially under Vitest's module-graph evaluation order, which is not guaranteed), so they do NOT gain `.openapi()` retroactively. Re-export them without `.openapi(name)` and let the generator inline them (no `$ref` name). Local schemas defined in `src/schemas.ts` (after `import "./zod-setup"`) keep their `.openapi(name)` tagging.
+
+Chained methods on contract schemas (`.nullable()`, `.optional()`) return fresh ZodNullable / ZodOptional instances and would normally have `.openapi`, but Vitest's evaluation order is unreliable — prefer `.describe(...)` (core Zod, always available) over `.openapi({ description })` when chaining off a contract schema.

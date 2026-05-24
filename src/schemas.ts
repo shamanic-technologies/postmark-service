@@ -1,12 +1,61 @@
-import { z } from "zod";
-import {
-  OpenAPIRegistry,
-  extendZodWithOpenApi,
-} from "@asteasolutions/zod-to-openapi";
+// Side-effect import — extends Zod with `.openapi()` so subsequent local schema
+// declarations (`z.object({...}).openapi("Name")`) work. Imported contract
+// schemas are re-exported as-is without `.openapi(name)`: zod-to-openapi v8's
+// `.openapi(name)` requires the schema instance to be created AFTER the
+// extension (Zod 4 attaches prototype methods at construction time). The
+// OpenAPI generator inlines contract shapes where they're referenced; trade-off
+// accepted to keep a single source of truth in the contract package.
+import "./zod-setup";
 
-extendZodWithOpenApi(z);
+import { z } from "zod";
+import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
+import {
+  ReplyClassificationSchema as RawReplyClassification,
+  RepliesDetailSchema as RawRepliesDetail,
+  RecipientStatsSchema as RawRecipientStats,
+  StepStatsSchema as RawStepStats,
+  EmailStatsSchema as RawEmailStats,
+  ChannelStatsSchema as RawChannelStats,
+  StatusScopeSchema as RawStatusScope,
+  GlobalStatusSchema as RawGlobalStatus,
+  ProviderStatusSchema as RawProviderStatus,
+} from "@shamanic-technologies/email-domain-contract";
 
 export const registry = new OpenAPIRegistry();
+
+// --- Shared cross-provider schemas (imported from email-domain-contract) ---
+// Re-exported as-is. The OpenAPI generator inlines them where they're referenced
+// (no $ref name) because zod-to-openapi v8's `.openapi(name)` cannot be applied
+// to pre-existing Zod 4 schema instances without the consumer creating them
+// fresh. Trade-off accepted for v1: slightly more verbose OpenAPI output, but
+// the schemas remain a single source of truth in the contract package.
+
+export const ReplyClassificationSchema = RawReplyClassification;
+export type ReplyClassification = z.infer<typeof ReplyClassificationSchema>;
+
+export const RepliesDetailSchema = RawRepliesDetail;
+export type RepliesDetail = z.infer<typeof RepliesDetailSchema>;
+
+export const RecipientStatsSchema = RawRecipientStats;
+export type RecipientStats = z.infer<typeof RecipientStatsSchema>;
+
+export const StepStatsSchema = RawStepStats;
+export type StepStats = z.infer<typeof StepStatsSchema>;
+
+export const EmailStatsSchema = RawEmailStats;
+export type EmailStats = z.infer<typeof EmailStatsSchema>;
+
+export const ChannelStatsSchema = RawChannelStats;
+export type ChannelStats = z.infer<typeof ChannelStatsSchema>;
+
+export const StatusScopeSchema = RawStatusScope;
+export type StatusScope = z.infer<typeof StatusScopeSchema>;
+
+export const GlobalStatusSchema = RawGlobalStatus;
+export type GlobalStatus = z.infer<typeof GlobalStatusSchema>;
+
+export const ProviderStatusSchema = RawProviderStatus;
+export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
 
 // --- Security scheme ---
 registry.registerComponent("securitySchemes", "apiKey", {
@@ -192,25 +241,9 @@ export const RunEmailsResponseSchema = z
 
 // ===== Unified Status Lookup =====
 
-const ScopeStatusSchema = z.object({
-  contacted: z.boolean().openapi({ description: "True if at least one sending exists in this scope" }),
-  sent: z.boolean().openapi({ description: "True if at least one email was accepted by Postmark (errorCode=0), or implied by downstream events" }),
-  delivered: z.boolean().openapi({ description: "True if at least one email was delivered, or implied by open/click. False if bounced" }),
-  opened: z.boolean().openapi({ description: "True if at least one email was opened, or implied by click" }),
-  clicked: z.boolean().openapi({ description: "True if at least one link was clicked (never implied)" }),
-  replied: z.boolean().openapi({ description: "True if at least one reply was received (always false for Postmark — no reply tracking)" }),
-  replyClassification: z.string().nullable().openapi({ description: "Reply sentiment classification (always null for Postmark)" }),
-  bounced: z.boolean().openapi({ description: "True if at least one email bounced" }),
-  unsubscribed: z.boolean().openapi({ description: "True if the recipient unsubscribed via a sending in this scope" }),
-  lastDeliveredAt: z.string().nullable().openapi({ format: "date-time", description: "ISO timestamp of the most recent delivery in this scope" }),
-}).openapi("ScopeStatus");
-
-const GlobalScopeSchema = z.object({
-  email: z.object({
-    bounced: z.boolean().openapi({ description: "True if any email to this address bounced across all campaigns in the org" }),
-    unsubscribed: z.boolean().openapi({ description: "True if the recipient unsubscribed from any campaign in the org" }),
-  }).openapi({ description: "Org-wide email health flags (not scoped to brand or campaign)" }),
-}).openapi("GlobalScope");
+// StatusScopeSchema and GlobalStatusSchema are imported from
+// @shamanic-technologies/email-domain-contract above. Local wrappers
+// (StatusResponseSchema, etc.) reference them directly.
 
 export const StatusRequestSchema = z
   .object({
@@ -231,10 +264,10 @@ export const StatusResponseSchema = z
     results: z.array(
       z.object({
         email: z.string().openapi({ description: "The email address that was looked up" }),
-        byCampaign: z.record(z.string(), ScopeStatusSchema).nullable().openapi({ description: "Per-campaign breakdown (brand mode only). Keys are campaign UUIDs, values are scoped status. Null in campaign and global modes." }),
-        brand: ScopeStatusSchema.nullable().openapi({ description: "Aggregated status across all campaigns for the brand (brand mode only). BOOL_OR across campaigns. Null in campaign and global modes." }),
-        campaign: ScopeStatusSchema.nullable().openapi({ description: "Status scoped to the requested campaignId (campaign mode only). Null in brand and global modes." }),
-        global: GlobalScopeSchema.openapi({ description: "Org-wide email health flags. Always present in all modes." }),
+        byCampaign: z.record(z.string(), StatusScopeSchema).nullable().describe("Per-campaign breakdown (brand mode only). Keys are campaign UUIDs, values are scoped status. Null in campaign and global modes."),
+        brand: StatusScopeSchema.nullable().describe("Aggregated status across all campaigns for the brand (brand mode only). BOOL_OR across campaigns. Null in campaign and global modes."),
+        campaign: StatusScopeSchema.nullable().describe("Status scoped to the requested campaignId (campaign mode only). Null in brand and global modes."),
+        global: GlobalStatusSchema.describe("Org-wide email health flags. Always present in all modes."),
       })
     ),
   })
@@ -260,57 +293,9 @@ export const StatsQuerySchema = z
 
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
-const RepliesDetailSchema = z.object({
-  interested: z.number(),
-  meetingBooked: z.number(),
-  closed: z.number(),
-  notInterested: z.number(),
-  wrongPerson: z.number(),
-  unsubscribe: z.number(),
-  neutral: z.number(),
-  autoReply: z.number(),
-  outOfOffice: z.number(),
-});
-
-const StepStatsSchema = z.object({
-  step: z.number(),
-  sent: z.number(),
-  delivered: z.number(),
-  opened: z.number(),
-  bounced: z.number(),
-  clicked: z.number(),
-  unsubscribed: z.number(),
-  repliesPositive: z.number(),
-  repliesNegative: z.number(),
-  repliesNeutral: z.number(),
-  repliesAutoReply: z.number(),
-  repliesDetail: RepliesDetailSchema,
-});
-
-const RecipientStatsSchema = z.object({
-  contacted: z.number().openapi({ description: "Unique recipients with any sending in scope" }),
-  sent: z.number().openapi({ description: "Unique recipients with at least one accepted email" }),
-  delivered: z.number().openapi({ description: "Unique recipients with at least one delivered email" }),
-  opened: z.number().openapi({ description: "Unique recipients who opened at least one email" }),
-  bounced: z.number().openapi({ description: "Unique recipients with at least one bounced email" }),
-  clicked: z.number().openapi({ description: "Unique recipients who clicked at least one link" }),
-  unsubscribed: z.number().openapi({ description: "Unique recipients who unsubscribed" }),
-  repliesPositive: z.number(),
-  repliesNegative: z.number(),
-  repliesNeutral: z.number(),
-  repliesAutoReply: z.number(),
-  repliesDetail: RepliesDetailSchema,
-});
-
-const EmailStatsSchema = z.object({
-  sent: z.number().openapi({ description: "Total distinct emails sent (by messageId)" }),
-  delivered: z.number().openapi({ description: "Total distinct emails delivered" }),
-  opened: z.number().openapi({ description: "Total distinct emails opened at least once" }),
-  clicked: z.number().openapi({ description: "Total distinct emails clicked at least once" }),
-  bounced: z.number().openapi({ description: "Total distinct emails bounced" }),
-  unsubscribed: z.number().openapi({ description: "Total distinct emails that triggered unsubscribe" }),
-  stepStats: z.array(StepStatsSchema).openapi({ description: "Per-step breakdown (always empty for Postmark — no step concept)" }),
-});
+// RepliesDetailSchema, StepStatsSchema, RecipientStatsSchema, EmailStatsSchema
+// are imported and re-exported from @shamanic-technologies/email-domain-contract
+// at the top of this file. The references below resolve to those exports.
 
 export const StatsResponseSchema = z
   .object({
