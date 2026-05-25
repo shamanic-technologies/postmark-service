@@ -338,6 +338,14 @@ describe("Zod schemas", () => {
       });
       expect(result.success).toBe(true);
     });
+
+    it("should accept arrays larger than 1000 items (no upper cap)", () => {
+      const items = Array.from({ length: 2000 }, (_, i) => ({
+        email: `user${i}@test.com`,
+      }));
+      const result = StatusRequestSchema.safeParse({ items });
+      expect(result.success).toBe(true);
+    });
   });
 
   describe("SendEmailRequestSchema - workflowSlug", () => {
