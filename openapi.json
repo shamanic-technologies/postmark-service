@@ -891,8 +891,7 @@
               ]
             },
             "minItems": 1,
-            "maxItems": 1000,
-            "description": "List of emails to check (1–1000)"
+            "description": "List of emails to check"
           }
         },
         "required": [
