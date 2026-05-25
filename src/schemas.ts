@@ -253,7 +253,7 @@ export const StatusRequestSchema = z
       z.object({
         email: z.string().email().openapi({ description: "Recipient email address to look up", example: "alice@example.com" }),
       })
-    ).min(1).max(1000).openapi({ description: "List of emails to check (1–1000)" }),
+    ).min(1).openapi({ description: "List of emails to check" }),
   })
   .openapi("StatusRequest");
 
