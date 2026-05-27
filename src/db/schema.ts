@@ -100,6 +100,14 @@ export const postmarkMessages = pgTable(
     index("idx_messages_feature_created").on(table.featureSlug, table.createdAt.desc()),
     index("idx_messages_to_email").on(table.toEmail),
     index("idx_messages_lead").on(table.leadId),
+    // Covering index for the cross-org leaderboard shape:
+    // WHERE feature_slug IN (...) GROUP BY workflow_slug + 7x COUNT(DISTINCT to_email) FILTER (...)
+    // Without this, the query falls back to a heap scan + hash agg and times out on prod-scale silver.
+    index("idx_messages_feature_workflow_email").on(
+      table.featureSlug,
+      table.workflowSlug,
+      table.toEmail
+    ),
   ]
 );
 
