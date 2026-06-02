@@ -16,7 +16,6 @@ import statusRoutes from "./routes/status";
 import webhooksRoutes from "./routes/webhooks";
 import performanceRoutes from "./routes/performance";
 import transferRoutes from "./routes/transfer";
-import { startStatsDailyCron } from "./jobs/stats-daily-cron";
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -95,7 +94,6 @@ if (process.env.NODE_ENV !== "test") {
       console.log("Migrations complete");
       app.listen(Number(PORT), "::", () => {
         console.log(`Service running on port ${PORT}`);
-        startStatsDailyCron();
       });
     })
     .catch((err) => {

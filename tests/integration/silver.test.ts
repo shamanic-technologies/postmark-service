@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "../../src/db";
-import { postmarkMessages, postmarkStatsDaily } from "../../src/db/schema";
+import { postmarkMessages } from "../../src/db/schema";
 import { upsertSilver } from "../../src/lib/silver";
-import { refreshStatsDaily } from "../../src/lib/gold";
 import {
   cleanTestData,
   closeDb,
@@ -113,65 +112,5 @@ describe("upsertSilver — idempotency & implication chain (integration)", () =>
     await upsertSilver(messageId);
     const rows = await db.select().from(postmarkMessages).where(eq(postmarkMessages.messageId, messageId));
     expect(rows.length).toBe(0);
-  });
-});
-
-describe("refreshStatsDaily — gold rollup (integration)", () => {
-  beforeEach(async () => {
-    await cleanTestData();
-  });
-
-  it("builds total + workflow_slug + brand_id rollups from silver", async () => {
-    const featureSlug = "sales-cold-email-outreach";
-    const wf = "cold-email-v1";
-    const brand = "brand-a";
-
-    await insertTestSending({
-      messageId: randomUUID(),
-      toEmail: "x@test.com",
-      featureSlug,
-      workflowSlug: wf,
-      brandIds: [brand],
-    });
-    await insertTestSending({
-      messageId: randomUUID(),
-      toEmail: "y@test.com",
-      featureSlug,
-      workflowSlug: wf,
-      brandIds: [brand],
-    });
-
-    await refreshStatsDaily({ windowDays: 30 });
-
-    const totals = await db
-      .select()
-      .from(postmarkStatsDaily)
-      .where(eq(postmarkStatsDaily.featureSlug, featureSlug));
-
-    const totalRow = totals.find((r) => r.groupDim === "total");
-    const wfRow = totals.find((r) => r.groupDim === "workflow_slug" && r.groupKey === wf);
-    const brandRow = totals.find((r) => r.groupDim === "brand_id" && r.groupKey === brand);
-
-    expect(totalRow?.sent).toBe(2);
-    expect(totalRow?.recipients).toBe(2);
-    expect(wfRow?.sent).toBe(2);
-    expect(brandRow?.sent).toBe(2);
-  });
-
-  it("rerunning refreshStatsDaily is idempotent — no duplicate rows", async () => {
-    const featureSlug = "hiring-cold-email-outreach";
-    await insertTestSending({
-      messageId: randomUUID(),
-      toEmail: "a@test.com",
-      featureSlug,
-      workflowSlug: "wf",
-    });
-
-    await refreshStatsDaily({ windowDays: 30 });
-    const first = await db.select().from(postmarkStatsDaily);
-    await refreshStatsDaily({ windowDays: 30 });
-    const second = await db.select().from(postmarkStatsDaily);
-
-    expect(second.length).toBe(first.length);
   });
 });
