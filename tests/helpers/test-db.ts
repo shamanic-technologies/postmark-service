@@ -8,7 +8,6 @@ import {
   postmarkSpamComplaints,
   postmarkSubscriptionChanges,
   postmarkMessages,
-  postmarkStatsDaily,
 } from "../../src/db/schema";
 import { sql } from "drizzle-orm";
 import { upsertSilver } from "../../src/lib/silver";
@@ -18,7 +17,6 @@ import { upsertSilver } from "../../src/lib/silver";
  */
 export async function cleanTestData() {
   // Delete in order of dependencies (no FKs in this schema, but good practice)
-  await db.delete(postmarkStatsDaily);
   await db.delete(postmarkMessages);
   await db.delete(postmarkLinkClicks);
   await db.delete(postmarkOpenings);

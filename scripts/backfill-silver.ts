@@ -1,9 +1,9 @@
 /**
  * One-shot backfill: scan all postmark_sendings (bronze) and (re)build
- * postmark_messages (silver) + postmark_stats_daily (gold).
+ * postmark_messages (silver).
  *
  * Idempotent — safe to run multiple times. Pages bronze in batches and calls
- * upsertSilver per message. Refreshes gold for a wide window at the end.
+ * upsertSilver per message.
  *
  * Run on Railway as a one-off:
  *   railway run npx tsx scripts/backfill-silver.ts
@@ -17,10 +17,8 @@ dotenv.config();
 import { sql } from "drizzle-orm";
 import { db } from "../src/db";
 import { upsertSilver } from "../src/lib/silver";
-import { refreshStatsDaily } from "../src/lib/gold";
 
 const BATCH_SIZE = 500;
-const FULL_HISTORY_WINDOW_DAYS = 365 * 5;
 
 async function main() {
   const start = Date.now();
@@ -62,9 +60,6 @@ async function main() {
       `[backfill-silver] processed=${processed} failed=${failed} elapsed=${elapsed}s cursor=${cursorCreatedAt}`
     );
   }
-
-  console.log("[backfill-silver] silver rebuild done — refreshing gold for full history");
-  await refreshStatsDaily({ windowDays: FULL_HISTORY_WINDOW_DAYS });
 
   console.log(
     `[backfill-silver] DONE — processed=${processed} failed=${failed} totalSeconds=${Math.round((Date.now() - start) / 1000)}`

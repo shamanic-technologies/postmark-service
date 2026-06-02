@@ -9,8 +9,6 @@ import {
   bigint,
   uniqueIndex,
   index,
-  date,
-  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -100,32 +98,14 @@ export const postmarkMessages = pgTable(
     index("idx_messages_feature_created").on(table.featureSlug, table.createdAt.desc()),
     index("idx_messages_to_email").on(table.toEmail),
     index("idx_messages_lead").on(table.leadId),
-  ]
-);
-
-/**
- * Gold — Daily rollup per (feature_slug, group_dim, group_key, day).
- * group_dim: "workflow_slug" | "brand_id" | "total".
- * Refreshed every 5 minutes for the trailing 7 days. Public leaderboard reads from here.
- */
-export const postmarkStatsDaily = pgTable(
-  "postmark_stats_daily",
-  {
-    featureSlug: text("feature_slug").notNull(),
-    groupDim: text("group_dim").notNull(),
-    groupKey: text("group_key").notNull(),
-    day: date("day").notNull(),
-    sent: integer("sent").notNull().default(0),
-    delivered: integer("delivered").notNull().default(0),
-    opened: integer("opened").notNull().default(0),
-    clicked: integer("clicked").notNull().default(0),
-    bounced: integer("bounced").notNull().default(0),
-    recipients: integer("recipients").notNull().default(0),
-    refreshedAt: timestamp("refreshed_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.featureSlug, table.groupDim, table.groupKey, table.day] }),
-    index("idx_stats_daily_feature_day").on(table.featureSlug, table.day.desc()),
+    // Covering index for the cross-org leaderboard shape:
+    // WHERE feature_slug IN (...) GROUP BY workflow_slug + 7x COUNT(DISTINCT to_email) FILTER (...)
+    // Without this, the query falls back to a heap scan + hash agg and times out on prod-scale silver.
+    index("idx_messages_feature_workflow_email").on(
+      table.featureSlug,
+      table.workflowSlug,
+      table.toEmail
+    ),
   ]
 );
 
@@ -307,5 +287,3 @@ export type PostmarkSubscriptionChange = typeof postmarkSubscriptionChanges.$inf
 export type NewPostmarkSubscriptionChange = typeof postmarkSubscriptionChanges.$inferInsert;
 export type PostmarkMessage = typeof postmarkMessages.$inferSelect;
 export type NewPostmarkMessage = typeof postmarkMessages.$inferInsert;
-export type PostmarkStatsDaily = typeof postmarkStatsDaily.$inferSelect;
-export type NewPostmarkStatsDaily = typeof postmarkStatsDaily.$inferInsert;

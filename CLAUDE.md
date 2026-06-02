@@ -42,18 +42,18 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 - `src/db/schema.ts` — Drizzle table definitions
 - `src/db/index.ts` — Database connection
 - `src/lib/silver.ts` — `upsertSilver(messageId)` + `recomputeLayer2()` — single chokepoint for Layer 2
-- `src/lib/gold.ts` — `refreshStatsDaily({windowDays})` — rebuild gold rollup
-- `src/jobs/stats-daily-cron.ts` — 5-minute gold refresh, started post-`listen()`
-- `scripts/backfill-silver.ts` — one-shot bronze → silver + gold rebuild
+- `scripts/backfill-silver.ts` — one-shot bronze → silver rebuild
 - `scripts/generate-openapi.ts` — OpenAPI spec generation script
 - `tests/` — Test files (unit/, integration/, fixtures/, helpers/)
 - `openapi.json` — Auto-generated, do NOT edit manually
 
-## Delivery Status Architecture (bronze / silver / gold)
+## Delivery Status Architecture (bronze / silver)
 
-### Core principle: all endpoints read from silver / gold — never bronze
+### Core principle: all endpoints read from silver — never bronze
 
-Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized) or the **gold** rollup `postmark_stats_daily`. Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. This is what keeps queries cheap regardless of geography between Railway and Neon.
+Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized). Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. This is what keeps queries cheap regardless of geography between Railway and Neon.
+
+> **No gold/rollup layer.** A `postmark_stats_daily` gold rollup + 5-min refresh cron existed historically but was **removed** (migration `0013_drop_stats_daily`): it had zero readers across the fleet, and the 5-min cron kept the Neon compute awake 24/7 (blocked scale-to-zero). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug` — kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). Live silver is always real-time; there is no rollup staleness to manage.
 
 ### Bronze — Layer 1: raw Postmark events (write-only)
 
@@ -135,21 +135,18 @@ The implication chain applies to counting too — if a recipient has a click but
 
 Note: unlike instantly-service which computes `delivered = sent - bounced` (because they lack a delivery signal), postmark-service uses the **real Postmark delivery webhook** plus implications. This is more accurate.
 
-### Gold — Layer 3: rollup (`postmark_stats_daily`)
+### No gold/rollup layer (removed)
 
-Pre-aggregated counts keyed by `(feature_slug, group_dim, group_key, day)` where `group_dim ∈ { "total" | "workflow_slug" | "brand_id" }`. Used by the public cross-org feature leaderboard, which scans no other table at read time.
-
-- Rebuilt every 5 minutes by `src/jobs/stats-daily-cron.ts` (running `refreshStatsDaily({ windowDays: 7 })`).
-- Cron is started **after** `app.listen()` — never on the boot path. Refresh is single-transaction, full-window DELETE+INSERT — idempotent.
-- Reading the leaderboard is one SQL SELECT against gold; no fan-out, no JOINs.
+There is no Layer 3. The `postmark_stats_daily` gold rollup + its 5-min refresh cron were removed in migration `0013_drop_stats_daily` — zero readers across the fleet, and the cron was the sole repeating SQL that blocked Neon scale-to-zero (kept the prod compute warm 24/7 at the 0.25 CU floor). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug&featureSlugs=…` (called by email-gateway), kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). No rebuild job, no rollup staleness.
 
 ### Write path summary
 
 ```
 POST /send              → INSERT bronze.postmark_sendings → upsertSilver(messageId)
 POST /webhooks/postmark → INSERT bronze.postmark_<event>  → upsertSilver(messageId)
-cron (every 5 min)      → refreshStatsDaily({ windowDays: 7 }) → wipe + rebuild gold window
 ```
+
+No timer/cron touches the DB. When the service is idle (no sends, no webhooks) nothing queries Postgres, so the Neon compute suspends after the 300s idle timeout (scale-to-zero).
 
 ### Read path summary
 
@@ -162,7 +159,7 @@ GET  /orgs/stats, /internal/stats   → SELECT COUNT(*) FILTER (...) FROM postma
 GET  /public/performance/leaderboard→ SELECT FROM postmark_messages GROUP BY workflow_slug  (silver, global)
 ```
 
-Public feature leaderboard endpoints (currently mounted upstream in features-service) hit gold via `postmark_stats_daily` when the cross-org feature dimension is requested.
+The cross-org feature leaderboard (mounted upstream in features-service, fanned out by email-gateway) reads silver live via `GET /internal/stats?groupBy=workflowSlug&featureSlugs=…` — the covering index `idx_messages_feature_workflow_email` makes this an index-only GroupAggregate, no rollup table needed.
 
 ### Status endpoint modes (`POST /orgs/status`)
 
