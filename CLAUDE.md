@@ -148,6 +148,8 @@ POST /webhooks/postmark → INSERT bronze.postmark_<event>  → upsertSilver(mes
 
 No timer/cron touches the DB. When the service is idle (no sends, no webhooks) nothing queries Postgres, so the Neon compute suspends after the 300s idle timeout (scale-to-zero).
 
+**Cold-start connect handling.** The first DB call after a suspend hits a compute that is still resuming (~1–7s). Node 20's happy-eyeballs would abort each address at 250ms, so the connect fails with `AggregateError [ETIMEDOUT]` before the wake completes. `src/db/index.ts` neutralizes this: it raises `autoSelectFamilyAttemptTimeout` to 5s and wraps `pool.query` with `withConnectRetry` (`src/db/retry.ts`) — connection-acquisition errors (ETIMEDOUT/ECONNREFUSED/"timeout expired") retry with backoff (250/500/1000ms). Retry is connect-phase only (pre-dispatch), so it is write-safe; SQL errors and statement timeouts are never retried. This preserves scale-to-zero without surfacing cold-start 500s.
+
 ### Read path summary
 
 ```
