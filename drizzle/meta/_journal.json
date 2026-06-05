@@ -99,6 +99,13 @@
       "when": 1780400000000,
       "tag": "0013_drop_stats_daily",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1780600000000,
+      "tag": "0014_first_at_timestamps",
+      "breakpoints": true
     }
   ]
 }

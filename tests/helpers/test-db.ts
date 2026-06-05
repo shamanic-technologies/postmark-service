@@ -73,14 +73,14 @@ export async function insertTestSending(data: {
 /**
  * Insert test delivery record
  */
-export async function insertTestDelivery(messageId: string, recipient?: string) {
+export async function insertTestDelivery(messageId: string, recipient?: string, deliveredAt?: Date) {
   const [delivery] = await db
     .insert(postmarkDeliveries)
     .values({
       messageId,
       recordType: "Delivery",
       recipient: recipient || "test@example.com",
-      deliveredAt: new Date(),
+      deliveredAt: deliveredAt ?? new Date(),
       messageStream: "broadcast",
     })
     .returning();
@@ -92,7 +92,7 @@ export async function insertTestDelivery(messageId: string, recipient?: string) 
 /**
  * Insert test bounce record
  */
-export async function insertTestBounce(messageId: string, email?: string) {
+export async function insertTestBounce(messageId: string, email?: string, bouncedAt?: Date) {
   const [bounce] = await db
     .insert(postmarkBounces)
     .values({
@@ -102,7 +102,7 @@ export async function insertTestBounce(messageId: string, email?: string) {
       type: "HardBounce",
       typeCode: 1,
       email: email || "bounced@example.com",
-      bouncedAt: new Date(),
+      bouncedAt: bouncedAt ?? new Date(),
       messageStream: "broadcast",
     })
     .returning();
@@ -114,14 +114,14 @@ export async function insertTestBounce(messageId: string, email?: string) {
 /**
  * Insert test opening record
  */
-export async function insertTestOpening(messageId: string, recipient?: string) {
+export async function insertTestOpening(messageId: string, recipient?: string, receivedAt?: Date) {
   const [opening] = await db
     .insert(postmarkOpenings)
     .values({
       messageId,
       recordType: "Open",
       recipient: recipient || "test@example.com",
-      receivedAt: new Date(),
+      receivedAt: receivedAt ?? new Date(),
       firstOpen: true,
       platform: "Desktop",
       messageStream: "broadcast",
@@ -135,14 +135,14 @@ export async function insertTestOpening(messageId: string, recipient?: string) {
 /**
  * Insert test link click record
  */
-export async function insertTestLinkClick(messageId: string, recipient?: string) {
+export async function insertTestLinkClick(messageId: string, recipient?: string, receivedAt?: Date) {
   const [click] = await db
     .insert(postmarkLinkClicks)
     .values({
       messageId,
       recordType: "Click",
       recipient: recipient || "test@example.com",
-      receivedAt: new Date(),
+      receivedAt: receivedAt ?? new Date(),
       platform: "Desktop",
       originalLink: "https://example.com",
       clickLocation: "HTML",
@@ -161,6 +161,7 @@ export async function insertTestSubscriptionChange(
   messageId: string,
   recipient?: string,
   suppressSending?: boolean,
+  changedAt?: Date,
 ) {
   const [change] = await db
     .insert(postmarkSubscriptionChanges)
@@ -169,7 +170,7 @@ export async function insertTestSubscriptionChange(
       recordType: "SubscriptionChange",
       recipient: recipient || "test@example.com",
       suppressSending: suppressSending ?? true,
-      changedAt: new Date(),
+      changedAt: changedAt ?? new Date(),
       messageStream: "broadcast",
     })
     .returning();

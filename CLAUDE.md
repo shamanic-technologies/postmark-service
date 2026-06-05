@@ -16,6 +16,13 @@ Email sending and tracking service using Postmark. Handles delivery via broadcas
 - `npm run db:migrate` — run migrations
 - `npm run db:push` — push schema to database
 
+## Migrations & CI test DB (gotchas)
+
+- **`drizzle-kit generate` is BROKEN in this repo** — the `drizzle/meta/*_snapshot.json` files are hand-authored stubs (fake ids like `0d13d013-…`, don't even include `postmark_messages`) left over from earlier hand-authored migrations, so generate fails with `… pointing to a parent snapshot … which is a collision`. **Hand-author new migrations**: write `drizzle/<NNNN>_<name>.sql` (idempotent — `ADD COLUMN IF NOT EXISTS`, `CREATE … IF NOT EXISTS`, `--> statement-breakpoint` between statements), append a `_journal.json` entry (`idx`, `version:"7"`, strictly-increasing `when`, `tag`), and add a `<NNNN>_snapshot.json` stub (copy the previous one, swap `id`/`prevId`). The runtime migrator only reads the `.sql` + journal `when`; the unit guard `drizzle-migrations.test.ts` only checks the journal/sql/snapshot files EXIST.
+- **CI integration tests do NOT use the migration SQL** — `.github/workflows/test.yml` runs `drizzle-kit push --force` from `src/db/schema.ts` onto a fresh Neon branch, then `npm run test:integration`. So `schema.ts` is the source of truth CI tests against; the hand-authored migration SQL only feeds the prod/staging runtime migrator (`drizzle migrate()` on boot) + the guard test. Keep `schema.ts` and the migration in sync.
+- **Verify integration locally without touching prod** — spin an ephemeral local Postgres (`initdb` + `pg_ctl` on a temp dir), `POSTMARK_SERVICE_DATABASE_URL=postgresql://…?sslmode=disable npx drizzle-kit push --force`, run `npm run test:integration`. Do NOT point integration tests at the `.env` `DATABASE_URL` (real Neon) — `cleanTestData()` deletes ALL rows.
+- **Neon CI cold-start flake**: the first heavy-insert integration test (e.g. `leaderboard.test.ts > should compute rates correctly`, ~4 serial `upsertSilver` round-trips) can hit vitest's 5000ms per-test timeout on a cold Neon compute. It is a latency flake, not a logic bug — `gh run rerun <id> --failed` clears it; don't chase it as a code error.
+
 ## brandId convention
 
 `brandId` is **always a string** — single UUID or comma-separated CSV (`"uuid1,uuid2,uuid3"`). This applies everywhere: request body, query params, and headers. **Never use `z.array(z.string())`** for brandId in Zod schemas.
@@ -115,7 +122,17 @@ Used by all endpoints. Shape is aligned with instantly-service.
 | `replyClassification` | string? | Always `null` — Postmark has no reply tracking |
 | `bounced` | boolean | Bounce webhook exists |
 | `unsubscribed` | boolean | SubscriptionChange with suppress_sending = true |
-| `lastDeliveredAt` | string? | ISO 8601 timestamp of most recent delivery |
+| `lastDeliveredAt` | string? | ISO 8601 timestamp of most recent delivery (MAX) |
+| `firstContactedAt` | string? | First-occurrence (MIN) ISO timestamp of contacted = `submitted_at ?? created_at` |
+| `firstSentAt` | string? | MIN timestamp of sent (same source, gated on `sent`) |
+| `firstDeliveredAt` | string? | MIN timestamp of delivered = `last_delivered_at ?? first_opened_at`, gated on `delivered` |
+| `firstOpenedAt` | string? | MIN(`postmark_openings.received_at`), implied by click when no open webhook |
+| `firstClickedAt` | string? | MIN(`postmark_link_clicks.received_at`) (never implied) |
+| `firstRepliedAt` | string? | Always `null` — Postmark has no reply tracking |
+| `firstBouncedAt` | string? | `postmark_bounces.bounced_at` |
+| `firstUnsubscribedAt` | string? | `postmark_subscription_changes.changed_at` |
+
+The 8 `first*At` are **first-occurrence (MIN)** timestamps mirroring `lastDeliveredAt` (MAX), surfaced for funnel chronology / cumulative revenue time-series (DIS-229). Each is non-null **iff** its boolean is true (implication baked in `recomputeLayer2`). Only `first_opened_at` / `first_clicked_at` / `first_bounced_at` / `first_unsubscribed_at` are stored on silver (migration `0014`); `firstContactedAt` / `firstSentAt` / `firstDeliveredAt` are derived at read from existing columns. In brand mode, brand-scope `first*At` = MIN across the brand's campaigns (consistent with BOOL_OR booleans / MAX `lastDeliveredAt`). **Populated on `POST /orgs/status` only** — the `/internal/status/*` endpoints use the local `MessageStatus` shape and are unchanged.
 
 ### Counting convention (stats endpoints)
 
@@ -195,6 +212,8 @@ Every endpoint below returns Layer 2 only. No exceptions.
 Cross-provider canonical shapes (`StatusScope`, `RecipientStats`, `EmailStats`, `StepStats`, `RepliesDetail`, `ChannelStats`, `ProviderStatus`, `GlobalStatus`, `ReplyClassification`) live in [`@shamanic-technologies/email-domain-contract`](https://github.com/shamanic-technologies/email-domain-contract). Do NOT redeclare these schemas locally — re-export from the package via `src/schemas.ts`. Same convention as email-gateway-service and (pending) instantly-service.
 
 Two provider-specific fields are **optional in v1** of the contract: `cancelled` (on `StatusScope`) and `notSending` (on `RecipientStats`). They live on instantly responses today; postmark pads them with neutral defaults (`cancelled: false` in `aggregateScope()`, `notSending: 0` in `buildRecipientStatsObject()`) so consumers see a consistent shape across providers. Contract v2 will tighten them to required after instantly confirms its responses still match.
+
+Dep pinned at **`^1.1.0`**, which widened `StatusScope` with 8 optional+nullable `first*At` first-occurrence (MIN) timestamps (`firstContactedAt` … `firstUnsubscribedAt`). postmark populates the 7 it tracks on `POST /orgs/status`; `firstRepliedAt` is always `null` (no reply tracking). See the `ScopedStatusFields` table above for per-field derivation.
 
 ## Zod 4 caveat — contract schemas + `.openapi()`
 

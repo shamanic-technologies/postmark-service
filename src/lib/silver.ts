@@ -43,37 +43,53 @@ export async function upsertSilver(messageId: string): Promise<void> {
     .limit(1);
 
   const [bounce] = await db
-    .select({ id: postmarkBounces.id })
+    .select({ id: postmarkBounces.id, bouncedAt: postmarkBounces.bouncedAt })
     .from(postmarkBounces)
     .where(eq(postmarkBounces.messageId, messageId))
     .limit(1);
 
+  // Openings/clicks are multi-row per message — aggregate existence + earliest time.
   const [opening] = await db
-    .select({ id: postmarkOpenings.id })
+    .select({
+      cnt: sql<number>`count(*)::int`,
+      firstAt: sql<string | null>`min(${postmarkOpenings.receivedAt})`,
+    })
     .from(postmarkOpenings)
-    .where(eq(postmarkOpenings.messageId, messageId))
-    .limit(1);
+    .where(eq(postmarkOpenings.messageId, messageId));
 
   const [click] = await db
-    .select({ id: postmarkLinkClicks.id })
+    .select({
+      cnt: sql<number>`count(*)::int`,
+      firstAt: sql<string | null>`min(${postmarkLinkClicks.receivedAt})`,
+    })
     .from(postmarkLinkClicks)
-    .where(eq(postmarkLinkClicks.messageId, messageId))
-    .limit(1);
+    .where(eq(postmarkLinkClicks.messageId, messageId));
 
   const [unsub] = await db
-    .select({ id: postmarkSubscriptionChanges.id, suppressSending: postmarkSubscriptionChanges.suppressSending })
+    .select({
+      id: postmarkSubscriptionChanges.id,
+      suppressSending: postmarkSubscriptionChanges.suppressSending,
+      changedAt: postmarkSubscriptionChanges.changedAt,
+    })
     .from(postmarkSubscriptionChanges)
     .where(eq(postmarkSubscriptionChanges.messageId, messageId))
     .limit(1);
+
+  const toDate = (v: string | Date | null | undefined): Date | null =>
+    v == null ? null : v instanceof Date ? v : new Date(v);
 
   const layer2 = recomputeLayer2({
     errorCode: sending.errorCode,
     hasDelivery: !!delivery,
     hasBounce: !!bounce,
-    hasOpen: !!opening,
-    hasClick: !!click,
+    hasOpen: (opening?.cnt ?? 0) > 0,
+    hasClick: (click?.cnt ?? 0) > 0,
     hasUnsubscribe: !!unsub && unsub.suppressSending === true,
     deliveredAt: delivery?.deliveredAt ?? null,
+    openFirstAt: toDate(opening?.firstAt),
+    clickFirstAt: toDate(click?.firstAt),
+    bounceAt: toDate(bounce?.bouncedAt),
+    unsubAt: toDate(unsub?.changedAt),
   });
 
   await db
@@ -101,12 +117,17 @@ export async function upsertSilver(messageId: string): Promise<void> {
       bounced: layer2.bounced,
       unsubscribed: layer2.unsubscribed,
       lastDeliveredAt: layer2.lastDeliveredAt,
+      firstOpenedAt: layer2.firstOpenedAt,
+      firstClickedAt: layer2.firstClickedAt,
+      firstBouncedAt: layer2.firstBouncedAt,
+      firstUnsubscribedAt: layer2.firstUnsubscribedAt,
       sourceAttribution: {
         sendingId: sending.id,
         deliveryId: delivery?.id ?? null,
         bounceId: bounce?.id ?? null,
-        openingId: opening?.id ?? null,
-        clickId: click?.id ?? null,
+        // openings/clicks are aggregated (multi-row); no single representative id.
+        openingId: null,
+        clickId: null,
         subscriptionChangeId: unsub?.id ?? null,
       },
       createdAt: sending.createdAt,
@@ -136,6 +157,10 @@ export async function upsertSilver(messageId: string): Promise<void> {
         bounced: sql`excluded.bounced`,
         unsubscribed: sql`excluded.unsubscribed`,
         lastDeliveredAt: sql`excluded.last_delivered_at`,
+        firstOpenedAt: sql`excluded.first_opened_at`,
+        firstClickedAt: sql`excluded.first_clicked_at`,
+        firstBouncedAt: sql`excluded.first_bounced_at`,
+        firstUnsubscribedAt: sql`excluded.first_unsubscribed_at`,
         sourceAttribution: sql`excluded.source_attribution`,
         lastRebuiltAt: sql`excluded.last_rebuilt_at`,
       },

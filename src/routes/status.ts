@@ -224,11 +224,22 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         bounced: postmarkMessages.bounced,
         unsubscribed: postmarkMessages.unsubscribed,
         lastDeliveredAt: postmarkMessages.lastDeliveredAt,
+        submittedAt: postmarkMessages.submittedAt,
+        createdAt: postmarkMessages.createdAt,
+        firstOpenedAt: postmarkMessages.firstOpenedAt,
+        firstClickedAt: postmarkMessages.firstClickedAt,
+        firstBouncedAt: postmarkMessages.firstBouncedAt,
+        firstUnsubscribedAt: postmarkMessages.firstUnsubscribedAt,
       })
       .from(postmarkMessages)
       .where(and(...conditions));
 
     type Row = (typeof rows)[number];
+
+    const toDate = (v: Date | string | null): Date | null =>
+      v == null ? null : v instanceof Date ? v : new Date(v);
+    const earlier = (acc: Date | null, v: Date | null): Date | null =>
+      v == null ? acc : acc == null || v < acc ? v : acc;
 
     function aggregateScope(group: Row[]) {
       let contacted = false;
@@ -240,6 +251,17 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       let unsubscribed = false;
       let lastDeliveredAt: Date | null = null;
 
+      // First-occurrence (MIN) accumulators. firstContacted/Sent/Delivered are
+      // derived from existing columns (submitted_at / created_at / last_delivered_at);
+      // firstOpened/Clicked/Bounced/Unsub are stored on the silver row.
+      let firstContactedAt: Date | null = null;
+      let firstSentAt: Date | null = null;
+      let firstDeliveredAt: Date | null = null;
+      let firstOpenedAt: Date | null = null;
+      let firstClickedAt: Date | null = null;
+      let firstBouncedAt: Date | null = null;
+      let firstUnsubscribedAt: Date | null = null;
+
       for (const r of group) {
         if (r.contacted) contacted = true;
         if (r.sent) sent = true;
@@ -249,9 +271,21 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         if (r.bounced) bounced = true;
         if (r.unsubscribed) unsubscribed = true;
         if (r.lastDeliveredAt) {
-          const dt = r.lastDeliveredAt instanceof Date ? r.lastDeliveredAt : new Date(r.lastDeliveredAt);
+          const dt = toDate(r.lastDeliveredAt)!;
           if (!lastDeliveredAt || dt > lastDeliveredAt) lastDeliveredAt = dt;
         }
+
+        // Per-message milestone timestamps, then MIN across the scope.
+        const rowContactedAt = toDate(r.submittedAt) ?? toDate(r.createdAt);
+        const rowOpenedAt = toDate(r.firstOpenedAt);
+        const rowDeliveredAt = r.delivered ? toDate(r.lastDeliveredAt) ?? rowOpenedAt : null;
+        firstContactedAt = earlier(firstContactedAt, rowContactedAt);
+        firstSentAt = earlier(firstSentAt, r.sent ? rowContactedAt : null);
+        firstDeliveredAt = earlier(firstDeliveredAt, rowDeliveredAt);
+        firstOpenedAt = earlier(firstOpenedAt, rowOpenedAt);
+        firstClickedAt = earlier(firstClickedAt, toDate(r.firstClickedAt));
+        firstBouncedAt = earlier(firstBouncedAt, toDate(r.firstBouncedAt));
+        firstUnsubscribedAt = earlier(firstUnsubscribedAt, toDate(r.firstUnsubscribedAt));
       }
 
       return {
@@ -266,6 +300,14 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         unsubscribed,
         cancelled: false,
         lastDeliveredAt: lastDeliveredAt?.toISOString() ?? null,
+        firstContactedAt: firstContactedAt?.toISOString() ?? null,
+        firstSentAt: firstSentAt?.toISOString() ?? null,
+        firstDeliveredAt: firstDeliveredAt?.toISOString() ?? null,
+        firstOpenedAt: firstOpenedAt?.toISOString() ?? null,
+        firstClickedAt: firstClickedAt?.toISOString() ?? null,
+        firstRepliedAt: null as string | null,
+        firstBouncedAt: firstBouncedAt?.toISOString() ?? null,
+        firstUnsubscribedAt: firstUnsubscribedAt?.toISOString() ?? null,
       };
     }
 
