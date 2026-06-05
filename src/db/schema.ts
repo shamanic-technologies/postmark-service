@@ -84,6 +84,14 @@ export const postmarkMessages = pgTable(
     bounced: boolean("bounced").notNull().default(false),
     unsubscribed: boolean("unsubscribed").notNull().default(false),
     lastDeliveredAt: timestamp("last_delivered_at", { withTimezone: true }),
+    // Per-event first-occurrence (MIN) timestamps. Mirror of lastDeliveredAt (MAX).
+    // Only the genuinely-non-derivable events get a column; firstContacted/Sent/Delivered
+    // are derived at read from submitted_at / created_at / last_delivered_at.
+    // firstOpenedAt carries the click-implication baked in (open ?? click), see recomputeLayer2.
+    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }),
+    firstClickedAt: timestamp("first_clicked_at", { withTimezone: true }),
+    firstBouncedAt: timestamp("first_bounced_at", { withTimezone: true }),
+    firstUnsubscribedAt: timestamp("first_unsubscribed_at", { withTimezone: true }),
     sourceAttribution: jsonb("source_attribution"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastRebuiltAt: timestamp("last_rebuilt_at", { withTimezone: true }).notNull().defaultNow(),

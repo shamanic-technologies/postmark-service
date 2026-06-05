@@ -776,4 +776,126 @@ describe("Status Endpoints Integration", () => {
       expect(r.byCampaign["camp-pad-b"].cancelled).toBe(false);
     });
   });
+
+  describe("first-occurrence (MIN) timestamps on StatusScope", () => {
+    const ms = (v: string | null) => (v == null ? null : new Date(v).getTime());
+
+    it("campaign mode: open@T1 + click@T2>T1 → firstOpenedAt==T1, firstClickedAt==T2, distinguishable", async () => {
+      const messageId = randomUUID();
+      const campaignId = "camp-first-oc";
+      const email = "first-oc@test.com";
+      const T1 = new Date("2026-05-20T10:00:00.000Z"); // open
+      const T2 = new Date("2026-05-20T11:30:00.000Z"); // click (later)
+      await insertTestSending({ messageId, toEmail: email, campaignId, brandId: "b-oc" });
+      await insertTestDelivery(messageId, email, new Date("2026-05-20T09:00:00.000Z"));
+      await insertTestOpening(messageId, email, T1);
+      await insertTestLinkClick(messageId, email, T2);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ campaignId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(ms(r.campaign.firstOpenedAt)).toBe(T1.getTime());
+      expect(ms(r.campaign.firstClickedAt)).toBe(T2.getTime());
+      expect(ms(r.campaign.firstOpenedAt)!).toBeLessThan(ms(r.campaign.firstClickedAt)!);
+      // firstContacted/Sent/Delivered non-null and agree with booleans
+      expect(r.campaign.firstContactedAt).not.toBeNull();
+      expect(r.campaign.firstSentAt).not.toBeNull();
+      expect(r.campaign.firstDeliveredAt).not.toBeNull();
+    });
+
+    it("firstRepliedAt is always null (postmark has no reply tracking)", async () => {
+      const messageId = randomUUID();
+      const campaignId = "camp-no-reply";
+      const email = "no-reply@test.com";
+      await insertTestSending({ messageId, toEmail: email, campaignId, brandId: "b-nr" });
+      await insertTestOpening(messageId, email);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ campaignId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.campaign.firstRepliedAt).toBeNull();
+      expect(r.campaign.replied).toBe(false);
+    });
+
+    it("un-engaged recipient (sent only) → contacted/sent set, downstream first*At null", async () => {
+      const messageId = randomUUID();
+      const campaignId = "camp-unengaged";
+      const email = "unengaged@test.com";
+      await insertTestSending({ messageId, toEmail: email, campaignId, brandId: "b-un" });
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ campaignId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.campaign.firstContactedAt).not.toBeNull();
+      expect(r.campaign.firstSentAt).not.toBeNull();
+      expect(r.campaign.firstDeliveredAt).toBeNull();
+      expect(r.campaign.firstOpenedAt).toBeNull();
+      expect(r.campaign.firstClickedAt).toBeNull();
+      expect(r.campaign.firstBouncedAt).toBeNull();
+      expect(r.campaign.firstUnsubscribedAt).toBeNull();
+      expect(r.campaign.firstRepliedAt).toBeNull();
+    });
+
+    it("brand mode: firstOpenedAt = MIN across campaigns; byCampaign keeps per-campaign times", async () => {
+      const msgA = randomUUID();
+      const msgB = randomUUID();
+      const brandId = "b-min";
+      const email = "brandmin@test.com";
+      const Ta = new Date("2026-05-20T08:00:00.000Z"); // open in camp-A (earlier)
+      const Tb = new Date("2026-05-20T12:00:00.000Z"); // open in camp-B (later)
+      await insertTestSending({ messageId: msgA, toEmail: email, brandId, campaignId: "camp-min-a" });
+      await insertTestSending({ messageId: msgB, toEmail: email, brandId, campaignId: "camp-min-b" });
+      await insertTestOpening(msgA, email, Ta);
+      await insertTestOpening(msgB, email, Tb);
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ brandId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(ms(r.byCampaign["camp-min-a"].firstOpenedAt)).toBe(Ta.getTime());
+      expect(ms(r.byCampaign["camp-min-b"].firstOpenedAt)).toBe(Tb.getTime());
+      // Brand = MIN across campaigns (consistent with BOOL_OR booleans / MAX lastDeliveredAt)
+      expect(ms(r.brand.firstOpenedAt)).toBe(Ta.getTime());
+    });
+
+    it("bounce → firstBouncedAt set; unsubscribe → firstUnsubscribedAt set", async () => {
+      const msgBounce = randomUUID();
+      const msgUnsub = randomUUID();
+      const campaignId = "camp-bu";
+      const Tbounce = new Date("2026-05-20T14:00:00.000Z");
+      const Tunsub = new Date("2026-05-20T15:00:00.000Z");
+      await insertTestSending({ messageId: msgBounce, toEmail: "bounce-oc@test.com", campaignId, brandId: "b-bu" });
+      await insertTestBounce(msgBounce, "bounce-oc@test.com", Tbounce);
+      await insertTestSending({ messageId: msgUnsub, toEmail: "unsub-oc@test.com", campaignId, brandId: "b-bu" });
+      await insertTestSubscriptionChange(msgUnsub, "unsub-oc@test.com", true, Tunsub);
+
+      const bounceRes = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ campaignId, items: [{ email: "bounce-oc@test.com" }] });
+      expect(ms(bounceRes.body.results[0].campaign.firstBouncedAt)).toBe(Tbounce.getTime());
+      expect(bounceRes.body.results[0].campaign.firstDeliveredAt).toBeNull();
+
+      const unsubRes = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ campaignId, items: [{ email: "unsub-oc@test.com" }] });
+      expect(ms(unsubRes.body.results[0].campaign.firstUnsubscribedAt)).toBe(Tunsub.getTime());
+    });
+  });
 });

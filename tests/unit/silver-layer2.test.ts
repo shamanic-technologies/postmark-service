@@ -23,6 +23,10 @@ describe("recomputeLayer2 — implication chain", () => {
       bounced: false,
       unsubscribed: false,
       lastDeliveredAt: null,
+      firstOpenedAt: null,
+      firstClickedAt: null,
+      firstBouncedAt: null,
+      firstUnsubscribedAt: null,
     });
   });
 
@@ -83,5 +87,62 @@ describe("recomputeLayer2 — implication chain", () => {
     expect(r.sent).toBe(true);
     expect(r.bounced).toBe(true);
     expect(r.delivered).toBe(false);
+  });
+});
+
+describe("recomputeLayer2 — first-occurrence timestamps", () => {
+  const T1 = new Date("2026-05-20T10:00:00Z"); // open
+  const T2 = new Date("2026-05-20T11:00:00Z"); // click (later)
+
+  it("open@T1 + click@T2 → firstOpenedAt=T1, firstClickedAt=T2 (both non-null, ordered)", () => {
+    const r = recomputeLayer2({
+      ...baseInputs,
+      hasOpen: true,
+      hasClick: true,
+      openFirstAt: T1,
+      clickFirstAt: T2,
+    });
+    expect(r.firstOpenedAt).toEqual(T1);
+    expect(r.firstClickedAt).toEqual(T2);
+    expect(r.firstOpenedAt!.getTime()).toBeLessThan(r.firstClickedAt!.getTime());
+  });
+
+  it("click only (no open webhook) → firstOpenedAt implied = click time", () => {
+    const r = recomputeLayer2({
+      ...baseInputs,
+      hasClick: true,
+      clickFirstAt: T2,
+    });
+    expect(r.opened).toBe(true);
+    expect(r.firstOpenedAt).toEqual(T2); // implied by click
+    expect(r.firstClickedAt).toEqual(T2);
+  });
+
+  it("no engagement → all four first*At null", () => {
+    const r = recomputeLayer2({ ...baseInputs, errorCode: 0 });
+    expect(r.firstOpenedAt).toBeNull();
+    expect(r.firstClickedAt).toBeNull();
+    expect(r.firstBouncedAt).toBeNull();
+    expect(r.firstUnsubscribedAt).toBeNull();
+  });
+
+  it("bounce@Tb → firstBouncedAt=Tb; unsubscribe@Tu → firstUnsubscribedAt=Tu", () => {
+    const Tb = new Date("2026-05-20T12:00:00Z");
+    const Tu = new Date("2026-05-20T13:00:00Z");
+    const r = recomputeLayer2({
+      ...baseInputs,
+      hasBounce: true,
+      bounceAt: Tb,
+      hasUnsubscribe: true,
+      unsubAt: Tu,
+    });
+    expect(r.firstBouncedAt).toEqual(Tb);
+    expect(r.firstUnsubscribedAt).toEqual(Tu);
+  });
+
+  it("opened with no timestamp passed → firstOpenedAt null even though opened=true (graceful)", () => {
+    const r = recomputeLayer2({ ...baseInputs, hasOpen: true });
+    expect(r.opened).toBe(true);
+    expect(r.firstOpenedAt).toBeNull();
   });
 });
