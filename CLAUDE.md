@@ -16,6 +16,13 @@ Email sending and tracking service using Postmark. Handles delivery via broadcas
 - `npm run db:migrate` — run migrations
 - `npm run db:push` — push schema to database
 
+## Migrations & CI test DB (gotchas)
+
+- **`drizzle-kit generate` is BROKEN in this repo** — the `drizzle/meta/*_snapshot.json` files are hand-authored stubs (fake ids like `0d13d013-…`, don't even include `postmark_messages`) left over from earlier hand-authored migrations, so generate fails with `… pointing to a parent snapshot … which is a collision`. **Hand-author new migrations**: write `drizzle/<NNNN>_<name>.sql` (idempotent — `ADD COLUMN IF NOT EXISTS`, `CREATE … IF NOT EXISTS`, `--> statement-breakpoint` between statements), append a `_journal.json` entry (`idx`, `version:"7"`, strictly-increasing `when`, `tag`), and add a `<NNNN>_snapshot.json` stub (copy the previous one, swap `id`/`prevId`). The runtime migrator only reads the `.sql` + journal `when`; the unit guard `drizzle-migrations.test.ts` only checks the journal/sql/snapshot files EXIST.
+- **CI integration tests do NOT use the migration SQL** — `.github/workflows/test.yml` runs `drizzle-kit push --force` from `src/db/schema.ts` onto a fresh Neon branch, then `npm run test:integration`. So `schema.ts` is the source of truth CI tests against; the hand-authored migration SQL only feeds the prod/staging runtime migrator (`drizzle migrate()` on boot) + the guard test. Keep `schema.ts` and the migration in sync.
+- **Verify integration locally without touching prod** — spin an ephemeral local Postgres (`initdb` + `pg_ctl` on a temp dir), `POSTMARK_SERVICE_DATABASE_URL=postgresql://…?sslmode=disable npx drizzle-kit push --force`, run `npm run test:integration`. Do NOT point integration tests at the `.env` `DATABASE_URL` (real Neon) — `cleanTestData()` deletes ALL rows.
+- **Neon CI cold-start flake**: the first heavy-insert integration test (e.g. `leaderboard.test.ts > should compute rates correctly`, ~4 serial `upsertSilver` round-trips) can hit vitest's 5000ms per-test timeout on a cold Neon compute. It is a latency flake, not a logic bug — `gh run rerun <id> --failed` clears it; don't chase it as a code error.
+
 ## brandId convention
 
 `brandId` is **always a string** — single UUID or comma-separated CSV (`"uuid1,uuid2,uuid3"`). This applies everywhere: request body, query params, and headers. **Never use `z.array(z.string())`** for brandId in Zod schemas.
