@@ -234,6 +234,23 @@ describe("Status Endpoints Integration", () => {
       expect(response.status).toBe(400);
     });
 
+    it("should NOT 413 on a large items array (>100kb body)", async () => {
+      // ~6000 recipients ≈ ~190kb JSON — above the 100kb body-parser default,
+      // below the 25mb limit. Must parse and return 200, never PayloadTooLargeError.
+      const items = Array.from({ length: 6000 }, (_, i) => ({
+        email: `recipient-${i}@bulk-status.com`,
+      }));
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ items });
+
+      expect(response.status).not.toBe(413);
+      expect(response.status).toBe(200);
+      expect(response.body.results).toHaveLength(6000);
+    });
+
     // ── Global-only mode (no brandId, no campaignId) ──────────────────
 
     it("should return global-only mode when neither brandId nor campaignId provided", async () => {

@@ -170,8 +170,9 @@ internalRouter.get("/status/by-run/:runId", async (req: Request, res: Response) 
  * GET /internal/stats
  * Same as /orgs/stats but only requires service API key (no identity headers).
  * Used by email-gateway for transactional stats aggregation.
+ * Allows an unfiltered call → global cross-org aggregate (service-auth only).
  */
-internalRouter.get("/stats", handleStats);
+internalRouter.get("/stats", (req, res) => handleStats(req, res, { allowGlobal: true }));
 
 // ── Org-scoped routes (API key + x-org-id required) ──────────────────────────
 
@@ -519,7 +520,12 @@ function emptyAggregate(): AggregateRow {
 
 // ─── Shared stats handler ─────────────────────────────────────────────────────
 
-async function handleStats(req: Request, res: Response) {
+async function handleStats(
+  req: Request,
+  res: Response,
+  options: { allowGlobal?: boolean } = {}
+) {
+  const { allowGlobal = false } = options;
   const parsed = StatsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({
@@ -543,13 +549,18 @@ async function handleStats(req: Request, res: Response) {
 
   const conditions = buildStatsConditions({ ...filters, runIds, brandId, workflowSlugs, featureSlugs });
 
-  if (conditions.length === 0) {
+  // Service-auth /internal/stats allows an unfiltered call → global cross-org
+  // aggregate (same scope class as the public leaderboard). Org-scoped /orgs/stats
+  // scopes only via the ?orgId query param (NOT the x-org-id header), so an empty
+  // filter there must stay a 400 — otherwise an org caller reads every org's data.
+  if (conditions.length === 0 && !allowGlobal) {
     return res.status(400).json({
       error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlugs, or featureSlugs)",
     });
   }
 
-  const whereClause = sql.join(conditions, sql` AND `);
+  const whereClause =
+    conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`TRUE`;
 
   try {
     if (!groupBy) {
@@ -609,6 +620,6 @@ async function handleStats(req: Request, res: Response) {
  * GET /orgs/stats
  * Get aggregated email stats (requires identity headers)
  */
-orgsRouter.get("/stats", handleStats);
+orgsRouter.get("/stats", (req, res) => handleStats(req, res, { allowGlobal: false }));
 
 export default { internal: internalRouter, orgs: orgsRouter };
