@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import request from "supertest";
-import { createTestApp, getAuthHeaders } from "../helpers/test-app";
+import { createTestApp, getAuthHeaders, getServiceHeaders } from "../helpers/test-app";
 import {
   cleanTestData,
   closeDb,
@@ -31,6 +31,39 @@ describe("GET /stats", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatch(/at least one filter/i);
+  });
+
+  // ── Global cross-org aggregate (service-auth /internal/stats, no filter) ──────
+
+  it("should return a global cross-org aggregate on /internal/stats with no filters", async () => {
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@org1.com", orgId: "org-1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@org2.com", orgId: "org-2" });
+
+    const response = await request(app)
+      .get("/internal/stats")
+      .set(getServiceHeaders())
+      .query({});
+
+    expect(response.status).toBe(200);
+    // Both orgs counted — proves the call is not scoped to a single org.
+    expect(response.body.recipientStats.sent).toBe(2);
+    expect(response.body.emailStats).toBeDefined();
+  });
+
+  it("should return global groups on /internal/stats with no filters + groupBy", async () => {
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@org1.com", orgId: "org-1", workflowSlug: "wf-a" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@org2.com", orgId: "org-2", workflowSlug: "wf-b" });
+
+    const response = await request(app)
+      .get("/internal/stats")
+      .set(getServiceHeaders())
+      .query({ groupBy: "workflowSlug" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.groups).toBeDefined();
+    const keys = response.body.groups.map((g: any) => g.key);
+    expect(keys).toContain("wf-a");
+    expect(keys).toContain("wf-b");
   });
 
   it("should return 400 when only groupBy is provided (no filter)", async () => {

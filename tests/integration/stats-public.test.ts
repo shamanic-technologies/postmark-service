@@ -47,14 +47,20 @@ describe("GET /internal/stats", () => {
     expect(response.body.recipientStats.sent).toBeGreaterThanOrEqual(1);
   });
 
-  it("should return 400 without any filters", async () => {
+  it("should return a global cross-org aggregate without any filters", async () => {
+    // /internal/stats is service-auth and may be called unfiltered → global
+    // aggregate across all orgs (same scope class as the public leaderboard).
+    await insertTestSending({ messageId: randomUUID(), toEmail: "g1@org-a.com", orgId: "org-a" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "g2@org-b.com", orgId: "org-b" });
+
     const response = await request(app)
       .get("/internal/stats")
       .set(getServiceAuthHeaders())
       .query({});
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toMatch(/at least one filter/i);
+    expect(response.status).toBe(200);
+    // Both orgs counted — confirms the unfiltered call is not scoped to one org.
+    expect(response.body.recipientStats.sent).toBe(2);
   });
 
   it("should reject requests without API key", async () => {
