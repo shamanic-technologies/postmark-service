@@ -15,7 +15,8 @@ import transferRoutes from "../../src/routes/transfer";
 export function createTestApp() {
   const app = express();
 
-  app.use(express.json());
+  // Mirror prod body-parser limit (src/index.ts) so payload-size behavior is testable.
+  app.use(express.json({ limit: "25mb" }));
 
   // ── Public (no auth) ──────────────────────────────────────────────────────
   app.use("/", healthRoutes);

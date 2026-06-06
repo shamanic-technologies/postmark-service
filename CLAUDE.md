@@ -200,8 +200,8 @@ Every endpoint below returns Layer 2 only. No exceptions.
 | Endpoint | What it returns | Scope |
 |----------|----------------|-------|
 | `POST /orgs/status` | Per-email boolean status (ScopedStatusFields) | campaign/brand/global modes |
-| `GET /orgs/stats` | Aggregated counts by unique recipient | org-scoped, filterable |
-| `GET /internal/stats` | Same as /orgs/stats, service auth only | used by email-gateway |
+| `GET /orgs/stats` | Aggregated counts by unique recipient | org-scoped, filterable — **≥1 filter required** (empty filter → 400; the handler scopes via `?orgId`, NOT the `x-org-id` header, so an unfiltered call must not leak cross-org) |
+| `GET /internal/stats` | Same as /orgs/stats, service auth only | used by email-gateway. **Empty filter allowed → global cross-org aggregate** (same scope class as the public leaderboard); pass any filter to scope |
 | `GET /internal/status/{messageId}` | Single email: sending metadata + Layer 2 status | single message |
 | `GET /internal/status/by-org/{orgId}` | List of emails with Layer 2 status each | org-wide |
 | `GET /internal/status/by-run/{runId}` | List of emails with Layer 2 status each | single run |

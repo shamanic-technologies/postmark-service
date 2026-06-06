@@ -50,7 +50,11 @@ app.use(
   })
 );
 
-app.use(express.json());
+// Raise body-parser limit well above the 100kb default: POST /orgs/status sends
+// one { email } per recipient and the items array is uncapped (DIS-40), so large
+// orgs blow past 100kb → 413. 25mb ≈ ~700k recipients; the body is buffered in
+// RAM before parsing, so this stays well under a Railway OOM ceiling (do NOT set GB).
+app.use(express.json({ limit: "25mb" }));
 
 // ── Public (no auth) ──────────────────────────────────────────────────────────
 app.use("/", healthRoutes);
