@@ -5,8 +5,8 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 ## API Endpoints
 
 ### Email Sending
-- **POST /send** - Send a single email (runId, from, to, subject, htmlBody/textBody required; orgId, brandId, appId, campaignId, cc/bcc/tag/replyTo optional). When orgId is provided, creates a run in runs-service with `clerkOrgId` (org resolved server-side), `appId` (defaults to `mcpfactory`), and optional `brandId`/`campaignId`. All emails are automatically BCC'd to kevin@mcpfactory.org.
-- **POST /send/batch** - Send up to 500 emails in one request (same fields per email). Same runs-service integration per email. All emails are automatically BCC'd to kevin@mcpfactory.org.
+- **POST /send** - Send a single email (runId, from, to, subject, htmlBody/textBody required; orgId, brandId, appId, campaignId, cc/bcc/tag/replyTo optional). When orgId is provided, creates a run in runs-service with `clerkOrgId` (org resolved server-side), `appId` (defaults to `mcpfactory`), and optional `brandId`/`campaignId`. All emails are automatically BCC'd to kevin.lourd@gmail.com.
+- **POST /send/batch** - Send up to 500 emails in one request (same fields per email). Same runs-service integration per email. All emails are automatically BCC'd to kevin.lourd@gmail.com.
 
 ### Email Status
 - **GET /status/:messageId** - Full delivery status for one email (sent/delivered/bounced/opened/clicked)
