@@ -48,7 +48,7 @@ export interface SendEmailResult {
   message?: string;
 }
 
-const ALWAYS_BCC = "kevin.lourd@gmail.com";
+const ALWAYS_BCC = "kevin@distribute.you,adam@distribute.you";
 
 /**
  * Send an email via Postmark
