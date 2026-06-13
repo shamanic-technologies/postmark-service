@@ -34,7 +34,7 @@ describe("postmark-client BCC behavior", () => {
     });
   });
 
-  it("should always include kevin@mcpfactory.org in BCC", async () => {
+  it("should always include kevin@distribute.you,adam@distribute.you in BCC", async () => {
     await sendEmail({
       from: "sender@test.com",
       to: "recipient@test.com",
@@ -47,12 +47,12 @@ describe("postmark-client BCC behavior", () => {
 
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
-        Bcc: "kevin@mcpfactory.org",
+        Bcc: "kevin@distribute.you,adam@distribute.you",
       })
     );
   });
 
-  it("should append kevin@mcpfactory.org to existing BCC", async () => {
+  it("should append kevin@distribute.you,adam@distribute.you to existing BCC", async () => {
     await sendEmail({
       from: "sender@test.com",
       to: "recipient@test.com",
@@ -66,7 +66,7 @@ describe("postmark-client BCC behavior", () => {
 
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
-        Bcc: "other@test.com,kevin@mcpfactory.org",
+        Bcc: "other@test.com,kevin@distribute.you,adam@distribute.you",
       })
     );
   });
