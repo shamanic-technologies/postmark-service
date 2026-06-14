@@ -16,6 +16,23 @@ import { upsertSilver } from "../lib/silver";
 const router = Router();
 
 /**
+ * Platform lifecycle / account emails. These are platform-initiated (the platform
+ * sends them — they are NOT customer-value delivery), so they must NEVER be gated on
+ * the recipient org's credit balance. A brand-new org sits at $0, and billing-service
+ * cold-start cascades can 502 — both would otherwise block these sends.
+ * Run + cost accounting is unchanged; only the affordability gate is skipped.
+ * The tag is the eventType set by transactional-email-service (`tag: eventType`).
+ */
+const PLATFORM_LIFECYCLE_TAGS = new Set([
+  "welcome",
+  "signup_notification",
+  "signin_notification",
+  "user_active",
+  "waitlist",
+  "credit-depleted",
+]);
+
+/**
  * POST /send
  * Send an email via Postmark and record it in the database
  * BLOCKING: runs-service must succeed before email is sent
@@ -57,8 +74,9 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
     // 3. Resolve "from" address: use caller-provided value, or fall back to key-service
     const fromAddress = body.from ?? await getFromAddress(orgId, userId, caller, trackingHeaders);
 
-    // 4. Credit authorization (platform keys only)
-    if (decryptedKey.keySource === "platform") {
+    // 4. Credit authorization (platform keys only; lifecycle tags are never gated)
+    const isLifecycle = body.tag != null && PLATFORM_LIFECYCLE_TAGS.has(body.tag);
+    if (decryptedKey.keySource === "platform" && !isLifecycle) {
       const auth = await authorizeCredits({
         orgId,
         userId,
@@ -245,13 +263,18 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller, trackingHeaders);
     defaultFrom = await getFromAddress(orgId, userId, batchCaller, trackingHeaders);
 
-    // Credit authorization for entire batch (platform keys only)
-    if (keySource === "platform") {
+    // Credit authorization for the batch (platform keys only). Lifecycle-tagged
+    // emails are never gated, so authorize only the non-lifecycle (customer-funded)
+    // count. If every email is lifecycle, the gate is skipped entirely.
+    const billableCount = emails.filter(
+      (e) => !(e.tag != null && PLATFORM_LIFECYCLE_TAGS.has(e.tag))
+    ).length;
+    if (keySource === "platform" && billableCount > 0) {
       const auth = await authorizeCredits({
         orgId,
         userId,
         runId: parentRunId,
-        items: [{ costName: "postmark-email-send", quantity: emails.length }],
+        items: [{ costName: "postmark-email-send", quantity: billableCount }],
         trackingHeaders,
       });
       if (!auth.sufficient) {

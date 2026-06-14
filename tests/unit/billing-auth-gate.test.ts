@@ -154,6 +154,45 @@ describe("billing credit authorization gate", () => {
       expect(sendEmail).not.toHaveBeenCalled();
     });
 
+    it("should skip authorization for platform-lifecycle tag", async () => {
+      vi.mocked(getOrgKey).mockResolvedValue({
+        provider: "postmark",
+        key: "platform-token",
+        keySource: "platform",
+      });
+
+      const res = await request(app)
+        .post("/orgs/send")
+        .set(getAuthHeaders())
+        .send({ ...validBody, tag: "welcome" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(authorizeCredits).not.toHaveBeenCalled();
+      expect(sendEmail).toHaveBeenCalled();
+    });
+
+    it("should still authorize for a non-lifecycle tag with platform key", async () => {
+      vi.mocked(getOrgKey).mockResolvedValue({
+        provider: "postmark",
+        key: "platform-token",
+        keySource: "platform",
+      });
+      vi.mocked(authorizeCredits).mockResolvedValue({
+        sufficient: true,
+        balance_cents: 500,
+        required_cents: 1,
+      });
+
+      const res = await request(app)
+        .post("/orgs/send")
+        .set(getAuthHeaders())
+        .send({ ...validBody, tag: "campaign_created" });
+
+      expect(res.status).toBe(200);
+      expect(authorizeCredits).toHaveBeenCalled();
+    });
+
     it("should forward tracking headers to authorizeCredits", async () => {
       vi.mocked(getOrgKey).mockResolvedValue({
         provider: "postmark",
@@ -240,6 +279,58 @@ describe("billing credit authorization gate", () => {
       expect(authorizeCredits).toHaveBeenCalledWith(
         expect.objectContaining({
           items: [{ costName: "postmark-email-send", quantity: 3 }],
+        })
+      );
+    });
+
+    it("should skip authorization when every email in the batch is lifecycle-tagged", async () => {
+      vi.mocked(getOrgKey).mockResolvedValue({
+        provider: "postmark",
+        key: "platform-token",
+        keySource: "platform",
+      });
+
+      const res = await request(app)
+        .post("/orgs/send/batch")
+        .set(getAuthHeaders())
+        .send({
+          emails: [
+            { to: "a@example.com", subject: "A", htmlBody: "<p>A</p>", tag: "welcome" },
+            { to: "b@example.com", subject: "B", htmlBody: "<p>B</p>", tag: "signin_notification" },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(authorizeCredits).not.toHaveBeenCalled();
+    });
+
+    it("should authorize only the non-lifecycle emails in a mixed batch", async () => {
+      vi.mocked(getOrgKey).mockResolvedValue({
+        provider: "postmark",
+        key: "platform-token",
+        keySource: "platform",
+      });
+      vi.mocked(authorizeCredits).mockResolvedValue({
+        sufficient: true,
+        balance_cents: 500,
+        required_cents: 1,
+      });
+
+      const res = await request(app)
+        .post("/orgs/send/batch")
+        .set(getAuthHeaders())
+        .send({
+          emails: [
+            { to: "a@example.com", subject: "A", htmlBody: "<p>A</p>", tag: "welcome" },
+            { to: "b@example.com", subject: "B", htmlBody: "<p>B</p>", tag: "campaign_created" },
+            { to: "c@example.com", subject: "C", htmlBody: "<p>C</p>" },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(authorizeCredits).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ costName: "postmark-email-send", quantity: 2 }],
         })
       );
     });
