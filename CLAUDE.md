@@ -23,6 +23,12 @@ Email sending and tracking service using Postmark. Handles delivery via broadcas
 - **Verify integration locally without touching prod** — spin an ephemeral local Postgres (`initdb` + `pg_ctl` on a temp dir), `POSTMARK_SERVICE_DATABASE_URL=postgresql://…?sslmode=disable npx drizzle-kit push --force`, run `npm run test:integration`. Do NOT point integration tests at the `.env` `DATABASE_URL` (real Neon) — `cleanTestData()` deletes ALL rows.
 - **Neon CI cold-start flake**: the first heavy-insert integration test (e.g. `leaderboard.test.ts > should compute rates correctly`, ~4 serial `upsertSilver` round-trips) can hit vitest's 5000ms per-test timeout on a cold Neon compute. It is a latency flake, not a logic bug — `gh run rerun <id> --failed` clears it; don't chase it as a code error.
 
+## Credit-authorize gate — platform lifecycle tags are never gated
+
+`/orgs/send` + `/orgs/send/batch` call billing-service `authorizeCredits` for platform-key sends (BYOK/org keys never authorize — the org pays the provider). **Exception:** platform lifecycle / account emails are platform-initiated (the platform sends them; not customer-value delivery) and must NEVER be blocked on the recipient org's credit balance — a brand-new org sits at $0 (→402) and billing cold-start cascades 502. The allowlist `PLATFORM_LIFECYCLE_TAGS` (in `src/routes/send.ts`) skips ONLY the affordability gate; run + cost accounting (`createRun`/`addCosts`) is unchanged. `/send/batch` authorizes only the non-lifecycle (customer-funded) email count.
+
+The gate keys on `body.tag`, which is the `eventType` set by transactional-email-service (`tag: eventType`). **Cross-service coupling: when a new lifecycle eventType is added in transactional-email-service, register its tag in `PLATFORM_LIFECYCLE_TAGS` or that email will be credit-gated and fail for $0 orgs.** Current set: `welcome`, `signup_notification`, `signin_notification`, `user_active`, `waitlist`, `credit-depleted`.
+
 ## brandId convention
 
 `brandId` is **always a string** — single UUID or comma-separated CSV (`"uuid1,uuid2,uuid3"`). This applies everywhere: request body, query params, and headers. **Never use `z.array(z.string())`** for brandId in Zod schemas.
