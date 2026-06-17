@@ -22,7 +22,7 @@ const TRANSIENT_CONNECT_CODES = new Set([
  * are safe to retry. Covers:
  *  - Node happy-eyeballs AggregateError (its own `.code` is `ETIMEDOUT`)
  *  - raw socket errors while the Neon proxy is still waking the compute
- *  - pg's own `connectionTimeoutMillis` expiry ("timeout expired")
+ *  - pg client/pool connectionTimeoutMillis expiry messages
  *
  * Returns false for SQL errors and statement timeouts (57014) — by then the
  * statement has run, so retrying could double-apply a write.
@@ -32,7 +32,7 @@ export function isTransientConnectError(err: unknown): boolean {
   const code = (err as { code?: unknown }).code;
   if (typeof code === "string" && TRANSIENT_CONNECT_CODES.has(code)) return true;
   const message = (err as { message?: unknown }).message;
-  return typeof message === "string" && /timeout expired/i.test(message);
+  return typeof message === "string" && /timeout expired|timeout exceeded when trying to connect/i.test(message);
 }
 
 export interface ConnectRetryOptions {

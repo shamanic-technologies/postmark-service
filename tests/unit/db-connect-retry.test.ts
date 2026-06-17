@@ -21,6 +21,7 @@ describe("isTransientConnectError", () => {
 
   it("returns true for pg's connectionTimeoutMillis expiry message", () => {
     expect(isTransientConnectError(new Error("timeout expired"))).toBe(true);
+    expect(isTransientConnectError(new Error("timeout exceeded when trying to connect"))).toBe(true);
   });
 
   it("returns false for a real SQL error (undefined_table 42P01)", () => {
