@@ -150,6 +150,10 @@
             "type": "string",
             "description": "Workflow slug for tracking/grouping"
           },
+          "audienceId": {
+            "type": "string",
+            "description": "Audience ID for cost attribution. Header x-audience-id takes precedence."
+          },
           "leadId": {
             "type": "string",
             "description": "Lead ID for tracking and dedup"
@@ -297,6 +301,9 @@
                   "type": "string"
                 },
                 "workflowSlug": {
+                  "type": "string"
+                },
+                "audienceId": {
                   "type": "string"
                 },
                 "leadId": {

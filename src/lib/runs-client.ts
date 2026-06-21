@@ -46,6 +46,7 @@ export interface CreateRunParams {
   campaignId?: string;
   featureSlug?: string;
   workflowSlug?: string;
+  audienceId?: string;
 }
 
 export interface CostItem {

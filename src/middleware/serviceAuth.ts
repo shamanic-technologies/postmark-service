@@ -40,6 +40,7 @@ export interface OrgContext {
   brandId?: string;
   featureSlug?: string;
   workflowSlug?: string;
+  audienceId?: string;
 }
 
 declare global {
@@ -68,6 +69,7 @@ export function requireOrgId(req: Request, res: Response, next: NextFunction) {
     brandId: typeof req.headers["x-brand-id"] === "string" ? req.headers["x-brand-id"] : undefined,
     featureSlug: typeof req.headers["x-feature-slug"] === "string" ? req.headers["x-feature-slug"] : undefined,
     workflowSlug: typeof req.headers["x-workflow-slug"] === "string" ? req.headers["x-workflow-slug"] : undefined,
+    audienceId: typeof req.headers["x-audience-id"] === "string" ? req.headers["x-audience-id"] : undefined,
   };
 
   next();
