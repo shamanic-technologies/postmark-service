@@ -368,4 +368,114 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
       );
     });
   });
+
+  // Audience attribution: x-audience-id must flow inbound → run declaration AND
+  // every internal egress (cost row inherits run/header attribution in runs-service).
+  // Regression guard for the campaign cost-per-audience attribution (DIS audience CPC).
+  describe("x-audience-id propagation (cost attribution)", () => {
+    it("POST /send: inbound x-audience-id → createRun arg + forwarded on every internal egress", async () => {
+      await request(app)
+        .post("/orgs/send")
+        .set({
+          ...getAuthHeaders(),
+          "x-audience-id": "aud-from-header",
+        })
+        .send({
+          to: "recipient@test.com",
+          subject: "Test",
+          textBody: "Hello",
+        });
+
+      // createRun receives the audienceId AND the tracking header
+      expect(createRun).toHaveBeenCalledWith(
+        expect.objectContaining({ audienceId: "aud-from-header" }),
+        expect.objectContaining({ "x-audience-id": "aud-from-header" })
+      );
+
+      // Cost row tagging: addCosts must carry x-audience-id (cost inherits run/header attribution)
+      expect(addCosts).toHaveBeenCalledWith(
+        "run-1",
+        expect.any(Array),
+        "test-org-id",
+        "test-user-id",
+        expect.objectContaining({ "x-audience-id": "aud-from-header" })
+      );
+      expect(updateRun).toHaveBeenCalledWith(
+        "run-1",
+        "completed",
+        "test-org-id",
+        "test-user-id",
+        undefined,
+        expect.objectContaining({ "x-audience-id": "aud-from-header" })
+      );
+
+      // Key-service egress also carries it (forwarded as a block, not cherry-picked)
+      expect(getOrgKey).toHaveBeenCalledWith(
+        "test-org-id",
+        "test-user-id",
+        "postmark",
+        expect.any(Object),
+        expect.objectContaining({ "x-audience-id": "aud-from-header" })
+      );
+    });
+
+    it("POST /send: body audienceId is used when header absent", async () => {
+      await request(app)
+        .post("/orgs/send")
+        .set(getAuthHeaders())
+        .send({
+          to: "recipient@test.com",
+          subject: "Test",
+          textBody: "Hello",
+          audienceId: "aud-from-body",
+        });
+
+      expect(createRun).toHaveBeenCalledWith(
+        expect.objectContaining({ audienceId: "aud-from-body" }),
+        expect.objectContaining({ "x-audience-id": "aud-from-body" })
+      );
+    });
+
+    it("POST /send: no audience anywhere → no x-audience-id egress, createRun audienceId undefined", async () => {
+      await request(app)
+        .post("/orgs/send")
+        .set(getAuthHeaders())
+        .send({
+          to: "recipient@test.com",
+          subject: "Test",
+          textBody: "Hello",
+        });
+
+      expect(createRun).toHaveBeenCalledWith(
+        expect.objectContaining({ audienceId: undefined }),
+        {} // empty tracking headers — no x-audience-id leaked
+      );
+    });
+
+    it("POST /send/batch: x-audience-id header → every per-email createRun + forwarded egress", async () => {
+      await request(app)
+        .post("/orgs/send/batch")
+        .set({
+          ...getAuthHeaders(),
+          "x-audience-id": "aud-batch",
+        })
+        .send({
+          emails: [
+            { to: "a@test.com", subject: "A", textBody: "Hello A" },
+            { to: "b@test.com", subject: "B", textBody: "Hello B" },
+          ],
+        });
+
+      expect(createRun).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ audienceId: "aud-batch" }),
+        expect.objectContaining({ "x-audience-id": "aud-batch" })
+      );
+      expect(createRun).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ audienceId: "aud-batch" }),
+        expect.objectContaining({ "x-audience-id": "aud-batch" })
+      );
+    });
+  });
 });
