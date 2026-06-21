@@ -57,11 +57,13 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
   const brandIds = headerBrandIds.length > 0 ? headerBrandIds : undefined;
   const featureSlug = body.featureSlug ?? (req.headers["x-feature-slug"] as string | undefined);
   const workflowSlug = body.workflowSlug ?? (req.headers["x-workflow-slug"] as string | undefined);
+  const audienceId = body.audienceId ?? (req.headers["x-audience-id"] as string | undefined);
   const trackingHeaders: Record<string, string> = {};
   if (campaignId) trackingHeaders["x-campaign-id"] = campaignId;
   if (brandIds && brandIds.length > 0) trackingHeaders["x-brand-id"] = brandIds.join(",");
   if (featureSlug) trackingHeaders["x-feature-slug"] = featureSlug;
   if (workflowSlug) trackingHeaders["x-workflow-slug"] = workflowSlug;
+  if (audienceId) trackingHeaders["x-audience-id"] = audienceId;
 
   try {
     // 1. Resolve key from key-service (get keySource for cost tracking)
@@ -104,6 +106,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       campaignId: campaignId,
       featureSlug: featureSlug,
       workflowSlug: workflowSlug,
+      audienceId: audienceId,
     }, trackingHeaders);
     const sendRunId = sendRun.id;
 
@@ -244,11 +247,13 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
   const headerBrandIds = String(req.headers["x-brand-id"] ?? "").split(",").map(s => s.trim()).filter(Boolean);
   const headerFeatureSlug = req.headers["x-feature-slug"] as string | undefined;
   const headerWorkflowSlug = req.headers["x-workflow-slug"] as string | undefined;
+  const headerAudienceId = req.headers["x-audience-id"] as string | undefined;
   const trackingHeaders: Record<string, string> = {};
   if (headerCampaignId) trackingHeaders["x-campaign-id"] = headerCampaignId;
   if (headerBrandIds.length > 0) trackingHeaders["x-brand-id"] = headerBrandIds.join(",");
   if (headerFeatureSlug) trackingHeaders["x-feature-slug"] = headerFeatureSlug;
   if (headerWorkflowSlug) trackingHeaders["x-workflow-slug"] = headerWorkflowSlug;
+  if (headerAudienceId) trackingHeaders["x-audience-id"] = headerAudienceId;
 
   const results = [];
 
@@ -302,6 +307,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
       const emailBrandIds = headerBrandIds.length > 0 ? headerBrandIds : undefined;
       const emailFeatureSlug = email.featureSlug ?? headerFeatureSlug;
       const emailWorkflowSlug = email.workflowSlug ?? headerWorkflowSlug;
+      const emailAudienceId = email.audienceId ?? headerAudienceId;
 
       // 1. Create run in runs-service (BLOCKING)
       const sendRun = await createRun({
@@ -314,6 +320,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         campaignId: emailCampaignId,
         featureSlug: emailFeatureSlug,
         workflowSlug: emailWorkflowSlug,
+        audienceId: emailAudienceId,
       }, trackingHeaders);
       const sendRunId = sendRun.id;
 

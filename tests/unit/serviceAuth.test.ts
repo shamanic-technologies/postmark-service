@@ -73,6 +73,7 @@ describe("serviceAuth middleware", () => {
         "x-brand-id": "brand-a",
         "x-feature-slug": "feat-1",
         "x-workflow-slug": "wf-1",
+        "x-audience-id": "aud-1",
       });
       const res = mockRes();
       const next = vi.fn();
@@ -88,6 +89,7 @@ describe("serviceAuth middleware", () => {
         brandId: "brand-a",
         featureSlug: "feat-1",
         workflowSlug: "wf-1",
+        audienceId: "aud-1",
       });
     });
 
