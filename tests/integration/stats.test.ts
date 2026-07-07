@@ -94,6 +94,60 @@ describe("GET /stats", () => {
     expect(wfB).toBeDefined();
   });
 
+  // ── audienceId filter + groupBy (per-audience transactional attribution, #160) ──
+
+  it("should scope stats to one audience via ?audienceId (recipient grain)", async () => {
+    const orgId = "org-aud-" + randomUUID();
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId, audienceId: "aud-1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId, audienceId: "aud-1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", orgId, audienceId: "aud-2" });
+
+    const response = await request(app)
+      .get("/orgs/stats")
+      .set(getAuthHeaders())
+      .query({ orgId, audienceId: "aud-1" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.recipientStats.sent).toBe(2);
+  });
+
+  it("should return one group per audience via groupBy=audienceId", async () => {
+    const orgId = "org-audgrp-" + randomUUID();
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId, audienceId: "aud-x" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId, audienceId: "aud-y" });
+
+    const response = await request(app)
+      .get("/orgs/stats")
+      .set(getAuthHeaders())
+      .query({ orgId, groupBy: "audienceId" });
+
+    expect(response.status).toBe(200);
+    const keys = response.body.groups.map((g: any) => g.key);
+    expect(keys).toContain("aud-x");
+    expect(keys).toContain("aud-y");
+  });
+
+  it("should return per-(audience, workflow) counts via audienceId filter + groupBy=workflowSlug", async () => {
+    const orgId = "org-audwf-" + randomUUID();
+    // audience aud-1 ran two workflows; aud-2 is noise that must be excluded.
+    await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", orgId, audienceId: "aud-1", workflowSlug: "wf-1" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "b@test.com", orgId, audienceId: "aud-1", workflowSlug: "wf-2" });
+    await insertTestSending({ messageId: randomUUID(), toEmail: "c@test.com", orgId, audienceId: "aud-2", workflowSlug: "wf-1" });
+
+    const response = await request(app)
+      .get("/orgs/stats")
+      .set(getAuthHeaders())
+      .query({ orgId, audienceId: "aud-1", groupBy: "workflowSlug" });
+
+    expect(response.status).toBe(200);
+    const keys = response.body.groups.map((g: any) => g.key);
+    expect(keys).toContain("wf-1");
+    expect(keys).toContain("wf-2");
+    // aud-2's wf-1 send is excluded → wf-1 group counts only aud-1's single recipient.
+    const wf1 = response.body.groups.find((g: any) => g.key === "wf-1");
+    expect(wf1.recipientStats.sent).toBe(1);
+  });
+
   it("should filter by runIds (comma-separated)", async () => {
     const runId = "run-stats-1";
     await insertTestSending({ messageId: randomUUID(), toEmail: "a@test.com", runId, brandId: "b1", campaignId: "c1" });

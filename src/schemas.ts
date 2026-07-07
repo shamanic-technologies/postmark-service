@@ -279,7 +279,7 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
 // ===== Stats =====
 
-export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail"]);
+export const GroupByEnum = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "audienceId", "recipientEmail"]);
 
 export const StatsQuerySchema = z
   .object({
@@ -287,6 +287,7 @@ export const StatsQuerySchema = z
     orgId: z.string().optional().openapi({ description: "Filter by organization ID" }),
     brandId: z.string().optional().openapi({ description: "Filter by brand ID (comma-separated for multiple)" }),
     campaignId: z.string().optional().openapi({ description: "Filter by campaign ID" }),
+    audienceId: z.string().optional().openapi({ description: "Filter by audience ID (per-audience attribution)" }),
     workflowSlugs: z.string().optional().openapi({ description: "Filter by workflow slugs (comma-separated)" }),
     featureSlugs: z.string().optional().openapi({ description: "Filter by feature slugs (comma-separated)" }),
     groupBy: GroupByEnum.optional().openapi({ description: "Group results by dimension" }),
@@ -651,7 +652,7 @@ registry.registerPath({
   path: "/orgs/stats",
   summary: "Get aggregated stats",
   description:
-    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, and/or featureSlugs. When groupBy is provided, returns grouped results. Requires x-org-id header.",
+    "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, audienceId, workflowSlugs, and/or featureSlugs. When groupBy is provided, returns grouped results. Requires x-org-id header.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {

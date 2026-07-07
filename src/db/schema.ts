@@ -36,6 +36,7 @@ export const postmarkSendings = pgTable(
     campaignId: text("campaign_id"),
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
+    audienceId: text("audience_id"), // Per-audience attribution (x-audience-id)
     leadId: text("lead_id"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -47,6 +48,7 @@ export const postmarkSendings = pgTable(
     index("idx_sendings_brand_ids").using("gin", table.brandIds),
     index("idx_sendings_campaign").on(table.campaignId),
     index("idx_sendings_workflow").on(table.workflowSlug),
+    index("idx_sendings_audience").on(table.audienceId),
     index("idx_sendings_lead").on(table.leadId),
     index("idx_sendings_campaign_email").on(table.campaignId, table.toEmail),
     index("idx_sendings_feature_created").on(table.featureSlug, table.createdAt.desc()),
@@ -72,6 +74,7 @@ export const postmarkMessages = pgTable(
     brandIds: text("brand_ids").array(),
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
+    audienceId: text("audience_id"), // Per-audience attribution (x-audience-id)
     leadId: text("lead_id"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     errorCode: integer("error_code"),
@@ -103,6 +106,7 @@ export const postmarkMessages = pgTable(
     index("idx_messages_campaign").on(table.campaignId),
     index("idx_messages_brand_ids").using("gin", table.brandIds),
     index("idx_messages_workflow").on(table.workflowSlug),
+    index("idx_messages_audience").on(table.audienceId),
     index("idx_messages_feature_created").on(table.featureSlug, table.createdAt.desc()),
     index("idx_messages_to_email").on(table.toEmail),
     index("idx_messages_lead").on(table.leadId),
