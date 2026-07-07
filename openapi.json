@@ -2222,7 +2222,7 @@
     "/orgs/stats": {
       "get": {
         "summary": "Get aggregated stats",
-        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, workflowSlugs, and/or featureSlugs. When groupBy is provided, returns grouped results. Requires x-org-id header.",
+        "description": "Get aggregated email stats optionally filtered by runIds, orgId, brandId, campaignId, audienceId, workflowSlugs, and/or featureSlugs. When groupBy is provided, returns grouped results. Requires x-org-id header.",
         "tags": [
           "Email Status"
         ],
@@ -2275,6 +2275,16 @@
           {
             "schema": {
               "type": "string",
+              "description": "Filter by audience ID (per-audience attribution)"
+            },
+            "required": false,
+            "description": "Filter by audience ID (per-audience attribution)",
+            "name": "audienceId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Filter by workflow slugs (comma-separated)"
             },
             "required": false,
@@ -2300,6 +2310,7 @@
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
+                "audienceId",
                 "recipientEmail"
               ],
               "description": "Group results by dimension"
@@ -2397,6 +2408,16 @@
           {
             "schema": {
               "type": "string",
+              "description": "Filter by audience ID (per-audience attribution)"
+            },
+            "required": false,
+            "description": "Filter by audience ID (per-audience attribution)",
+            "name": "audienceId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Filter by workflow slugs (comma-separated)"
             },
             "required": false,
@@ -2422,6 +2443,7 @@
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
+                "audienceId",
                 "recipientEmail"
               ],
               "description": "Group results by dimension"

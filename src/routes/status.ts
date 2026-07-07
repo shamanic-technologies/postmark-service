@@ -390,6 +390,7 @@ const GROUP_BY_COLUMN_MAP = {
   campaignId: postmarkMessages.campaignId,
   workflowSlug: postmarkMessages.workflowSlug,
   featureSlug: postmarkMessages.featureSlug,
+  audienceId: postmarkMessages.audienceId,
   recipientEmail: postmarkMessages.toEmail,
 } as const;
 
@@ -398,6 +399,7 @@ function buildStatsConditions(data: {
   orgId?: string;
   brandId?: string[];
   campaignId?: string;
+  audienceId?: string;
   workflowSlugs?: string[];
   featureSlugs?: string[];
 }): SQL[] {
@@ -413,6 +415,9 @@ function buildStatsConditions(data: {
   }
   if (data.campaignId) {
     conditions.push(eq(postmarkMessages.campaignId, data.campaignId));
+  }
+  if (data.audienceId) {
+    conditions.push(eq(postmarkMessages.audienceId, data.audienceId));
   }
   if (data.workflowSlugs && data.workflowSlugs.length > 0) {
     conditions.push(inArray(postmarkMessages.workflowSlug, data.workflowSlugs));
@@ -555,7 +560,7 @@ async function handleStats(
   // filter there must stay a 400 — otherwise an org caller reads every org's data.
   if (conditions.length === 0 && !allowGlobal) {
     return res.status(400).json({
-      error: "At least one filter is required (runIds, orgId, brandId, campaignId, workflowSlugs, or featureSlugs)",
+      error: "At least one filter is required (runIds, orgId, brandId, campaignId, audienceId, workflowSlugs, or featureSlugs)",
     });
   }
 
