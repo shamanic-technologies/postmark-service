@@ -176,6 +176,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           campaignId,
           featureSlug,
           workflowSlug,
+          audienceId,
           leadId: body.leadId,
           metadata: body.metadata,
         })
@@ -389,6 +390,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             campaignId: emailCampaignId,
             featureSlug: emailFeatureSlug,
             workflowSlug: emailWorkflowSlug,
+            audienceId: emailAudienceId,
             leadId: email.leadId,
             metadata: email.metadata,
           })
