@@ -251,6 +251,11 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
       let bounced = false;
       let unsubscribed = false;
       let lastDeliveredAt: Date | null = null;
+      // Send-event COUNT: one postmarkMessages row = one transactional message,
+      // so the number of emails actually sent to this recipient in the scope is
+      // the count of rows whose `sent` is true. Brand scope groups all of the
+      // brand's campaign rows, so its count is the SUM across campaigns for free.
+      let sentCount = 0;
 
       // First-occurrence (MIN) accumulators. firstContacted/Sent/Delivered are
       // derived from existing columns (submitted_at / created_at / last_delivered_at);
@@ -271,6 +276,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         if (r.clicked) clicked = true;
         if (r.bounced) bounced = true;
         if (r.unsubscribed) unsubscribed = true;
+        if (r.sent) sentCount++;
         if (r.lastDeliveredAt) {
           const dt = toDate(r.lastDeliveredAt)!;
           if (!lastDeliveredAt || dt > lastDeliveredAt) lastDeliveredAt = dt;
@@ -300,6 +306,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
         bounced,
         unsubscribed,
         cancelled: false,
+        sentCount,
         lastDeliveredAt: lastDeliveredAt?.toISOString() ?? null,
         firstContactedAt: firstContactedAt?.toISOString() ?? null,
         firstSentAt: firstSentAt?.toISOString() ?? null,
