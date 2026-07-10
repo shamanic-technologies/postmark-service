@@ -915,4 +915,51 @@ describe("Status Endpoints Integration", () => {
       expect(ms(unsubRes.body.results[0].campaign.firstUnsubscribedAt)).toBe(Tunsub.getTime());
     });
   });
+
+  describe("sentCount (send-event count per scope)", () => {
+    it("campaign mode: counts each sent message to the recipient (2 sends → 2)", async () => {
+      const campaignId = "camp-sc";
+      const email = "sentcount@test.com";
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, campaignId, brandId: "b-sc" });
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, campaignId, brandId: "b-sc" });
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ campaignId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results[0].campaign.sentCount).toBe(2);
+    });
+
+    it("brand mode: byCampaign carries per-campaign counts; brand = SUM across campaigns", async () => {
+      const brandId = "b-sc-sum";
+      const email = "sentcount-brand@test.com";
+      // camp-A: 2 sends, camp-B: 1 send → brand total 3
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, brandId, campaignId: "camp-sc-a" });
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, brandId, campaignId: "camp-sc-a" });
+      await insertTestSending({ messageId: randomUUID(), toEmail: email, brandId, campaignId: "camp-sc-b" });
+
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ brandId, items: [{ email }] });
+
+      expect(response.status).toBe(200);
+      const r = response.body.results[0];
+      expect(r.byCampaign["camp-sc-a"].sentCount).toBe(2);
+      expect(r.byCampaign["camp-sc-b"].sentCount).toBe(1);
+      expect(r.brand.sentCount).toBe(3);
+    });
+
+    it("no send → sentCount 0", async () => {
+      const response = await request(app)
+        .post("/orgs/status")
+        .set(getAuthHeaders())
+        .send({ campaignId: "camp-none", items: [{ email: "never-sent@test.com" }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results[0].campaign.sentCount).toBe(0);
+    });
+  });
 });
