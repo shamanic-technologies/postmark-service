@@ -14,6 +14,30 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # A throwaway Postgres, one per run, inside the runner.
+    #
+    # This used to be an isolated Neon branch cut per PR. The Neon project no
+    # longer exists — the fleet moved to a self-hosted Postgres — so the
+    # create-branch step began failing with a 404 and nothing could merge. A
+    # service container gives the same guarantee the branch was there for (never
+    # a database anything else points at, discarded when the job ends) with no
+    # external dependency, no API key, and no cleanup step that can leave a
+    # branch behind.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postmark_service_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,32 +57,15 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Create Neon branch for PR
-        if: github.event_name == 'pull_request'
-        id: neon
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch_name: pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
       - name: Push schema to database
         if: github.event_name == 'pull_request'
         run: npx drizzle-kit push --force
         env:
-          POSTMARK_SERVICE_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
+          POSTMARK_SERVICE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postmark_service_test
 
       - name: Run integration tests
         if: github.event_name == 'pull_request'
         run: npm run test:integration
         env:
-          POSTMARK_SERVICE_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
+          POSTMARK_SERVICE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postmark_service_test
           POSTMARK_SERVICE_API_KEY: test-secret-key
-
-      - name: Delete Neon branch
-        if: github.event_name == 'pull_request' && always()
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
