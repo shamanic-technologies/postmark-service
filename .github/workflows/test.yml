@@ -22,10 +22,11 @@ jobs:
     # service container gives the same guarantee the branch was there for (never
     # a database anything else points at, discarded when the job ends) with no
     # external dependency, no API key, and no cleanup step that can leave a
-    # branch behind.
+    # branch behind. postgres:17 matches the version the fleet runs in production
+    # (17.10), so CI validates the schema against the same major.
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
