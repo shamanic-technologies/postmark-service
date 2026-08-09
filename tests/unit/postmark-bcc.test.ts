@@ -34,7 +34,7 @@ describe("postmark-client BCC behavior", () => {
     });
   });
 
-  it("should always include kevin@distribute.you,adam@distribute.you in BCC", async () => {
+  it("should send no BCC when the caller supplied none", async () => {
     await sendEmail({
       from: "sender@test.com",
       to: "recipient@test.com",
@@ -47,12 +47,12 @@ describe("postmark-client BCC behavior", () => {
 
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
-        Bcc: "kevin@distribute.you,adam@distribute.you",
+        Bcc: undefined,
       })
     );
   });
 
-  it("should append kevin@distribute.you,adam@distribute.you to existing BCC", async () => {
+  it("should forward the caller-supplied BCC byte-equal, with nothing appended", async () => {
     await sendEmail({
       from: "sender@test.com",
       to: "recipient@test.com",
@@ -66,8 +66,42 @@ describe("postmark-client BCC behavior", () => {
 
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
-        Bcc: "other@test.com,kevin@distribute.you,adam@distribute.you",
+        Bcc: "other@test.com",
       })
     );
+  });
+
+  it("should forward a multi-address caller BCC list unchanged", async () => {
+    await sendEmail({
+      from: "sender@test.com",
+      to: "recipient@test.com",
+      subject: "Test",
+      textBody: "Hello",
+      messageStream: "broadcast",
+      bcc: "a@test.com,b@test.com",
+      orgId: "test-org",
+      userId: "test-user",
+    });
+
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Bcc: "a@test.com,b@test.com",
+      })
+    );
+  });
+
+  it("should never add a staff address of its own", async () => {
+    await sendEmail({
+      from: "sender@test.com",
+      to: "recipient@test.com",
+      subject: "Test",
+      textBody: "Hello",
+      messageStream: "broadcast",
+      orgId: "test-org",
+      userId: "test-user",
+    });
+
+    const message = mockSendEmail.mock.calls[0][0];
+    expect(JSON.stringify(message)).not.toContain("distribute.you");
   });
 });

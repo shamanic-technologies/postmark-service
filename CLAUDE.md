@@ -29,6 +29,10 @@ Email sending and tracking service using Postmark. Handles delivery via broadcas
 
 The gate keys on `body.tag`, which is the `eventType` set by transactional-email-service (`tag: eventType`). **Cross-service coupling: when a new lifecycle eventType is added in transactional-email-service, register its tag in `PLATFORM_LIFECYCLE_TAGS` or that email will be credit-gated and fail for $0 orgs.** Current set: `welcome`, `signup_notification`, `signin_notification`, `user_active`, `waitlist`, `credit-depleted`.
 
+## BCC — this service never adds a recipient of its own
+
+`sendEmail` forwards `params.bcc` verbatim (and sends no BCC when the caller supplied none). **Do NOT reintroduce a service-added BCC — not hardcoded, not behind an env var.** Postmark bills PER RECIPIENT and counts blind copies: a hardcoded staff BCC, concatenated on top of the list transactional-email-service already sent, billed that address twice on every message and drove a 4.45x multiplier (July 2026: 628 API calls → 2,797 billed emails, against a 100/month free-plan cap). The archival need is already covered — Postmark keeps the full message 45 days in Activity, and `postmark_sendings` keeps a permanent metadata row per send.
+
 ## brandId convention
 
 `brandId` is **always a string** — single UUID or comma-separated CSV (`"uuid1,uuid2,uuid3"`). This applies everywhere: request body, query params, and headers. **Never use `z.array(z.string())`** for brandId in Zod schemas.

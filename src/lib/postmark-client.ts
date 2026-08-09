@@ -48,22 +48,24 @@ export interface SendEmailResult {
   message?: string;
 }
 
-const ALWAYS_BCC = "kevin@distribute.you,adam@distribute.you";
-
 /**
  * Send an email via Postmark
+ *
+ * BCC is forwarded exactly as the caller supplied it — this service never adds a
+ * recipient of its own. Postmark bills per recipient (BCC included), so a
+ * service-added archival BCC doubled the billed volume of every send. Archival is
+ * covered by Postmark's 45-day Activity retention plus the permanent per-send
+ * metadata row in `postmark_sendings`.
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const caller = params.caller || { method: "POST", path: "/send" };
   const postmarkClient = await getClient(params.orgId, params.userId, caller);
 
-  const bcc = params.bcc ? `${params.bcc},${ALWAYS_BCC}` : ALWAYS_BCC;
-
   const message: Models.Message = {
     From: params.from,
     To: params.to,
     Cc: params.cc,
-    Bcc: bcc,
+    Bcc: params.bcc,
     Subject: params.subject,
     HtmlBody: params.htmlBody,
     TextBody: params.textBody,
