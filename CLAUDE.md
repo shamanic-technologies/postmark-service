@@ -67,9 +67,9 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 
 ### Core principle: all endpoints read from silver — never bronze
 
-Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized). Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. This is what keeps queries cheap regardless of geography between Railway and Neon.
+Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized). Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. That is what keeps a stats query cheap no matter how much bronze accumulates behind it.
 
-> **No gold/rollup layer.** A `postmark_stats_daily` gold rollup + 5-min refresh cron existed historically but was **removed** (migration `0013_drop_stats_daily`): it had zero readers across the fleet, and the 5-min cron kept the Neon compute awake 24/7 (blocked scale-to-zero). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug` — kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). Live silver is always real-time; there is no rollup staleness to manage.
+> **No gold/rollup layer.** A `postmark_stats_daily` gold rollup + 5-min refresh cron existed historically but was **removed** (migration `0013_drop_stats_daily`): it had zero readers across the fleet, and the 5-min cron kept the database awake around the clock (the compute was Neon then, and the cron blocked its scale-to-zero). The zero-readers half is the part that still decides: a rollup nobody reads is one to delete whatever it costs to keep warm. The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug` — kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). Live silver is always real-time; there is no rollup staleness to manage.
 
 ### Bronze — Layer 1: raw Postmark events (write-only)
 
@@ -163,7 +163,7 @@ Note: unlike instantly-service which computes `delivered = sent - bounced` (beca
 
 ### No gold/rollup layer (removed)
 
-There is no Layer 3. The `postmark_stats_daily` gold rollup + its 5-min refresh cron were removed in migration `0013_drop_stats_daily` — zero readers across the fleet, and the cron was the sole repeating SQL that blocked Neon scale-to-zero (kept the prod compute warm 24/7 at the 0.25 CU floor). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug&featureSlugs=…` (called by email-gateway), kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). No rebuild job, no rollup staleness.
+There is no Layer 3. The `postmark_stats_daily` gold rollup + its 5-min refresh cron were removed in migration `0013_drop_stats_daily` — zero readers across the fleet, and the cron was the sole repeating SQL keeping the database busy around the clock (Neon then, where it blocked scale-to-zero at the 0.25 CU floor). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug&featureSlugs=…` (called by email-gateway), kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). No rebuild job, no rollup staleness.
 
 ### Write path summary
 
@@ -172,9 +172,9 @@ POST /send              → INSERT bronze.postmark_sendings → upsertSilver(mes
 POST /webhooks/postmark → INSERT bronze.postmark_<event>  → upsertSilver(messageId)
 ```
 
-No timer/cron touches the DB. When the service is idle (no sends, no webhooks) nothing queries Postgres, so the Neon compute suspends after the 300s idle timeout (scale-to-zero).
+No timer/cron touches the DB: when the service is idle (no sends, no webhooks) nothing queries Postgres. That mattered acutely on Neon, where an idle compute suspended after 300s and a single repeating query would have held it awake. Postgres is now a container on the box and never suspends, so nothing is saved by it any more — but a timer that queries for no reader is still a timer that queries for no reader, so do not add one.
 
-**Cold-start connect handling.** The first DB call after a suspend hits a compute that is still resuming (~1–7s). Node 20's happy-eyeballs would abort each address at 250ms, so the connect fails with `AggregateError [ETIMEDOUT]` before the wake completes. `src/db/index.ts` neutralizes this: it raises `autoSelectFamilyAttemptTimeout` to 5s and wraps `pool.query` with `withConnectRetry` (`src/db/retry.ts`) — connection-acquisition errors (ETIMEDOUT/ECONNREFUSED/"timeout expired") retry with backoff (250/500/1000ms). Retry is connect-phase only (pre-dispatch), so it is write-safe; SQL errors and statement timeouts are never retried. This preserves scale-to-zero without surfacing cold-start 500s.
+**Cold-start connect handling.** The first DB call after a suspend hits a compute that is still resuming (~1–7s). Node 20's happy-eyeballs would abort each address at 250ms, so the connect fails with `AggregateError [ETIMEDOUT]` before the wake completes. `src/db/index.ts` neutralizes this: it raises `autoSelectFamilyAttemptTimeout` to 5s and wraps `pool.query` with `withConnectRetry` (`src/db/retry.ts`) — connection-acquisition errors (ETIMEDOUT/ECONNREFUSED/"timeout expired") retry with backoff (250/500/1000ms). Retry is connect-phase only (pre-dispatch), so it is write-safe; SQL errors and statement timeouts are never retried. It was written for Neon's suspend/resume cycle, which no longer exists — the database is a local container now. The wrapper is kept because a connect-phase retry is right whenever a pool can transiently fail to hand out a connection, not only on a waking compute; what is gone is the daily cold start that made it urgent.
 
 ### Read path summary
 
