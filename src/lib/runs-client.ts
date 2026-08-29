@@ -146,3 +146,66 @@ export async function addCosts(
     },
   });
 }
+
+// ─── Platform runs (org-less spend) ──────────────────────────────────────────
+//
+// A platform run carries no organization, so the cost rows hung off it have
+// `runs_costs.organization_id = NULL` and are invisible to
+// `GET /internal/org-usage-total` — the aggregate billing-service reads to charge
+// an org. That is the whole point: a platform-initiated notification must be
+// declared (priced, attributable to postmark-service) without being charged to
+// the org it is about.
+//
+// Deliberately NO `x-org-id` / `x-user-id` on these calls. runs-service accepts
+// both on `/v1/platform-runs` and stores them on the row — which would put the
+// cost straight back into that org's usage total. Passing them here would undo
+// the fix while looking like better attribution. The recipient org stays on
+// `postmark_sendings.org_id`, which is where this service records who a mail
+// was for.
+
+export interface CreatePlatformRunParams {
+  serviceName: string;
+  taskName: string;
+}
+
+function platformIdentityHeaders(
+  trackingHeaders: Record<string, string>
+): Record<string, string> {
+  return { "x-service-name": "postmark-service", ...trackingHeaders };
+}
+
+export async function createPlatformRun(
+  params: CreatePlatformRunParams,
+  trackingHeaders: Record<string, string> = {}
+): Promise<Run> {
+  return runsRequest<Run>("/v1/platform-runs", {
+    method: "POST",
+    body: params,
+    identityHeaders: platformIdentityHeaders(trackingHeaders),
+  });
+}
+
+export async function updatePlatformRun(
+  runId: string,
+  status: "completed" | "failed",
+  error?: string,
+  trackingHeaders: Record<string, string> = {}
+): Promise<Run> {
+  return runsRequest<Run>(`/v1/platform-runs/${runId}`, {
+    method: "PATCH",
+    body: { status, error },
+    identityHeaders: platformIdentityHeaders(trackingHeaders),
+  });
+}
+
+export async function addPlatformCosts(
+  runId: string,
+  items: CostItem[],
+  trackingHeaders: Record<string, string> = {}
+): Promise<{ costs: RunCost[] }> {
+  return runsRequest<{ costs: RunCost[] }>(`/v1/platform-runs/${runId}/costs`, {
+    method: "POST",
+    body: { items },
+    identityHeaders: platformIdentityHeaders(trackingHeaders),
+  });
+}

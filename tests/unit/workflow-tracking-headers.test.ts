@@ -5,6 +5,9 @@ vi.mock("../../src/lib/runs-client", () => ({
   createRun: vi.fn(),
   updateRun: vi.fn(),
   addCosts: vi.fn(),
+  createPlatformRun: vi.fn().mockResolvedValue({ id: "platform-run-1" }),
+  updatePlatformRun: vi.fn().mockResolvedValue({}),
+  addPlatformCosts: vi.fn().mockResolvedValue({ costs: [] }),
 }));
 
 // Mock postmark-client

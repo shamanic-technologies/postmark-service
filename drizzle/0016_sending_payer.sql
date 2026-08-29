@@ -1,0 +1,11 @@
+-- Who was charged for a send.
+--
+-- "org"      — the cost was declared on the org's run, so runs_costs.organization_id
+--              is set and billing-service counts it in that org's usage.
+-- "platform" — the cost was declared on an org-less platform run, so the cost row
+--              carries a NULL org and no org-spend SUM can reach it. The platform
+--              absorbs it. Used for platform-initiated notifications: a mail about
+--              an organization's billing state must not be able to move that state.
+--
+-- Every row that exists today was org-billed, which is what the default records.
+ALTER TABLE "postmark_sendings" ADD COLUMN IF NOT EXISTS "payer" text NOT NULL DEFAULT 'org';

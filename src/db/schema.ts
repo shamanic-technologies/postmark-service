@@ -37,6 +37,11 @@ export const postmarkSendings = pgTable(
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
     audienceId: text("audience_id"), // Per-audience attribution (x-audience-id)
+    // Who was charged for this send. "org" = declared on the org's run and billed
+    // to org_id; "platform" = declared on an org-less platform run, so no org
+    // usage total can reach it. Recorded here so a platform-paid send stays
+    // auditable from this service alone (the run it points at carries no org).
+    payer: text("payer").notNull().default("org"),
     leadId: text("lead_id"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -75,6 +80,11 @@ export const postmarkMessages = pgTable(
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
     audienceId: text("audience_id"), // Per-audience attribution (x-audience-id)
+    // Who was charged for this send. "org" = declared on the org's run and billed
+    // to org_id; "platform" = declared on an org-less platform run, so no org
+    // usage total can reach it. Recorded here so a platform-paid send stays
+    // auditable from this service alone (the run it points at carries no org).
+    payer: text("payer").notNull().default("org"),
     leadId: text("lead_id"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     errorCode: integer("error_code"),
