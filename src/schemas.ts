@@ -74,6 +74,17 @@ const EmailHeaderSchema = z.object({
   value: z.string(),
 });
 
+const PayerSchema = z.enum(["platform", "org"]).openapi({
+  description:
+    "Who is charged for this send. 'org' (the default) bills the organization: " +
+    "the cost is declared on the org's run and billing-service counts it in that " +
+    "org's usage. 'platform' declares the same cost on an org-less platform run — " +
+    "still priced and still traceable, but no org-spend total can reach it. Send " +
+    "'platform' for platform-initiated notifications (billing/dunning alerts, " +
+    "account lifecycle mail): a notification about an organization's billing state " +
+    "must not be able to move that state. Omit it for work done for the customer.",
+});
+
 // ===== Send Email =====
 
 export const SendEmailRequestSchema = z
@@ -92,6 +103,7 @@ export const SendEmailRequestSchema = z
     bcc: z.string().optional(),
     replyTo: z.string().optional(),
     tag: z.string().optional(),
+    payer: PayerSchema.optional(),
     headers: z.array(EmailHeaderSchema).optional(),
     metadata: z.record(z.string(), z.string()).optional(),
     trackOpens: z.boolean().optional().default(true),
@@ -138,6 +150,7 @@ export const BatchSendRequestSchema = z
           bcc: z.string().optional(),
           replyTo: z.string().optional(),
           tag: z.string().optional(),
+          payer: PayerSchema.optional(),
           headers: z.array(EmailHeaderSchema).optional(),
           metadata: z.record(z.string(), z.string()).optional(),
           trackOpens: z.boolean().optional().default(true),
