@@ -351,4 +351,84 @@ describe("billing credit authorization gate", () => {
       expect(authorizeCredits).not.toHaveBeenCalled();
     });
   });
+  // A billing notification must never be able to move the billing state it reports on.
+  // Prod 2026-08-29: `credits-reload-failed` was org-billed, so sending it authorized
+  // credits, which made billing-service retry the declined card, which produced another
+  // `credits-reload-failed` — 2,939 authorizations and 2,938 declines in 71 minutes.
+  describe("billing notifications skip the credit gate", () => {
+    const BILLING_NOTIFICATION_TAGS = [
+      "credits-reload-failed",
+      "credit-depleted",
+      "credit-depleted-followup-3d",
+      "credit-depleted-followup-10d",
+      "credit-depleted-blocked",
+      "credit-depleted-followup-3d-blocked",
+      "credit-depleted-followup-10d-blocked",
+    ];
+
+    beforeEach(() => {
+      vi.mocked(getOrgKey).mockResolvedValue({
+        provider: "postmark",
+        key: "platform-token",
+        keySource: "platform",
+      });
+      // Would 402 every send if the gate were reached at all.
+      vi.mocked(authorizeCredits).mockResolvedValue({
+        sufficient: false,
+        balance_cents: -49999,
+        required_cents: 1,
+      });
+    });
+
+    it.each(BILLING_NOTIFICATION_TAGS)(
+      "sends %s without authorizing credits, on an org past its floor",
+      async (tag) => {
+        const res = await request(app)
+          .post("/orgs/send")
+          .set(getAuthHeaders())
+          .send({ ...validBody, tag });
+
+        expect(res.status).toBe(200);
+        expect(authorizeCredits).not.toHaveBeenCalled();
+        expect(sendEmail).toHaveBeenCalled();
+      }
+    );
+
+    it("excludes billing notifications from the batch authorization count", async () => {
+      vi.mocked(authorizeCredits).mockResolvedValue({
+        sufficient: true,
+        balance_cents: 500,
+        required_cents: 1,
+      });
+
+      const res = await request(app)
+        .post("/orgs/send/batch")
+        .set(getAuthHeaders())
+        .send({
+          emails: [
+            { to: "a@example.com", subject: "A", htmlBody: "<p>A</p>", tag: "credits-reload-failed" },
+            { to: "b@example.com", subject: "B", htmlBody: "<p>B</p>", tag: "credit-depleted-followup-3d" },
+            { to: "c@example.com", subject: "C", htmlBody: "<p>C</p>" },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(authorizeCredits).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ costName: "postmark-email-send", quantity: 1 }],
+        })
+      );
+    });
+
+    it("still gates an ordinary org email", async () => {
+      const res = await request(app)
+        .post("/orgs/send")
+        .set(getAuthHeaders())
+        .send({ ...validBody, tag: "campaign_created" });
+
+      expect(res.status).toBe(402);
+      expect(authorizeCredits).toHaveBeenCalled();
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+  });
 });
