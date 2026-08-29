@@ -22,11 +22,55 @@ Email sending and tracking service using Postmark. Handles delivery via broadcas
 - **CI integration tests do NOT use the migration SQL** — `.github/workflows/test.yml` runs `drizzle-kit push --force` from `src/db/schema.ts` onto a `postgres:16` service container the runner throws away, then `npm run test:integration`. The container replaced a per-PR Neon branch when the Neon project was deleted; it gives the same isolation with no API key and no cleanup step. So `schema.ts` is the source of truth CI tests against; the hand-authored migration SQL only feeds the prod/staging runtime migrator (`drizzle migrate()` on boot) + the guard test. Keep `schema.ts` and the migration in sync.
 - **Verify integration locally without touching prod** — spin an ephemeral local Postgres (`docker run --rm -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16`, or `initdb` + `pg_ctl` on a temp dir), `POSTMARK_SERVICE_DATABASE_URL=postgresql://…?sslmode=disable npx drizzle-kit push --force`, run `npm run test:integration`. NEVER point integration tests at a real database — `cleanTestData()` deletes ALL rows.
 
+## Who pays for a send — `payer`, and why a platform notification cannot be org-billed
+
+Every send is classified as paid by the **org** or by the **platform**, by
+`resolvePayer` (`src/lib/payer.ts`), and the classification decides which run the
+spend is declared on:
+
+| payer | run | cost row | consequence |
+|---|---|---|---|
+| `org` (default) | `POST /v1/runs`, org identity | `organization_id = <org>` | runs-service counts it in `GET /internal/org-usage-total`; billing charges the org |
+| `platform` | `POST /v1/platform-runs`, **no org at all** | `organization_id = NULL` | no org-spend SUM can reach it; the platform absorbs it |
+
+An org is billed for a cost row iff `cost_source = 'platform'` **and** the row's
+`organization_id` is that org (runs-service `is_platform_projected`, migration 0017 +
+the denormalized org of migration 0029). So `costSource` is not the payer — it is
+which Postmark key paid the vendor, and it stays truthful. The org on the run is the
+payer, and that is the single lever this service pulls.
+
+`createPlatformRun` / `addPlatformCosts` / `updatePlatformRun` deliberately send **no
+`x-org-id` / `x-user-id`**. runs-service accepts both on `/v1/platform-runs` and
+stores them, which would put the cost straight back into that org's usage total —
+passing them would undo the fix while looking like better attribution. The recipient
+org stays on `postmark_sendings.org_id`, and `postmark_sendings.payer` (migration
+0016) records which side paid, so a platform-paid send is auditable from this service
+alone.
+
+**Classification, highest precedence first:** the caller's `payer` field on the send
+body → the `PLATFORM_LIFECYCLE_TAGS` backstop → `org`. The tag list cannot be the
+mechanism: `tag` is the free-form eventType transactional-email-service reads out of
+its own `email_templates` table, so a copy of that namespace kept here goes stale
+silently on every template added there, and it goes stale in the billed direction.
+Only the service that decided to send the mail knows it was platform-initiated —
+that service should send `payer: "platform"`. `tests/unit/payer-routing.test.ts` pins
+both paths; `tests/unit/platform-run-headers.test.ts` pins the no-org invariant.
+
+**Why this is not merely a billing preference.** Prod 2026-08-29, org `b645207b-…`:
+`credits-reload-failed` was org-billed, so sending it authorized credits, which made
+billing retry the declined card, which produced another `credits-reload-failed` —
+2,939 authorizations and 2,938 declined charges in 71 minutes, one every ~1.5s, until
+the issuer moved the card from `insufficient_funds` to a flat `generic_decline`. A
+notification about an organization's billing state must not be able to move that
+state. billing-service capped its own amplification afterwards (per-org reload
+backoff + one notification per failure streak, 2,939 → 7), but the cycle only stops
+existing once the notification costs the org nothing.
+
 ## Credit-authorize gate — platform lifecycle tags are never gated
 
-`/orgs/send` + `/orgs/send/batch` call billing-service `authorizeCredits` for platform-key sends (BYOK/org keys never authorize — the org pays the provider). **Exception:** platform lifecycle / account emails are platform-initiated (the platform sends them; not customer-value delivery) and must NEVER be blocked on the recipient org's credit balance — a brand-new org sits at $0 (→402) and billing cold-start cascades 502. The allowlist `PLATFORM_LIFECYCLE_TAGS` (in `src/lib/lifecycle-tags.ts`, read through `isPlatformLifecycleTag`) skips ONLY the affordability gate; run + cost accounting (`createRun`/`addCosts`) is unchanged. `/send/batch` authorizes only the non-lifecycle (customer-funded) email count.
+`/orgs/send` + `/orgs/send/batch` call billing-service `authorizeCredits` for platform-key sends (BYOK/org keys never authorize — the org pays the provider). **Exception:** platform-paid sends (`resolvePayer` → `platform`) are platform-initiated (the platform sends them; not customer-value delivery) and must NEVER be blocked on the recipient org's credit balance — a brand-new org sits at $0 (→402) and billing cold-start cascades 502. The allowlist `PLATFORM_LIFECYCLE_TAGS` (in `src/lib/lifecycle-tags.ts`) is the backstop `resolvePayer` reads; run + cost accounting still happens, on a platform run (see above). `/send/batch` authorizes only the org-paid email count and opens each email's ledger against its own payer.
 
-The gate keys on `body.tag`, which is the `eventType` set by transactional-email-service (`tag: eventType`). **Cross-service coupling: when a new lifecycle eventType is added in transactional-email-service, register its tag in `PLATFORM_LIFECYCLE_TAGS` or that email will be credit-gated and fail for $0 orgs.** Current set: `welcome`, `signup_notification`, `signin_notification`, `user_active`, `waitlist`, plus the whole billing-notification family — `credits-reload-failed`, `credit-depleted`, `credit-depleted-followup-3d`, `credit-depleted-followup-10d`, and the three `-blocked` variants.
+Absent an explicit `payer`, the classification keys on `body.tag`, which is the `eventType` set by transactional-email-service (`tag: eventType`). **Cross-service coupling: a new lifecycle eventType in transactional-email-service must either send `payer: "platform"` or register its tag in `PLATFORM_LIFECYCLE_TAGS`, or that email will be credit-gated AND billed to the org it is about.** Current set: `welcome`, `signup_notification`, `signin_notification`, `user_active`, `waitlist`, plus the whole billing-notification family — `credits-reload-failed`, `credit-depleted`, `credit-depleted-followup-3d`, `credit-depleted-followup-10d`, and the three `-blocked` variants.
 
 **The billing family is not there for the $0-org reason — it is there because a notification about the org's billing state must not be able to MOVE that state.** Authorizing credits for one of these mails re-enters billing-service's charge path, and these are precisely the mails sent BECAUSE that path just failed, so the notification re-triggers what it reports on. Prod 2026-08-29, org `b645207b-…`: `credits-reload-failed` was org-billed while only `credit-depleted` was exempt → send authorizes → billing retries the declined card → 402 → another `credits-reload-failed` → **2,939 authorizations and 2,938 declined charges in 71 minutes**, one every ~1.5s, until the issuer moved the card from `insufficient_funds` to a flat `generic_decline`. billing-service capped its own side afterwards (per-org reload backoff + one notification per failure streak), but the cycle only stops existing once the notification costs the org nothing. **Adding a billing/dunning eventType in billing-service means adding it here in the same breath** — `tests/unit/billing-auth-gate.test.ts` pins the family, tag by tag.
 
@@ -56,6 +100,8 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 - `src/routes/health.ts` — Health check routes
 - `src/middleware/serviceAuth.ts` — API key auth middleware
 - `src/lib/postmark-client.ts` — Postmark SDK wrapper (multi-project)
+- `src/lib/payer.ts` — `resolvePayer` — who is charged for a send (`platform` | `org`)
+- `src/lib/send-ledger.ts` — `openSendLedger` — opens the run + cost ledger against that payer
 - `src/lib/runs-client.ts` — Runs service HTTP client
 - `src/db/schema.ts` — Drizzle table definitions
 - `src/db/index.ts` — Database connection
@@ -79,7 +125,7 @@ Append-only storage of every webhook received from Postmark. One row per event, 
 
 | Table | Webhook event | Unique per message? | Key extra columns |
 |-------|--------------|--------------------|--------------------|
-| `postmark_sendings` | *(not a webhook — created at send time)* | yes (`message_id`) | `error_code`, `to_email`, `org_id`, `campaign_id`, `brand_ids`, `lead_id` |
+| `postmark_sendings` | *(not a webhook — created at send time)* | yes (`message_id`) | `error_code`, `to_email`, `org_id`, `payer`, `campaign_id`, `brand_ids`, `lead_id` |
 | `postmark_deliveries` | Delivery | yes | `delivered_at`, `recipient` |
 | `postmark_bounces` | Bounce | yes | `type`, `type_code`, `description`, `bounced_at` |
 | `postmark_openings` | Open | **no** (multi-open) | `first_open`, `platform`, `read_seconds`, `geo` |

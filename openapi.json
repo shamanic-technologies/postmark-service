@@ -190,6 +190,14 @@
           "tag": {
             "type": "string"
           },
+          "payer": {
+            "type": "string",
+            "enum": [
+              "platform",
+              "org"
+            ],
+            "description": "Who is charged for this send. 'org' (the default) bills the organization: the cost is declared on the org's run and billing-service counts it in that org's usage. 'platform' declares the same cost on an org-less platform run — still priced and still traceable, but no org-spend total can reach it. Send 'platform' for platform-initiated notifications (billing/dunning alerts, account lifecycle mail): a notification about an organization's billing state must not be able to move that state. Omit it for work done for the customer."
+          },
           "headers": {
             "type": "array",
             "items": {
@@ -335,6 +343,14 @@
                 },
                 "tag": {
                   "type": "string"
+                },
+                "payer": {
+                  "type": "string",
+                  "enum": [
+                    "platform",
+                    "org"
+                  ],
+                  "description": "Who is charged for this send. 'org' (the default) bills the organization: the cost is declared on the org's run and billing-service counts it in that org's usage. 'platform' declares the same cost on an org-less platform run — still priced and still traceable, but no org-spend total can reach it. Send 'platform' for platform-initiated notifications (billing/dunning alerts, account lifecycle mail): a notification about an organization's billing state must not be able to move that state. Omit it for work done for the customer."
                 },
                 "headers": {
                   "type": "array",
