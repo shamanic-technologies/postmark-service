@@ -4,15 +4,11 @@ import { postmarkSendings } from "../db/schema";
 import { eq, and, ne } from "drizzle-orm";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
 import { getOrgKey, getStreamId, getFromAddress } from "../lib/key-client";
-import {
-  createRun,
-  updateRun,
-  addCosts,
-} from "../lib/runs-client";
 import { authorizeCredits } from "../lib/billing-client";
 import { SendEmailRequestSchema, BatchSendRequestSchema } from "../schemas";
 import { upsertSilver } from "../lib/silver";
-import { isPlatformLifecycleTag } from "../lib/lifecycle-tags";
+import { resolvePayer } from "../lib/payer";
+import { openSendLedger } from "../lib/send-ledger";
 
 const router = Router();
 
@@ -61,9 +57,12 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
     // 3. Resolve "from" address: use caller-provided value, or fall back to key-service
     const fromAddress = body.from ?? await getFromAddress(orgId, userId, caller, trackingHeaders);
 
-    // 4. Credit authorization (platform keys only; lifecycle tags are never gated)
-    const isLifecycle = isPlatformLifecycleTag(body.tag);
-    if (decryptedKey.keySource === "platform" && !isLifecycle) {
+    // 4. Credit authorization. Only an org-paid send on a platform key is gated:
+    //    a platform-paid send costs the org nothing, so there is nothing to
+    //    authorize — and authorizing it is what let a billing notification
+    //    re-enter the charge path it was reporting on (2026-08-29).
+    const payer = resolvePayer({ payer: body.payer, tag: body.tag });
+    if (decryptedKey.keySource === "platform" && payer === "org") {
       const auth = await authorizeCredits({
         orgId,
         userId,
@@ -80,20 +79,20 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       }
     }
 
-    // 5. Create run in runs-service (BLOCKING)
-    const sendRun = await createRun({
+    // 5. Open the run ledger against whoever pays (BLOCKING)
+    const ledger = await openSendLedger({
+      payer,
       orgId,
-      serviceName: "postmark-service",
-      taskName: "email-send",
-      parentRunId,
       userId,
+      parentRunId,
       brandId: brandIds?.[0],
-      campaignId: campaignId,
-      featureSlug: featureSlug,
-      workflowSlug: workflowSlug,
-      audienceId: audienceId,
-    }, trackingHeaders);
-    const sendRunId = sendRun.id;
+      campaignId,
+      featureSlug,
+      workflowSlug,
+      audienceId,
+      trackingHeaders,
+    });
+    const sendRunId = ledger.runId;
 
     try {
       // 6. Guard: reject conflicting leadId for this email
@@ -110,7 +109,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           .limit(1);
 
         if (existing) {
-          await updateRun(sendRunId, "failed", orgId, userId, "leadId conflict", trackingHeaders);
+          await ledger.fail("leadId conflict");
           return res.status(400).json({
             error: "leadId conflict",
             details: `Email ${body.to} already has leadId=${existing.leadId} in the database, but this request sent leadId=${body.leadId}`,
@@ -162,6 +161,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           featureSlug,
           workflowSlug,
           audienceId,
+          payer,
           leadId: body.leadId,
           metadata: body.metadata,
         })
@@ -172,10 +172,8 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
 
       // 8. Log costs and complete run
       if (result.success) {
-        await addCosts(sendRunId, [
-          { costName: "postmark-email-send", quantity: 1, costSource: decryptedKey.keySource },
-        ], orgId, userId, trackingHeaders);
-        await updateRun(sendRunId, "completed", orgId, userId, undefined, trackingHeaders);
+        await ledger.addSendCost(decryptedKey.keySource);
+        await ledger.complete();
 
         res.status(200).json({
           success: true,
@@ -184,7 +182,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           sendingId: sending.id,
         });
       } else {
-        await updateRun(sendRunId, "failed", orgId, userId, result.message, trackingHeaders);
+        await ledger.fail(result.message);
 
         res.status(400).json({
           success: false,
@@ -195,7 +193,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       }
     } catch (error: any) {
       // Email send or DB failed — mark run as failed
-      await updateRun(sendRunId, "failed", orgId, userId, error.message, trackingHeaders);
+      await ledger.fail(error.message);
       throw error;
     }
   } catch (error: any) {
@@ -254,11 +252,11 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller, trackingHeaders);
     defaultFrom = await getFromAddress(orgId, userId, batchCaller, trackingHeaders);
 
-    // Credit authorization for the batch (platform keys only). Lifecycle-tagged
-    // emails are never gated, so authorize only the non-lifecycle (customer-funded)
-    // count. If every email is lifecycle, the gate is skipped entirely.
+    // Credit authorization for the batch (platform keys only). Only the org-paid
+    // emails are authorized; platform-paid ones cost the org nothing, so a batch
+    // made entirely of them skips the gate.
     const billableCount = emails.filter(
-      (e) => !isPlatformLifecycleTag(e.tag)
+      (e) => resolvePayer({ payer: e.payer, tag: e.tag }) === "org"
     ).length;
     if (keySource === "platform" && billableCount > 0) {
       const auth = await authorizeCredits({
@@ -295,20 +293,21 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
       const emailWorkflowSlug = email.workflowSlug ?? headerWorkflowSlug;
       const emailAudienceId = email.audienceId ?? headerAudienceId;
 
-      // 1. Create run in runs-service (BLOCKING)
-      const sendRun = await createRun({
+      // 1. Open the run ledger against whoever pays for this email (BLOCKING)
+      const emailPayer = resolvePayer({ payer: email.payer, tag: email.tag });
+      const ledger = await openSendLedger({
+        payer: emailPayer,
         orgId,
-        serviceName: "postmark-service",
-        taskName: "email-send",
-        parentRunId,
         userId,
+        parentRunId,
         brandId: emailBrandIds?.[0],
         campaignId: emailCampaignId,
         featureSlug: emailFeatureSlug,
         workflowSlug: emailWorkflowSlug,
         audienceId: emailAudienceId,
-      }, trackingHeaders);
-      const sendRunId = sendRun.id;
+        trackingHeaders,
+      });
+      const sendRunId = ledger.runId;
 
       try {
         // 2. Guard: reject conflicting leadId for this email
@@ -325,7 +324,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             .limit(1);
 
           if (existing) {
-            await updateRun(sendRunId, "failed", orgId, userId, "leadId conflict", trackingHeaders);
+            await ledger.fail("leadId conflict");
             throw new Error(`leadId conflict: email ${email.to} already has leadId=${existing.leadId}, but this request sent leadId=${email.leadId}`);
           }
         }
@@ -376,6 +375,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             featureSlug: emailFeatureSlug,
             workflowSlug: emailWorkflowSlug,
             audienceId: emailAudienceId,
+            payer: emailPayer,
             leadId: email.leadId,
             metadata: email.metadata,
           })
@@ -386,12 +386,10 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
 
         // 4. Log costs and complete run
         if (result.success) {
-          await addCosts(sendRunId, [
-            { costName: "postmark-email-send", quantity: 1, costSource: keySource },
-          ], orgId, userId, trackingHeaders);
-          await updateRun(sendRunId, "completed", orgId, userId, undefined, trackingHeaders);
+          await ledger.addSendCost(keySource);
+          await ledger.complete();
         } else {
-          await updateRun(sendRunId, "failed", orgId, userId, result.message, trackingHeaders);
+          await ledger.fail(result.message);
         }
 
         results.push({
@@ -404,7 +402,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         });
       } catch (error: any) {
         // Email send or DB failed — mark run as failed
-        await updateRun(sendRunId, "failed", orgId, userId, error.message, trackingHeaders);
+        await ledger.fail(error.message);
         throw error;
       }
     } catch (error: any) {
