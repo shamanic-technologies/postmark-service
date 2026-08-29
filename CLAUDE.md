@@ -74,6 +74,16 @@ Absent an explicit `payer`, the classification keys on `body.tag`, which is the 
 
 **The billing family is not there for the $0-org reason — it is there because a notification about the org's billing state must not be able to MOVE that state.** Authorizing credits for one of these mails re-enters billing-service's charge path, and these are precisely the mails sent BECAUSE that path just failed, so the notification re-triggers what it reports on. Prod 2026-08-29, org `b645207b-…`: `credits-reload-failed` was org-billed while only `credit-depleted` was exempt → send authorizes → billing retries the declined card → 402 → another `credits-reload-failed` → **2,939 authorizations and 2,938 declined charges in 71 minutes**, one every ~1.5s, until the issuer moved the card from `insufficient_funds` to a flat `generic_decline`. billing-service capped its own side afterwards (per-org reload backoff + one notification per failure streak), but the cycle only stops existing once the notification costs the org nothing. **Adding a billing/dunning eventType in billing-service means adding it here in the same breath** — `tests/unit/billing-auth-gate.test.ts` pins the family, tag by tag.
 
+## CI gate — every changed source file needs a test file NAMED after it
+
+`.github/workflows` runs `check-tests-exist`: for each changed `src/**/*.ts` it takes
+the basename and requires either a test file whose name contains it, or some test
+file that mentions the module name. Adding `src/lib/send-ledger.ts` with its
+behaviour covered from `tests/unit/payer-routing.test.ts` is NOT enough — the gate
+wants `tests/unit/send-ledger.test.ts`. It fails in 5 seconds, well before the test
+job finishes, so a release that greens locally still burns a CI cycle. Create the
+matching test file in the same commit as any new module.
+
 ## BCC — this service never adds a recipient of its own
 
 `sendEmail` forwards `params.bcc` verbatim (and sends no BCC when the caller supplied none). **Do NOT reintroduce a service-added BCC — not hardcoded, not behind an env var.** Postmark bills PER RECIPIENT and counts blind copies: a hardcoded staff BCC, concatenated on top of the list transactional-email-service already sent, billed that address twice on every message and drove a 4.45x multiplier (July 2026: 628 API calls → 2,797 billed emails, against a 100/month free-plan cap). The archival need is already covered — Postmark keeps the full message 45 days in Activity, and `postmark_sendings` keeps a permanent metadata row per send.
