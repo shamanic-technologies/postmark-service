@@ -1,0 +1,17 @@
+-- Give the silver mirror the "payer" column the schema has declared since 0016.
+--
+-- Migration 0016 added "payer" to the bronze table (postmark_sendings) only, while
+-- src/db/schema.ts declared it on BOTH postmark_sendings and postmark_messages. The
+-- silver insert therefore named a column the table did not have and every send since
+-- v0.32.3 failed its silver write with
+--   ERROR: column "payer" of relation "postmark_messages" does not exist
+-- after the mail had already been handed to Postmark and delivered — so callers
+-- recorded a 500 for a message the recipient received.
+--
+-- Same shape and default as the bronze column: text NOT NULL DEFAULT 'org'. Every
+-- row that exists today was org-billed, which is what the default records; there is
+-- no backfill beyond it, and nothing here changes what payer means.
+--
+-- IF NOT EXISTS so it is safe on a database where the column was already added by
+-- hand while prod was broken.
+ALTER TABLE "postmark_messages" ADD COLUMN IF NOT EXISTS "payer" text NOT NULL DEFAULT 'org';
