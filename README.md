@@ -12,6 +12,7 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 - **GET /status/:messageId** - Full delivery status for one email (sent/delivered/bounced/opened/clicked)
 - **GET /status/by-org/:orgId** - Recent emails for an organization
 - **GET /status/by-run/:runId** - Emails for a specific run
+- **GET /internal/operations/:operationRunId/stats** - Aggregate outcomes for one logical send operation: every message sent under the caller's OWN run, in a single indexed aggregate. Use this rather than `/stats?runIds=` for a multi-message operation — the run stored on a message is the child run this service mints per send, so filtering on the caller's run matches nothing. An operation with no messages recorded under it returns **404** (`code: OPERATION_NOT_FOUND`) with no stats block, so an unmatched query can never be read as an all-zero healthy one; a 200 always reports `messagesMatched` > 0. Service auth only.
 - **POST /stats** - Aggregated stats with filters: runIds, clerkOrgId, brandId, appId, campaignId (at least one required). Returns emailsSent, emailsDelivered, emailsOpened, emailsClicked, emailsBounced, and reply metrics.
 
 ### Webhooks

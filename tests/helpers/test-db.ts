@@ -37,6 +37,7 @@ export async function insertTestSending(data: {
   subject?: string;
   orgId?: string;
   runId?: string;
+  parentRunId?: string;
   brandId?: string;
   brandIds?: string[];
   campaignId?: string;
@@ -55,6 +56,7 @@ export async function insertTestSending(data: {
       subject: data.subject || "Test Subject",
       orgId: data.orgId || "test-org-id",
       runId: data.runId || "test-run-id",
+      parentRunId: data.parentRunId,
       brandIds: data.brandIds ?? (data.brandId ? [data.brandId] : undefined),
       campaignId: data.campaignId,
       workflowSlug: data.workflowSlug,

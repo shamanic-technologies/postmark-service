@@ -84,27 +84,46 @@ wants `tests/unit/send-ledger.test.ts`. It fails in 5 seconds, well before the t
 job finishes, so a release that greens locally still burns a CI cycle. Create the
 matching test file in the same commit as any new module.
 
-## Reading one logical send OPERATION back — `run_id` here is the CHILD run, so the tag is the only handle
+## Reading one logical send OPERATION back — `run_id` here is the CHILD run, and the handle is `parent_run_id`, NOT the tag
 
 The `run_id` on a sending (and on its silver row) is a run **this service mints per
 send**. It is NOT the run of the service that asked for the sends. So a caller that
 performed thousands of sends as one operation, and queries `/stats?runIds=<its own
 run>`, matches **no rows** and gets a well-formed answer saying nothing was sent —
 indistinguishable from a measured zero. transactional-email-service's mailing-list
-self-halt read exactly that and was inert for its whole life: it saw zero, every tick.
+self-halt read exactly that and was inert for its whole life: it saw zero, every
+tick. Measured in prod 2026-09-18: release run `79982eb6-…` → `sent: 0`; its child
+run `e095307e-…` → `sent: 1`.
 
-The handle that does name the set is the caller's send-time **tag**, which every
-message of one operation shares. Bronze has carried it since 0000; migration 0018
-mirrors it onto silver (all reads are silver-only), backfills it from bronze, and
-indexes it. `GET /internal/stats/by-tag` + `GET /orgs/stats/by-tag` serve it.
+The handle is **`parent_run_id`** (migration 0019, bronze + silver, indexed): the
+inbound `x-run-id`, i.e. the run the caller was already tracking. The writer held it
+all along — it is what `openSendLedger` passes as `parentRunId` — and threw it away,
+so the read side had nothing that could name a multi-message operation. Persist at
+write; never reconstruct it from runs-service at read.
+`GET /internal/operations/{operationRunId}/stats` serves it: one indexed aggregate
+over `idx_messages_parent_run`, whatever the operation's size, with no message id
+and no child run leaving this service.
 
-**That read reports an empty match as `matched: false` with no stats fields at all —
-never as zeros.** That is the point of the endpoint, not a detail of it: a consumer
-polling an operation in flight has to be able to tell "my question found nothing"
-from "the outcomes are zero", and the only way to give it that is to refuse to emit
-numbers with no messages behind them. Do not "simplify" it later into a plain zeroed
-`StatsResponse`, and do not add the tag as a filter on the existing `/stats` read
-either — that read's shape cannot express the distinction.
+**An operation with no messages under it is a 404 carrying `code:
+OPERATION_NOT_FOUND` and NO stats block — never zeros.** That is the point of the
+endpoint, not a detail of it: a consumer polling an operation in flight has to be
+able to tell "my question found nothing" from "the outcomes are zero", and the only
+way to give it that is to refuse to emit numbers with no messages behind them. A 200
+always carries `messagesMatched` > 0. Do not "simplify" it later into a zeroed
+`StatsResponse`, and do not re-express it as a filter on the existing `/stats` read —
+that read's shape cannot carry the distinction.
+
+**`tag` is NOT that handle, however much it looks like one.** It is on every send,
+delivery, bounce, open, click, complaint and subscription-change row, and it is the
+`eventType` transactional-email-service reads out of its own `email_templates`
+table — so it is per-TEMPLATE, not per-operation. Prod at the time of writing: **11
+separate mailing-list releases over 8 days, 11 distinct parent runs, all sharing
+`tag = 'mailing-list-newsletter-test'`**. A `GET /stats/by-tag` keyed on it shipped
+to `staging` first (migration 0018, never promoted) and was retired here before it
+could reach prod: for the one release the fix existed to measure it would have
+reported 11 messages instead of 1 — over-counting by the number of past releases,
+silently, in the reassuring direction. The silver `tag` column and its index survive
+that retirement as a plain denormalization; nothing reads them today.
 
 ## BCC — this service never adds a recipient of its own
 
@@ -147,9 +166,9 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 
 ### Core principle: all endpoints read from silver — never bronze
 
-Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized). Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. This is what keeps queries cheap regardless of geography between Railway and Neon.
+Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized). Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. That is what keeps a stats query cheap no matter how much bronze accumulates behind it.
 
-> **No gold/rollup layer.** A `postmark_stats_daily` gold rollup + 5-min refresh cron existed historically but was **removed** (migration `0013_drop_stats_daily`): it had zero readers across the fleet, and the 5-min cron kept the Neon compute awake 24/7 (blocked scale-to-zero). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug` — kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). Live silver is always real-time; there is no rollup staleness to manage.
+> **No gold/rollup layer.** A `postmark_stats_daily` gold rollup + 5-min refresh cron existed historically but was **removed** (migration `0013_drop_stats_daily`): it had zero readers across the fleet, and the 5-min cron kept the database awake around the clock (the compute was Neon then, and the cron blocked its scale-to-zero). The zero-readers half is the part that still decides: a rollup nobody reads is one to delete whatever it costs to keep warm. The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug` — kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). Live silver is always real-time; there is no rollup staleness to manage.
 
 ### Bronze — Layer 1: raw Postmark events (write-only)
 
@@ -243,7 +262,7 @@ Note: unlike instantly-service which computes `delivered = sent - bounced` (beca
 
 ### No gold/rollup layer (removed)
 
-There is no Layer 3. The `postmark_stats_daily` gold rollup + its 5-min refresh cron were removed in migration `0013_drop_stats_daily` — zero readers across the fleet, and the cron was the sole repeating SQL that blocked Neon scale-to-zero (kept the prod compute warm 24/7 at the 0.25 CU floor). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug&featureSlugs=…` (called by email-gateway), kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). No rebuild job, no rollup staleness.
+There is no Layer 3. The `postmark_stats_daily` gold rollup + its 5-min refresh cron were removed in migration `0013_drop_stats_daily` — zero readers across the fleet, and the cron was the sole repeating SQL keeping the database busy around the clock (Neon then, where it blocked scale-to-zero at the 0.25 CU floor). The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug&featureSlugs=…` (called by email-gateway), kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). No rebuild job, no rollup staleness.
 
 ### Write path summary
 
@@ -252,9 +271,9 @@ POST /send              → INSERT bronze.postmark_sendings → upsertSilver(mes
 POST /webhooks/postmark → INSERT bronze.postmark_<event>  → upsertSilver(messageId)
 ```
 
-No timer/cron touches the DB. When the service is idle (no sends, no webhooks) nothing queries Postgres, so the Neon compute suspends after the 300s idle timeout (scale-to-zero).
+No timer/cron touches the DB: when the service is idle (no sends, no webhooks) nothing queries Postgres. That mattered acutely on Neon, where an idle compute suspended after 300s and a single repeating query would have held it awake. Postgres is now a container on the box and never suspends, so nothing is saved by it any more — but a timer that queries for no reader is still a timer that queries for no reader, so do not add one.
 
-**Cold-start connect handling.** The first DB call after a suspend hits a compute that is still resuming (~1–7s). Node 20's happy-eyeballs would abort each address at 250ms, so the connect fails with `AggregateError [ETIMEDOUT]` before the wake completes. `src/db/index.ts` neutralizes this: it raises `autoSelectFamilyAttemptTimeout` to 5s and wraps `pool.query` with `withConnectRetry` (`src/db/retry.ts`) — connection-acquisition errors (ETIMEDOUT/ECONNREFUSED/"timeout expired") retry with backoff (250/500/1000ms). Retry is connect-phase only (pre-dispatch), so it is write-safe; SQL errors and statement timeouts are never retried. This preserves scale-to-zero without surfacing cold-start 500s.
+**Cold-start connect handling.** The first DB call after a suspend hits a compute that is still resuming (~1–7s). Node 20's happy-eyeballs would abort each address at 250ms, so the connect fails with `AggregateError [ETIMEDOUT]` before the wake completes. `src/db/index.ts` neutralizes this: it raises `autoSelectFamilyAttemptTimeout` to 5s and wraps `pool.query` with `withConnectRetry` (`src/db/retry.ts`) — connection-acquisition errors (ETIMEDOUT/ECONNREFUSED/"timeout expired") retry with backoff (250/500/1000ms). Retry is connect-phase only (pre-dispatch), so it is write-safe; SQL errors and statement timeouts are never retried. It was written for Neon's suspend/resume cycle, which no longer exists — the database is a local container now. The wrapper is kept because a connect-phase retry is right whenever a pool can transiently fail to hand out a connection, not only on a waking compute; what is gone is the daily cold start that made it urgent.
 
 ### Read path summary
 
@@ -294,6 +313,7 @@ Every endpoint below returns Layer 2 only. No exceptions.
 | `GET /internal/status/{messageId}` | Single email: sending metadata + Layer 2 status | single message |
 | `GET /internal/status/by-org/{orgId}` | List of emails with Layer 2 status each | org-wide |
 | `GET /internal/status/by-run/{runId}` | List of emails with Layer 2 status each | single run |
+| `GET /internal/operations/{operationRunId}/stats` | Aggregated counts for one logical send operation; 404 (no stats block) when nothing matches | the caller's own run |
 | `GET /public/performance/leaderboard` | Per-workflow aggregated counts + rates | global |
 
 ## Shared contract
