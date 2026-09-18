@@ -84,27 +84,46 @@ wants `tests/unit/send-ledger.test.ts`. It fails in 5 seconds, well before the t
 job finishes, so a release that greens locally still burns a CI cycle. Create the
 matching test file in the same commit as any new module.
 
-## Reading one logical send OPERATION back — `run_id` here is the CHILD run, so the tag is the only handle
+## Reading one logical send OPERATION back — `run_id` here is the CHILD run, and the handle is `parent_run_id`, NOT the tag
 
 The `run_id` on a sending (and on its silver row) is a run **this service mints per
 send**. It is NOT the run of the service that asked for the sends. So a caller that
 performed thousands of sends as one operation, and queries `/stats?runIds=<its own
 run>`, matches **no rows** and gets a well-formed answer saying nothing was sent —
 indistinguishable from a measured zero. transactional-email-service's mailing-list
-self-halt read exactly that and was inert for its whole life: it saw zero, every tick.
+self-halt read exactly that and was inert for its whole life: it saw zero, every
+tick. Measured in prod 2026-09-18: release run `79982eb6-…` → `sent: 0`; its child
+run `e095307e-…` → `sent: 1`.
 
-The handle that does name the set is the caller's send-time **tag**, which every
-message of one operation shares. Bronze has carried it since 0000; migration 0018
-mirrors it onto silver (all reads are silver-only), backfills it from bronze, and
-indexes it. `GET /internal/stats/by-tag` + `GET /orgs/stats/by-tag` serve it.
+The handle is **`parent_run_id`** (migration 0019, bronze + silver, indexed): the
+inbound `x-run-id`, i.e. the run the caller was already tracking. The writer held it
+all along — it is what `openSendLedger` passes as `parentRunId` — and threw it away,
+so the read side had nothing that could name a multi-message operation. Persist at
+write; never reconstruct it from runs-service at read.
+`GET /internal/operations/{operationRunId}/stats` serves it: one indexed aggregate
+over `idx_messages_parent_run`, whatever the operation's size, with no message id
+and no child run leaving this service.
 
-**That read reports an empty match as `matched: false` with no stats fields at all —
-never as zeros.** That is the point of the endpoint, not a detail of it: a consumer
-polling an operation in flight has to be able to tell "my question found nothing"
-from "the outcomes are zero", and the only way to give it that is to refuse to emit
-numbers with no messages behind them. Do not "simplify" it later into a plain zeroed
-`StatsResponse`, and do not add the tag as a filter on the existing `/stats` read
-either — that read's shape cannot express the distinction.
+**An operation with no messages under it is a 404 carrying `code:
+OPERATION_NOT_FOUND` and NO stats block — never zeros.** That is the point of the
+endpoint, not a detail of it: a consumer polling an operation in flight has to be
+able to tell "my question found nothing" from "the outcomes are zero", and the only
+way to give it that is to refuse to emit numbers with no messages behind them. A 200
+always carries `messagesMatched` > 0. Do not "simplify" it later into a zeroed
+`StatsResponse`, and do not re-express it as a filter on the existing `/stats` read —
+that read's shape cannot carry the distinction.
+
+**`tag` is NOT that handle, however much it looks like one.** It is on every send,
+delivery, bounce, open, click, complaint and subscription-change row, and it is the
+`eventType` transactional-email-service reads out of its own `email_templates`
+table — so it is per-TEMPLATE, not per-operation. Prod at the time of writing: **11
+separate mailing-list releases over 8 days, 11 distinct parent runs, all sharing
+`tag = 'mailing-list-newsletter-test'`**. A `GET /stats/by-tag` keyed on it shipped
+to `staging` first (migration 0018, never promoted) and was retired here before it
+could reach prod: for the one release the fix existed to measure it would have
+reported 11 messages instead of 1 — over-counting by the number of past releases,
+silently, in the reassuring direction. The silver `tag` column and its index survive
+that retirement as a plain denormalization; nothing reads them today.
 
 ## BCC — this service never adds a recipient of its own
 
@@ -294,41 +313,8 @@ Every endpoint below returns Layer 2 only. No exceptions.
 | `GET /internal/status/{messageId}` | Single email: sending metadata + Layer 2 status | single message |
 | `GET /internal/status/by-org/{orgId}` | List of emails with Layer 2 status each | org-wide |
 | `GET /internal/status/by-run/{runId}` | List of emails with Layer 2 status each | single run |
+| `GET /internal/operations/{operationRunId}/stats` | Aggregated counts for one logical send operation; 404 (no stats block) when nothing matches | the caller's own run |
 | `GET /public/performance/leaderboard` | Per-workflow aggregated counts + rates | global |
-
-## A per-operation read is keyed on the CALLER's run, and an empty match is never a zero
-
-`postmark_messages.run_id` is the CHILD run this service mints per send, so a caller
-asking `GET /internal/stats?runIds=<the run IT tracks>` matches no rows and gets a
-clean, well-formed body saying nothing was sent. Nothing errors, and an empty match
-is arithmetically indistinguishable from a real zero — so a consumer gating a
-decision on the numbers reads a blind query as a healthy result. Measured in prod
-2026-09-18: release run `79982eb6-…` returned `sent: 0`; its child run
-`e095307e-…` returned `sent: 1`. transactional-email-service's mailing-list release
-self-halt (the brake on a 30,013-address send whose complaint spike would suspend
-the whole Postmark account) reads through that path and had therefore never been
-able to fire.
-
-Two things fix it and both are load-bearing:
-
-- **`parent_run_id`** (migration 0018, bronze + silver, indexed) — the inbound
-  `x-run-id`, i.e. the run the caller was already tracking. The writer held it all
-  along (it is what `openSendLedger` passes as `parentRunId`) and threw it away, so
-  the read side had nothing that could name a multi-message operation. Persist at
-  write; do not reconstruct it from runs-service at read.
-- **`GET /internal/operations/{operationRunId}/stats`** — one indexed aggregate over
-  `idx_messages_parent_run`, whatever the operation's size, and **404 with no stats
-  block** when the operation has no messages. A 200 always carries `messagesMatched`
-  > 0. There is deliberately no all-zero body to misread, and no filter on `/stats`
-  was widened: `runIds` still means the child run, exactly as before.
-
-**Do not reach for `tag` as the operation handle.** It looks like one — every send,
-delivery, bounce, open, click, complaint and subscription-change row carries it —
-but it is the `eventType` transactional-email-service reads out of its own
-`email_templates` table, so it is per-TEMPLATE, not per-operation. Prod at the time
-of writing: 11 separate mailing-list releases over 8 days all sharing
-`tag = 'mailing-list-newsletter-test'`. A tag-keyed read would have over-counted by
-the number of past releases, silently and in the reassuring direction.
 
 ## Shared contract
 
