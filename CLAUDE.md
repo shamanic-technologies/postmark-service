@@ -84,6 +84,28 @@ wants `tests/unit/send-ledger.test.ts`. It fails in 5 seconds, well before the t
 job finishes, so a release that greens locally still burns a CI cycle. Create the
 matching test file in the same commit as any new module.
 
+## Reading one logical send OPERATION back — `run_id` here is the CHILD run, so the tag is the only handle
+
+The `run_id` on a sending (and on its silver row) is a run **this service mints per
+send**. It is NOT the run of the service that asked for the sends. So a caller that
+performed thousands of sends as one operation, and queries `/stats?runIds=<its own
+run>`, matches **no rows** and gets a well-formed answer saying nothing was sent —
+indistinguishable from a measured zero. transactional-email-service's mailing-list
+self-halt read exactly that and was inert for its whole life: it saw zero, every tick.
+
+The handle that does name the set is the caller's send-time **tag**, which every
+message of one operation shares. Bronze has carried it since 0000; migration 0018
+mirrors it onto silver (all reads are silver-only), backfills it from bronze, and
+indexes it. `GET /internal/stats/by-tag` + `GET /orgs/stats/by-tag` serve it.
+
+**That read reports an empty match as `matched: false` with no stats fields at all —
+never as zeros.** That is the point of the endpoint, not a detail of it: a consumer
+polling an operation in flight has to be able to tell "my question found nothing"
+from "the outcomes are zero", and the only way to give it that is to refuse to emit
+numbers with no messages behind them. Do not "simplify" it later into a plain zeroed
+`StatsResponse`, and do not add the tag as a filter on the existing `/stats` read
+either — that read's shape cannot express the distinction.
+
 ## BCC — this service never adds a recipient of its own
 
 `sendEmail` forwards `params.bcc` verbatim (and sends no BCC when the caller supplied none). **Do NOT reintroduce a service-added BCC — not hardcoded, not behind an env var.** Postmark bills PER RECIPIENT and counts blind copies: a hardcoded staff BCC, concatenated on top of the list transactional-email-service already sent, billed that address twice on every message and drove a 4.45x multiplier (July 2026: 628 API calls → 2,797 billed emails, against a 100/month free-plan cap). The archival need is already covered — Postmark keeps the full message 45 days in Activity, and `postmark_sendings` keeps a permanent metadata row per send.

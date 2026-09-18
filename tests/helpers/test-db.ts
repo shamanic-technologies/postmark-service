@@ -44,6 +44,7 @@ export async function insertTestSending(data: {
   featureSlug?: string;
   audienceId?: string;
   leadId?: string;
+  tag?: string;
 }) {
   const [sending] = await db
     .insert(postmarkSendings)
@@ -60,6 +61,7 @@ export async function insertTestSending(data: {
       featureSlug: data.featureSlug,
       audienceId: data.audienceId,
       leadId: data.leadId,
+      tag: data.tag,
       errorCode: 0,
       message: "OK",
       submittedAt: new Date(),
