@@ -133,6 +133,10 @@ describe("workflow tracking headers (x-campaign-id, x-brand-id, x-feature-slug, 
       expect(valuesCall.brandIds).toEqual(["brand-from-header"]);
       expect(valuesCall.featureSlug).toBe("feat-from-header");
       expect(valuesCall.workflowSlug).toBe("wf-from-header");
+      // The caller's own run is persisted alongside the child run this send minted.
+      // Without it, nothing on the row can answer for the caller's whole operation.
+      expect(valuesCall.parentRunId).toBe("test-run-id");
+      expect(valuesCall.runId).not.toBe("test-run-id");
     });
 
     it("should prefer body values over header values (except brandId — header only)", async () => {
