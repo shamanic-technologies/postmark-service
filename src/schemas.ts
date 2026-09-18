@@ -336,6 +336,46 @@ export const GroupedStatsResponseSchema = z
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
+// ===== Per-operation stats (by tag) =====
+
+export const OperationStatsQuerySchema = z
+  .object({
+    tag: z
+      .string()
+      .min(1)
+      .openapi({
+        description:
+          "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run.",
+      }),
+    orgId: z.string().optional().openapi({ description: "Optionally narrow the operation to one organization" }),
+  })
+  .openapi("OperationStatsQuery");
+
+export type OperationStatsQuery = z.infer<typeof OperationStatsQuerySchema>;
+
+export const OperationStatsResponseSchema = z
+  .object({
+    tag: z.string().openapi({ description: "The tag that was asked for, echoed back" }),
+    matched: z
+      .boolean()
+      .openapi({
+        description:
+          "Whether any message carries this tag. False means the question found nothing — NOT that the outcomes are zero. The stats fields are absent in that case, so a caller cannot read a blind query as a healthy one.",
+      }),
+    messageCount: z
+      .number()
+      .int()
+      .openapi({ description: "How many messages carry this tag. 0 exactly when matched is false." }),
+    // Both are present only when matched is true. No .openapi() here: these come
+    // from the shared contract package, whose schema instances predate this
+    // module's extendZodWithOpenApi call and so never gained the method.
+    recipientStats: RecipientStatsSchema.optional(),
+    emailStats: EmailStatsSchema.optional(),
+  })
+  .openapi("OperationStatsResponse");
+
+export type OperationStatsResponse = z.infer<typeof OperationStatsResponseSchema>;
+
 // ===== Performance Leaderboard =====
 
 const WorkflowStatsSchema = z.object({
@@ -706,6 +746,62 @@ registry.registerPath({
           schema: z.union([StatsResponseSchema, GroupedStatsResponseSchema]),
         },
       },
+    },
+    400: {
+      description: "Invalid request",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const OPERATION_STATS_DESCRIPTION = [
+  "Aggregate delivery outcomes for exactly the messages carrying one tag — i.e. for one logical send operation, in one request.",
+  "",
+  "Why this exists: the run recorded against a message is the CHILD run this service mints per send, not the run of the service that asked for the sends. A stats query keyed on that caller's own run therefore matches nothing and answers a well-formed zero, which is indistinguishable from a measured zero. Every message of one operation already carries the same caller-set tag, so the tag is the handle that names the set.",
+  "",
+  "An empty match is reported as matched=false with no stats fields at all, never as zeros. A caller polling this while an operation is still running can tell 'I am asking the wrong question' from 'the answer is zero'.",
+  "",
+  "Cost: one indexed range scan plus an aggregate, whatever the operation's size — a single round trip for tens of thousands of messages.",
+].join("\n");
+
+registry.registerPath({
+  method: "get",
+  path: "/orgs/stats/by-tag",
+  summary: "Aggregate outcomes for one logical send operation",
+  description: OPERATION_STATS_DESCRIPTION,
+  tags: ["Email Status"],
+  security: [{ apiKey: [] }],
+  request: {
+    query: OperationStatsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
+      content: { "application/json": { schema: OperationStatsResponseSchema } },
+    },
+    400: {
+      description: "Invalid request",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/internal/stats/by-tag",
+  summary: "Aggregate outcomes for one logical send operation (service auth only)",
+  description:
+    "Same as GET /orgs/stats/by-tag but only requires X-API-Key (no identity headers). Used by email-gateway, whose caller polls this while an operation is still running.\n\n" +
+    OPERATION_STATS_DESCRIPTION,
+  tags: ["Email Status"],
+  security: [{ apiKey: [] }],
+  request: {
+    query: OperationStatsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
+      content: { "application/json": { schema: OperationStatsResponseSchema } },
     },
     400: {
       description: "Invalid request",
