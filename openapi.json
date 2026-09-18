@@ -723,11 +723,6 @@
                         "type": "string",
                         "nullable": true,
                         "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
-                      },
-                      "sentCount": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "description": "Number of emails actually sent to the recipient in this scope (send-event count, not a boolean); 0 when no send. Sequence position derives from it: 1 = initial, 2 = first follow-up, 3 = second follow-up. Optional in contract v1; brand scope = SUM across the brand's campaigns."
                       }
                     },
                     "required": [
@@ -840,11 +835,6 @@
                       "type": "string",
                       "nullable": true,
                       "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
-                    },
-                    "sentCount": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "description": "Number of emails actually sent to the recipient in this scope (send-event count, not a boolean); 0 when no send. Sequence position derives from it: 1 = initial, 2 = first follow-up, 3 = second follow-up. Optional in contract v1; brand scope = SUM across the brand's campaigns."
                     }
                   },
                   "required": [
@@ -956,11 +946,6 @@
                       "type": "string",
                       "nullable": true,
                       "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
-                    },
-                    "sentCount": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "description": "Number of emails actually sent to the recipient in this scope (send-event count, not a boolean); 0 when no send. Sequence position derives from it: 1 = initial, 2 = first follow-up, 3 = second follow-up. Optional in contract v1; brand scope = SUM across the brand's campaigns."
                     }
                   },
                   "required": [
@@ -1649,6 +1634,309 @@
         },
         "required": [
           "groups"
+        ]
+      },
+      "OperationStatsResponse": {
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string",
+            "description": "The tag that was asked for, echoed back"
+          },
+          "matched": {
+            "type": "boolean",
+            "description": "Whether any message carries this tag. False means the question found nothing — NOT that the outcomes are zero. The stats fields are absent in that case, so a caller cannot read a blind query as a healthy one."
+          },
+          "messageCount": {
+            "type": "integer",
+            "description": "How many messages carry this tag. 0 exactly when matched is false."
+          },
+          "recipientStats": {
+            "type": "object",
+            "properties": {
+              "contacted": {
+                "type": "number",
+                "description": "Leads added to a campaign / send attempted"
+              },
+              "sent": {
+                "type": "number",
+                "description": "Leads with at least 1 email sent (COUNT DISTINCT lead)"
+              },
+              "delivered": {
+                "type": "number",
+                "description": "Leads delivered (sent - bounced)"
+              },
+              "opened": {
+                "type": "number",
+                "description": "Leads who opened at least 1 email"
+              },
+              "bounced": {
+                "type": "number",
+                "description": "Leads with at least 1 bounce"
+              },
+              "clicked": {
+                "type": "number",
+                "description": "Leads who clicked at least 1 link"
+              },
+              "unsubscribed": {
+                "type": "number",
+                "description": "Leads who unsubscribed"
+              },
+              "notSending": {
+                "type": "number",
+                "description": "Leads in campaigns currently flagged with Instantly's not_sending_status diagnostic. Optional in contract v1; will be required in v2 after postmark padding ships."
+              },
+              "cancelled": {
+                "type": "number",
+                "description": "Leads whose campaign was cancelled by the retry-stuck job (delivery_status='cancelled'). Optional in contract v1; will be required in v2 after postmark padding ships."
+              },
+              "repliesPositive": {
+                "type": "number",
+                "description": "interested + meetingBooked + closed"
+              },
+              "repliesNegative": {
+                "type": "number",
+                "description": "notInterested + wrongPerson + unsubscribe"
+              },
+              "repliesNeutral": {
+                "type": "number",
+                "description": "neutral (lead_neutral events only)"
+              },
+              "repliesAutoReply": {
+                "type": "number",
+                "description": "autoReply + outOfOffice"
+              },
+              "repliesDetail": {
+                "type": "object",
+                "properties": {
+                  "interested": {
+                    "type": "number",
+                    "description": "lead_interested events"
+                  },
+                  "meetingBooked": {
+                    "type": "number",
+                    "description": "lead_meeting_booked events"
+                  },
+                  "closed": {
+                    "type": "number",
+                    "description": "lead_closed events"
+                  },
+                  "notInterested": {
+                    "type": "number",
+                    "description": "lead_not_interested events"
+                  },
+                  "wrongPerson": {
+                    "type": "number",
+                    "description": "lead_wrong_person events"
+                  },
+                  "unsubscribe": {
+                    "type": "number",
+                    "description": "lead_unsubscribed events"
+                  },
+                  "neutral": {
+                    "type": "number",
+                    "description": "lead_neutral events"
+                  },
+                  "autoReply": {
+                    "type": "number",
+                    "description": "auto_reply_received events"
+                  },
+                  "outOfOffice": {
+                    "type": "number",
+                    "description": "lead_out_of_office events"
+                  }
+                },
+                "required": [
+                  "interested",
+                  "meetingBooked",
+                  "closed",
+                  "notInterested",
+                  "wrongPerson",
+                  "unsubscribe",
+                  "neutral",
+                  "autoReply",
+                  "outOfOffice"
+                ],
+                "description": "Granular reply breakdown by classification"
+              }
+            },
+            "required": [
+              "contacted",
+              "sent",
+              "delivered",
+              "opened",
+              "bounced",
+              "clicked",
+              "unsubscribed",
+              "repliesPositive",
+              "repliesNegative",
+              "repliesNeutral",
+              "repliesAutoReply",
+              "repliesDetail"
+            ]
+          },
+          "emailStats": {
+            "type": "object",
+            "properties": {
+              "sent": {
+                "type": "number",
+                "description": "Total emails sent (COUNT *, all steps)"
+              },
+              "delivered": {
+                "type": "number",
+                "description": "Total emails delivered (sent - bounced)"
+              },
+              "opened": {
+                "type": "number",
+                "description": "Unique emails opened at least once (COUNT DISTINCT)"
+              },
+              "clicked": {
+                "type": "number",
+                "description": "Unique emails with at least 1 click (COUNT DISTINCT)"
+              },
+              "bounced": {
+                "type": "number",
+                "description": "Total emails bounced"
+              },
+              "unsubscribed": {
+                "type": "number",
+                "description": "Total unsubscribe events"
+              },
+              "stepStats": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "step": {
+                      "type": "number",
+                      "description": "Step number (1-based)"
+                    },
+                    "sent": {
+                      "type": "number",
+                      "description": "Emails sent at this step"
+                    },
+                    "delivered": {
+                      "type": "number",
+                      "description": "Delivered at this step (sent - bounced)"
+                    },
+                    "opened": {
+                      "type": "number",
+                      "description": "Emails opened at this step"
+                    },
+                    "clicked": {
+                      "type": "number",
+                      "description": "Link clicks at this step"
+                    },
+                    "bounced": {
+                      "type": "number",
+                      "description": "Emails bounced at this step"
+                    },
+                    "unsubscribed": {
+                      "type": "number",
+                      "description": "Unsubscribes at this step"
+                    },
+                    "repliesPositive": {
+                      "type": "number",
+                      "description": "interested + meetingBooked + closed"
+                    },
+                    "repliesNegative": {
+                      "type": "number",
+                      "description": "notInterested + wrongPerson + unsubscribe"
+                    },
+                    "repliesNeutral": {
+                      "type": "number",
+                      "description": "neutral (lead_neutral events only)"
+                    },
+                    "repliesAutoReply": {
+                      "type": "number",
+                      "description": "autoReply + outOfOffice"
+                    },
+                    "repliesDetail": {
+                      "type": "object",
+                      "properties": {
+                        "interested": {
+                          "type": "number",
+                          "description": "lead_interested events"
+                        },
+                        "meetingBooked": {
+                          "type": "number",
+                          "description": "lead_meeting_booked events"
+                        },
+                        "closed": {
+                          "type": "number",
+                          "description": "lead_closed events"
+                        },
+                        "notInterested": {
+                          "type": "number",
+                          "description": "lead_not_interested events"
+                        },
+                        "wrongPerson": {
+                          "type": "number",
+                          "description": "lead_wrong_person events"
+                        },
+                        "unsubscribe": {
+                          "type": "number",
+                          "description": "lead_unsubscribed events"
+                        },
+                        "neutral": {
+                          "type": "number",
+                          "description": "lead_neutral events"
+                        },
+                        "autoReply": {
+                          "type": "number",
+                          "description": "auto_reply_received events"
+                        },
+                        "outOfOffice": {
+                          "type": "number",
+                          "description": "lead_out_of_office events"
+                        }
+                      },
+                      "required": [
+                        "interested",
+                        "meetingBooked",
+                        "closed",
+                        "notInterested",
+                        "wrongPerson",
+                        "unsubscribe",
+                        "neutral",
+                        "autoReply",
+                        "outOfOffice"
+                      ],
+                      "description": "Granular reply breakdown by classification"
+                    }
+                  },
+                  "required": [
+                    "step",
+                    "sent",
+                    "delivered",
+                    "opened",
+                    "clicked",
+                    "bounced",
+                    "unsubscribed",
+                    "repliesPositive",
+                    "repliesNegative",
+                    "repliesNeutral",
+                    "repliesAutoReply",
+                    "repliesDetail"
+                  ]
+                },
+                "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+              }
+            },
+            "required": [
+              "sent",
+              "delivered",
+              "opened",
+              "clicked",
+              "bounced",
+              "unsubscribed"
+            ]
+          }
+        },
+        "required": [
+          "tag",
+          "matched",
+          "messageCount"
         ]
       },
       "LeaderboardResponse": {
@@ -2499,6 +2787,124 @@
                       "$ref": "#/components/schemas/GroupedStatsResponse"
                     }
                   ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orgs/stats/by-tag": {
+      "get": {
+        "summary": "Aggregate outcomes for one logical send operation",
+        "description": "Aggregate delivery outcomes for exactly the messages carrying one tag — i.e. for one logical send operation, in one request.\n\nWhy this exists: the run recorded against a message is the CHILD run this service mints per send, not the run of the service that asked for the sends. A stats query keyed on that caller's own run therefore matches nothing and answers a well-formed zero, which is indistinguishable from a measured zero. Every message of one operation already carries the same caller-set tag, so the tag is the handle that names the set.\n\nAn empty match is reported as matched=false with no stats fields at all, never as zeros. A caller polling this while an operation is still running can tell 'I am asking the wrong question' from 'the answer is zero'.\n\nCost: one indexed range scan plus an aggregate, whatever the operation's size — a single round trip for tens of thousands of messages.",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run."
+            },
+            "required": true,
+            "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run.",
+            "name": "tag",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Optionally narrow the operation to one organization"
+            },
+            "required": false,
+            "description": "Optionally narrow the operation to one organization",
+            "name": "orgId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationStatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/stats/by-tag": {
+      "get": {
+        "summary": "Aggregate outcomes for one logical send operation (service auth only)",
+        "description": "Same as GET /orgs/stats/by-tag but only requires X-API-Key (no identity headers). Used by email-gateway, whose caller polls this while an operation is still running.\n\nAggregate delivery outcomes for exactly the messages carrying one tag — i.e. for one logical send operation, in one request.\n\nWhy this exists: the run recorded against a message is the CHILD run this service mints per send, not the run of the service that asked for the sends. A stats query keyed on that caller's own run therefore matches nothing and answers a well-formed zero, which is indistinguishable from a measured zero. Every message of one operation already carries the same caller-set tag, so the tag is the handle that names the set.\n\nAn empty match is reported as matched=false with no stats fields at all, never as zeros. A caller polling this while an operation is still running can tell 'I am asking the wrong question' from 'the answer is zero'.\n\nCost: one indexed range scan plus an aggregate, whatever the operation's size — a single round trip for tens of thousands of messages.",
+        "tags": [
+          "Email Status"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run."
+            },
+            "required": true,
+            "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run.",
+            "name": "tag",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Optionally narrow the operation to one organization"
+            },
+            "required": false,
+            "description": "Optionally narrow the operation to one organization",
+            "name": "orgId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationStatsResponse"
                 }
               }
             }

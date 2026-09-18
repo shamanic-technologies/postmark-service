@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkMessages, postmarkSendings } from "../db/schema";
 import { eq, inArray, and, arrayContains, sql, SQL } from "drizzle-orm";
-import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
+import { OperationStatsQuerySchema, StatsQuerySchema, StatusRequestSchema } from "../schemas";
 
 // ── Internal routes (API key only, no identity headers) ───────────────────────
 
@@ -629,9 +629,72 @@ async function handleStats(
 }
 
 /**
+ * Aggregate outcomes for exactly the messages carrying one tag.
+ *
+ * The tag is the only handle that names a logical send operation as a set: the
+ * run stored on a message is the CHILD run this service mints per send, so a
+ * query keyed on the run of the service that ASKED for the sends matches
+ * nothing — and answered a well-formed zero, which no caller could tell apart
+ * from a measured zero. That is what this read exists to fix, so it reports the
+ * empty match as such (`matched: false`, no stats fields) rather than as zeros.
+ *
+ * One indexed range scan over idx_messages_tag plus an aggregate: a single round
+ * trip whatever the operation's size.
+ */
+async function handleStatsByTag(req: Request, res: Response) {
+  const parsed = OperationStatsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid request",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { tag, orgId } = parsed.data;
+  const conditions: SQL[] = [eq(postmarkMessages.tag, tag)];
+  if (orgId) conditions.push(eq(postmarkMessages.orgId, orgId));
+  const whereClause = sql.join(conditions, sql` AND `);
+
+  try {
+    const { rows } = await db.execute<AggregateRow & { message_count: number }>(sql`
+      SELECT COUNT(*)::int AS message_count, ${aggregateExprs()}
+      FROM "postmark_messages"
+      WHERE ${whereClause}
+    `);
+
+    const agg = rows[0];
+    const messageCount = agg?.message_count ?? 0;
+
+    // Nothing carries this tag. Saying so is the whole point — zeros here would
+    // be read as a healthy operation by a caller that is asking the wrong
+    // question, which is the failure this endpoint was built to remove.
+    if (messageCount === 0) {
+      return res.json({ tag, matched: false, messageCount: 0 });
+    }
+
+    return res.json({
+      tag,
+      matched: true,
+      messageCount,
+      recipientStats: buildRecipientStatsObject(agg),
+      emailStats: buildEmailStatsObject(agg),
+    });
+  } catch (error: any) {
+    console.error("[postmark-service] Error getting stats by tag:", error);
+    res.status(500).json({
+      error: "Failed to get stats by tag",
+      details: error.message,
+    });
+  }
+}
+
+internalRouter.get("/stats/by-tag", (req, res) => handleStatsByTag(req, res));
+
+/**
  * GET /orgs/stats
  * Get aggregated email stats (requires identity headers)
  */
 orgsRouter.get("/stats", (req, res) => handleStats(req, res, { allowGlobal: false }));
+orgsRouter.get("/stats/by-tag", (req, res) => handleStatsByTag(req, res));
 
 export default { internal: internalRouter, orgs: orgsRouter };

@@ -80,6 +80,12 @@ export const postmarkMessages = pgTable(
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
     audienceId: text("audience_id"), // Per-audience attribution (x-audience-id)
+    // The Postmark tag the caller set at send time, mirrored from the bronze
+    // sending row. A caller that performs many sends as one logical operation
+    // gives them all the same tag, so this column is the only handle that can
+    // name that operation as a set — the run_id here is the CHILD run this
+    // service mints per send, never the caller's own run.
+    tag: text("tag"),
     // Who was charged for this send. "org" = declared on the org's run and billed
     // to org_id; "platform" = declared on an org-less platform run, so no org
     // usage total can reach it. Recorded here so a platform-paid send stays
@@ -120,6 +126,9 @@ export const postmarkMessages = pgTable(
     index("idx_messages_feature_created").on(table.featureSlug, table.createdAt.desc()),
     index("idx_messages_to_email").on(table.toEmail),
     index("idx_messages_lead").on(table.leadId),
+    // The per-operation read is a single range scan over this index plus an
+    // aggregate: one round trip whatever the operation's size.
+    index("idx_messages_tag").on(table.tag),
     // Covering index for the cross-org leaderboard shape:
     // WHERE feature_slug IN (...) GROUP BY workflow_slug + 7x COUNT(DISTINCT to_email) FILTER (...)
     // Without this, the query falls back to a heap scan + hash agg and times out on prod-scale silver.
