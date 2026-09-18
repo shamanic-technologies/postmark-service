@@ -336,45 +336,33 @@ export const GroupedStatsResponseSchema = z
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
-// ===== Per-operation stats (by tag) =====
-
-export const OperationStatsQuerySchema = z
-  .object({
-    tag: z
-      .string()
-      .min(1)
-      .openapi({
-        description:
-          "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run.",
-      }),
-    orgId: z.string().optional().openapi({ description: "Optionally narrow the operation to one organization" }),
-  })
-  .openapi("OperationStatsQuery");
-
-export type OperationStatsQuery = z.infer<typeof OperationStatsQuerySchema>;
+// ===== Per-operation stats =====
 
 export const OperationStatsResponseSchema = z
   .object({
-    tag: z.string().openapi({ description: "The tag that was asked for, echoed back" }),
-    matched: z
-      .boolean()
-      .openapi({
-        description:
-          "Whether any message carries this tag. False means the question found nothing — NOT that the outcomes are zero. The stats fields are absent in that case, so a caller cannot read a blind query as a healthy one.",
-      }),
-    messageCount: z
+    operationRunId: z.string().openapi({ description: "The caller's own run the operation was performed under" }),
+    messagesMatched: z
       .number()
       .int()
-      .openapi({ description: "How many messages carry this tag. 0 exactly when matched is false." }),
-    // Both are present only when matched is true. No .openapi() here: these come
-    // from the shared contract package, whose schema instances predate this
-    // module's extendZodWithOpenApi call and so never gained the method.
-    recipientStats: RecipientStatsSchema.optional(),
-    emailStats: EmailStatsSchema.optional(),
+      .openapi({ description: "Messages recorded under this operation. Always > 0 on a 200 — an operation with none is a 404, never an all-zero body." }),
+    recipientsMatched: z.number().int().openapi({ description: "Distinct recipients in the operation" }),
+    firstMessageAt: z.string().nullable().openapi({ description: "ISO-8601 timestamp of the operation's first message" }),
+    lastMessageAt: z.string().nullable().openapi({ description: "ISO-8601 timestamp of the operation's most recent message" }),
+    recipientStats: RecipientStatsSchema,
+    emailStats: EmailStatsSchema,
   })
   .openapi("OperationStatsResponse");
 
 export type OperationStatsResponse = z.infer<typeof OperationStatsResponseSchema>;
+
+export const OperationNotFoundResponseSchema = z
+  .object({
+    error: z.string(),
+    code: z.literal("OPERATION_NOT_FOUND"),
+    operationRunId: z.string(),
+    messagesMatched: z.literal(0),
+  })
+  .openapi("OperationNotFoundResponse");
 
 // ===== Performance Leaderboard =====
 
@@ -754,57 +742,32 @@ registry.registerPath({
   },
 });
 
-const OPERATION_STATS_DESCRIPTION = [
-  "Aggregate delivery outcomes for exactly the messages carrying one tag — i.e. for one logical send operation, in one request.",
-  "",
-  "Why this exists: the run recorded against a message is the CHILD run this service mints per send, not the run of the service that asked for the sends. A stats query keyed on that caller's own run therefore matches nothing and answers a well-formed zero, which is indistinguishable from a measured zero. Every message of one operation already carries the same caller-set tag, so the tag is the handle that names the set.",
-  "",
-  "An empty match is reported as matched=false with no stats fields at all, never as zeros. A caller polling this while an operation is still running can tell 'I am asking the wrong question' from 'the answer is zero'.",
-  "",
-  "Cost: one indexed range scan plus an aggregate, whatever the operation's size — a single round trip for tens of thousands of messages.",
-].join("\n");
-
 registry.registerPath({
   method: "get",
-  path: "/orgs/stats/by-tag",
-  summary: "Aggregate outcomes for one logical send operation",
-  description: OPERATION_STATS_DESCRIPTION,
-  tags: ["Email Status"],
-  security: [{ apiKey: [] }],
-  request: {
-    query: OperationStatsQuerySchema,
-  },
-  responses: {
-    200: {
-      description: "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
-      content: { "application/json": { schema: OperationStatsResponseSchema } },
-    },
-    400: {
-      description: "Invalid request",
-      content: { "application/json": { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/internal/stats/by-tag",
-  summary: "Aggregate outcomes for one logical send operation (service auth only)",
+  path: "/internal/operations/{operationRunId}/stats",
+  summary: "Get aggregated stats for one send operation",
   description:
-    "Same as GET /orgs/stats/by-tag but only requires X-API-Key (no identity headers). Used by email-gateway, whose caller polls this while an operation is still running.\n\n" +
-    OPERATION_STATS_DESCRIPTION,
+    "Aggregate delivery outcomes for every message sent under the caller's own run — one logical send operation — in a single request.\n\n" +
+    "Use this, not `GET /internal/stats?runIds=`: the run stored on a message is the CHILD run this service mints per send, so filtering on the run the caller tracks matches nothing and returns a well-formed all-zero body. Here that case is a 404 carrying no stats at all (`code: OPERATION_NOT_FOUND`), so an unmatched operation can never be read as a healthy zero. A 200 always describes messages that exist and reports how many were counted (`messagesMatched`).\n\n" +
+    "One indexed aggregate regardless of the operation's size; nothing is enumerated. Service auth only.",
   tags: ["Email Status"],
   security: [{ apiKey: [] }],
   request: {
-    query: OperationStatsQuerySchema,
+    params: z.object({
+      operationRunId: z.string().openapi({ description: "The run the caller performed the operation under (the parent of each message's run)" }),
+    }),
   },
   responses: {
     200: {
-      description: "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
+      description: "Aggregated stats for the operation. messagesMatched is always > 0.",
       content: { "application/json": { schema: OperationStatsResponseSchema } },
     },
-    400: {
-      description: "Invalid request",
+    404: {
+      description: "No messages are recorded under this operation — distinct from a measured all-zero result",
+      content: { "application/json": { schema: OperationNotFoundResponseSchema } },
+    },
+    500: {
+      description: "Server error",
       content: { "application/json": { schema: ErrorResponseSchema } },
     },
   },

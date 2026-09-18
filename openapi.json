@@ -723,6 +723,11 @@
                         "type": "string",
                         "nullable": true,
                         "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
+                      },
+                      "sentCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Number of emails actually sent to the recipient in this scope (send-event count, not a boolean); 0 when no send. Sequence position derives from it: 1 = initial, 2 = first follow-up, 3 = second follow-up. Optional in contract v1; brand scope = SUM across the brand's campaigns."
                       }
                     },
                     "required": [
@@ -835,6 +840,11 @@
                       "type": "string",
                       "nullable": true,
                       "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
+                    },
+                    "sentCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Number of emails actually sent to the recipient in this scope (send-event count, not a boolean); 0 when no send. Sequence position derives from it: 1 = initial, 2 = first follow-up, 3 = second follow-up. Optional in contract v1; brand scope = SUM across the brand's campaigns."
                     }
                   },
                   "required": [
@@ -946,6 +956,11 @@
                       "type": "string",
                       "nullable": true,
                       "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
+                    },
+                    "sentCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Number of emails actually sent to the recipient in this scope (send-event count, not a boolean); 0 when no send. Sequence position derives from it: 1 = initial, 2 = first follow-up, 3 = second follow-up. Optional in contract v1; brand scope = SUM across the brand's campaigns."
                     }
                   },
                   "required": [
@@ -1639,17 +1654,27 @@
       "OperationStatsResponse": {
         "type": "object",
         "properties": {
-          "tag": {
+          "operationRunId": {
             "type": "string",
-            "description": "The tag that was asked for, echoed back"
+            "description": "The caller's own run the operation was performed under"
           },
-          "matched": {
-            "type": "boolean",
-            "description": "Whether any message carries this tag. False means the question found nothing — NOT that the outcomes are zero. The stats fields are absent in that case, so a caller cannot read a blind query as a healthy one."
-          },
-          "messageCount": {
+          "messagesMatched": {
             "type": "integer",
-            "description": "How many messages carry this tag. 0 exactly when matched is false."
+            "description": "Messages recorded under this operation. Always > 0 on a 200 — an operation with none is a 404, never an all-zero body."
+          },
+          "recipientsMatched": {
+            "type": "integer",
+            "description": "Distinct recipients in the operation"
+          },
+          "firstMessageAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 timestamp of the operation's first message"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 timestamp of the operation's most recent message"
           },
           "recipientStats": {
             "type": "object",
@@ -1934,9 +1959,42 @@
           }
         },
         "required": [
-          "tag",
-          "matched",
-          "messageCount"
+          "operationRunId",
+          "messagesMatched",
+          "recipientsMatched",
+          "firstMessageAt",
+          "lastMessageAt",
+          "recipientStats",
+          "emailStats"
+        ]
+      },
+      "OperationNotFoundResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "OPERATION_NOT_FOUND"
+            ]
+          },
+          "operationRunId": {
+            "type": "string"
+          },
+          "messagesMatched": {
+            "type": "number",
+            "enum": [
+              0
+            ]
+          }
+        },
+        "required": [
+          "error",
+          "code",
+          "operationRunId",
+          "messagesMatched"
         ]
       },
       "LeaderboardResponse": {
@@ -2804,10 +2862,10 @@
         }
       }
     },
-    "/orgs/stats/by-tag": {
+    "/internal/operations/{operationRunId}/stats": {
       "get": {
-        "summary": "Aggregate outcomes for one logical send operation",
-        "description": "Aggregate delivery outcomes for exactly the messages carrying one tag — i.e. for one logical send operation, in one request.\n\nWhy this exists: the run recorded against a message is the CHILD run this service mints per send, not the run of the service that asked for the sends. A stats query keyed on that caller's own run therefore matches nothing and answers a well-formed zero, which is indistinguishable from a measured zero. Every message of one operation already carries the same caller-set tag, so the tag is the handle that names the set.\n\nAn empty match is reported as matched=false with no stats fields at all, never as zeros. A caller polling this while an operation is still running can tell 'I am asking the wrong question' from 'the answer is zero'.\n\nCost: one indexed range scan plus an aggregate, whatever the operation's size — a single round trip for tens of thousands of messages.",
+        "summary": "Get aggregated stats for one send operation",
+        "description": "Aggregate delivery outcomes for every message sent under the caller's own run — one logical send operation — in a single request.\n\nUse this, not `GET /internal/stats?runIds=`: the run stored on a message is the CHILD run this service mints per send, so filtering on the run the caller tracks matches nothing and returns a well-formed all-zero body. Here that case is a 404 carrying no stats at all (`code: OPERATION_NOT_FOUND`), so an unmatched operation can never be read as a healthy zero. A 200 always describes messages that exist and reports how many were counted (`messagesMatched`).\n\nOne indexed aggregate regardless of the operation's size; nothing is enumerated. Service auth only.",
         "tags": [
           "Email Status"
         ],
@@ -2820,28 +2878,17 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1,
-              "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run."
+              "description": "The run the caller performed the operation under (the parent of each message's run)"
             },
             "required": true,
-            "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run.",
-            "name": "tag",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Optionally narrow the operation to one organization"
-            },
-            "required": false,
-            "description": "Optionally narrow the operation to one organization",
-            "name": "orgId",
-            "in": "query"
+            "description": "The run the caller performed the operation under (the parent of each message's run)",
+            "name": "operationRunId",
+            "in": "path"
           }
         ],
         "responses": {
           "200": {
-            "description": "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
+            "description": "Aggregated stats for the operation. messagesMatched is always > 0.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2850,67 +2897,18 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid request",
+          "404": {
+            "description": "No messages are recorded under this operation — distinct from a measured all-zero result",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/stats/by-tag": {
-      "get": {
-        "summary": "Aggregate outcomes for one logical send operation (service auth only)",
-        "description": "Same as GET /orgs/stats/by-tag but only requires X-API-Key (no identity headers). Used by email-gateway, whose caller polls this while an operation is still running.\n\nAggregate delivery outcomes for exactly the messages carrying one tag — i.e. for one logical send operation, in one request.\n\nWhy this exists: the run recorded against a message is the CHILD run this service mints per send, not the run of the service that asked for the sends. A stats query keyed on that caller's own run therefore matches nothing and answers a well-formed zero, which is indistinguishable from a measured zero. Every message of one operation already carries the same caller-set tag, so the tag is the handle that names the set.\n\nAn empty match is reported as matched=false with no stats fields at all, never as zeros. A caller polling this while an operation is still running can tell 'I am asking the wrong question' from 'the answer is zero'.\n\nCost: one indexed range scan plus an aggregate, whatever the operation's size — a single round trip for tens of thousands of messages.",
-        "tags": [
-          "Email Status"
-        ],
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run."
-            },
-            "required": true,
-            "description": "The Postmark tag every message of one logical send operation carries. Set by the caller at send time; this is the only handle that names such an operation as a set, because the run recorded on a message is the child run this service mints per send, not the caller's own run.",
-            "name": "tag",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Optionally narrow the operation to one organization"
-            },
-            "required": false,
-            "description": "Optionally narrow the operation to one organization",
-            "name": "orgId",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Outcomes for the tagged operation, or matched=false when nothing carries the tag",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationStatsResponse"
+                  "$ref": "#/components/schemas/OperationNotFoundResponse"
                 }
               }
             }
           },
-          "400": {
-            "description": "Invalid request",
+          "500": {
+            "description": "Server error",
             "content": {
               "application/json": {
                 "schema": {
