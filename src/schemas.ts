@@ -336,6 +336,34 @@ export const GroupedStatsResponseSchema = z
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
+// ===== Per-operation stats =====
+
+export const OperationStatsResponseSchema = z
+  .object({
+    operationRunId: z.string().openapi({ description: "The caller's own run the operation was performed under" }),
+    messagesMatched: z
+      .number()
+      .int()
+      .openapi({ description: "Messages recorded under this operation. Always > 0 on a 200 — an operation with none is a 404, never an all-zero body." }),
+    recipientsMatched: z.number().int().openapi({ description: "Distinct recipients in the operation" }),
+    firstMessageAt: z.string().nullable().openapi({ description: "ISO-8601 timestamp of the operation's first message" }),
+    lastMessageAt: z.string().nullable().openapi({ description: "ISO-8601 timestamp of the operation's most recent message" }),
+    recipientStats: RecipientStatsSchema,
+    emailStats: EmailStatsSchema,
+  })
+  .openapi("OperationStatsResponse");
+
+export type OperationStatsResponse = z.infer<typeof OperationStatsResponseSchema>;
+
+export const OperationNotFoundResponseSchema = z
+  .object({
+    error: z.string(),
+    code: z.literal("OPERATION_NOT_FOUND"),
+    operationRunId: z.string(),
+    messagesMatched: z.literal(0),
+  })
+  .openapi("OperationNotFoundResponse");
+
 // ===== Performance Leaderboard =====
 
 const WorkflowStatsSchema = z.object({
@@ -709,6 +737,37 @@ registry.registerPath({
     },
     400: {
       description: "Invalid request",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/internal/operations/{operationRunId}/stats",
+  summary: "Get aggregated stats for one send operation",
+  description:
+    "Aggregate delivery outcomes for every message sent under the caller's own run — one logical send operation — in a single request.\n\n" +
+    "Use this, not `GET /internal/stats?runIds=`: the run stored on a message is the CHILD run this service mints per send, so filtering on the run the caller tracks matches nothing and returns a well-formed all-zero body. Here that case is a 404 carrying no stats at all (`code: OPERATION_NOT_FOUND`), so an unmatched operation can never be read as a healthy zero. A 200 always describes messages that exist and reports how many were counted (`messagesMatched`).\n\n" +
+    "One indexed aggregate regardless of the operation's size; nothing is enumerated. Service auth only.",
+  tags: ["Email Status"],
+  security: [{ apiKey: [] }],
+  request: {
+    params: z.object({
+      operationRunId: z.string().openapi({ description: "The run the caller performed the operation under (the parent of each message's run)" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Aggregated stats for the operation. messagesMatched is always > 0.",
+      content: { "application/json": { schema: OperationStatsResponseSchema } },
+    },
+    404: {
+      description: "No messages are recorded under this operation — distinct from a measured all-zero result",
+      content: { "application/json": { schema: OperationNotFoundResponseSchema } },
+    },
+    500: {
+      description: "Server error",
       content: { "application/json": { schema: ErrorResponseSchema } },
     },
   },

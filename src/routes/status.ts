@@ -174,6 +174,85 @@ internalRouter.get("/status/by-run/:runId", async (req: Request, res: Response) 
  */
 internalRouter.get("/stats", (req, res) => handleStats(req, res, { allowGlobal: true }));
 
+/**
+ * GET /internal/operations/:operationRunId/stats
+ *
+ * Aggregate outcomes for one logical send operation — every message this service
+ * sent under the caller's own run — in a single request.
+ *
+ * Why this exists rather than ?runIds=: run_id on a message is the CHILD run this
+ * service mints per send, so a caller filtering on the run IT is tracking matches
+ * no rows and gets a well-formed all-zero answer back. An empty match and a real
+ * zero were indistinguishable, so a consumer gating a decision on the numbers (the
+ * mailing-list release self-halt) read a blind query as a healthy one.
+ *
+ * Here they are never confusable: an operation with no messages recorded under it
+ * is a 404 carrying no stats at all, so there are no zeros to misread. A 200 always
+ * describes messages that exist, and says how many it counted.
+ *
+ * Cost: one indexed aggregate (idx_messages_parent_run) whatever the operation's
+ * size. Nothing is enumerated, no message id or child run leaves this service.
+ */
+internalRouter.get("/operations/:operationRunId/stats", async (req: Request, res: Response) => {
+  const operationRunId = req.params.operationRunId;
+  if (!operationRunId) {
+    return res.status(400).json({ error: "operationRunId is required" });
+  }
+
+  try {
+    const { rows } = await db.execute<
+      AggregateRow & {
+        messages_matched: number;
+        recipients_matched: number;
+        first_message_at: string | null;
+        last_message_at: string | null;
+      }
+    >(sql`
+      SELECT
+        COUNT(*)::int AS messages_matched,
+        COUNT(DISTINCT "to_email")::int AS recipients_matched,
+        MIN(COALESCE("submitted_at", "created_at")) AS first_message_at,
+        MAX(COALESCE("submitted_at", "created_at")) AS last_message_at,
+        ${aggregateExprs()}
+      FROM "postmark_messages"
+      WHERE "parent_run_id" = ${operationRunId}
+    `);
+
+    const agg = rows[0];
+    const messagesMatched = agg?.messages_matched ?? 0;
+
+    // No silent zero: an operation this service has no messages for is reported as
+    // such, with no stats block, so it cannot be read as "the operation is fine".
+    if (messagesMatched === 0) {
+      return res.status(404).json({
+        error: "No messages are recorded under this operation",
+        code: "OPERATION_NOT_FOUND",
+        operationRunId,
+        messagesMatched: 0,
+      });
+    }
+
+    const toIso = (v: string | Date | null | undefined): string | null =>
+      v == null ? null : (v instanceof Date ? v : new Date(v)).toISOString();
+
+    return res.json({
+      operationRunId,
+      messagesMatched,
+      recipientsMatched: agg!.recipients_matched,
+      firstMessageAt: toIso(agg!.first_message_at),
+      lastMessageAt: toIso(agg!.last_message_at),
+      recipientStats: buildRecipientStatsObject(agg!),
+      emailStats: buildEmailStatsObject(agg!),
+    });
+  } catch (error: any) {
+    console.error("[postmark-service] Error getting operation stats:", error);
+    res.status(500).json({
+      error: "Failed to get operation stats",
+      details: error.message,
+    });
+  }
+});
+
 // ── Org-scoped routes (API key + x-org-id required) ──────────────────────────
 
 const orgsRouter = Router();

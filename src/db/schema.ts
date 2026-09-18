@@ -32,6 +32,11 @@ export const postmarkSendings = pgTable(
     orgId: text("org_id"), // Organization ID
     userId: text("user_id"), // User ID (for runs-service attribution)
     runId: text("run_id"), // Child run ID created in runs-service
+    // The run the CALLER was already tracking when it asked for this send (inbound
+    // x-run-id), i.e. the parent of run_id. run_id is minted per message, so it can
+    // never identify the multi-message operation the caller performed; parent_run_id
+    // can, and it is the only value that identifies it without enumerating messages.
+    parentRunId: text("parent_run_id"),
     brandIds: text("brand_ids").array(),
     campaignId: text("campaign_id"),
     featureSlug: text("feature_slug"),
@@ -50,6 +55,7 @@ export const postmarkSendings = pgTable(
     uniqueIndex("idx_sendings_message_id").on(table.messageId),
     index("idx_sendings_org").on(table.orgId),
     index("idx_sendings_run").on(table.runId),
+    index("idx_sendings_parent_run").on(table.parentRunId),
     index("idx_sendings_brand_ids").using("gin", table.brandIds),
     index("idx_sendings_campaign").on(table.campaignId),
     index("idx_sendings_workflow").on(table.workflowSlug),
@@ -75,6 +81,9 @@ export const postmarkMessages = pgTable(
     orgId: text("org_id"),
     userId: text("user_id"),
     runId: text("run_id"),
+    // Parent of run_id — the caller's own run, denormalized from the bronze sending
+    // row. Keyed on by GET /internal/operations/{operationRunId}/stats.
+    parentRunId: text("parent_run_id"),
     campaignId: text("campaign_id"),
     brandIds: text("brand_ids").array(),
     featureSlug: text("feature_slug"),
@@ -113,6 +122,8 @@ export const postmarkMessages = pgTable(
     index("idx_messages_org").on(table.orgId),
     index("idx_messages_org_campaign").on(table.orgId, table.campaignId),
     index("idx_messages_run").on(table.runId),
+    // One indexed aggregate per operation probe, whatever the operation's size.
+    index("idx_messages_parent_run").on(table.parentRunId),
     index("idx_messages_campaign").on(table.campaignId),
     index("idx_messages_brand_ids").using("gin", table.brandIds),
     index("idx_messages_workflow").on(table.workflowSlug),

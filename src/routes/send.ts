@@ -156,6 +156,9 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           orgId,
           userId,
           runId: sendRunId,
+          // The caller's own run (inbound x-run-id). run_id is the child this send
+          // minted, so only this column can answer for the caller's whole operation.
+          parentRunId: parentRunId || null,
           brandIds: brandIds ?? null,
           campaignId,
           featureSlug,
@@ -370,6 +373,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             orgId,
             userId,
             runId: sendRunId,
+            parentRunId: parentRunId || null,
             brandIds: emailBrandIds ?? null,
             campaignId: emailCampaignId,
             featureSlug: emailFeatureSlug,

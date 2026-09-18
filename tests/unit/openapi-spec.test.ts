@@ -40,6 +40,7 @@ describe("OpenAPI spec", () => {
     expect(paths).toContain("/orgs/status");
     expect(paths).toContain("/orgs/stats");
     expect(paths).toContain("/internal/stats");
+    expect(paths).toContain("/internal/operations/{operationRunId}/stats");
     expect(paths).toContain("/public/performance/leaderboard");
     expect(paths).toContain("/webhooks/postmark");
   });
@@ -55,6 +56,8 @@ describe("OpenAPI spec", () => {
     expect(schemas).toContain("EmailStatus");
     // StatsQuery is now a query schema, not a body component
     expect(schemas).toContain("StatsResponse");
+    expect(schemas).toContain("OperationStatsResponse");
+    expect(schemas).toContain("OperationNotFoundResponse");
     expect(schemas).toContain("StatusRequest");
     expect(schemas).toContain("StatusResponse");
   });
