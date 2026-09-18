@@ -296,6 +296,40 @@ Every endpoint below returns Layer 2 only. No exceptions.
 | `GET /internal/status/by-run/{runId}` | List of emails with Layer 2 status each | single run |
 | `GET /public/performance/leaderboard` | Per-workflow aggregated counts + rates | global |
 
+## A per-operation read is keyed on the CALLER's run, and an empty match is never a zero
+
+`postmark_messages.run_id` is the CHILD run this service mints per send, so a caller
+asking `GET /internal/stats?runIds=<the run IT tracks>` matches no rows and gets a
+clean, well-formed body saying nothing was sent. Nothing errors, and an empty match
+is arithmetically indistinguishable from a real zero — so a consumer gating a
+decision on the numbers reads a blind query as a healthy result. Measured in prod
+2026-09-18: release run `79982eb6-…` returned `sent: 0`; its child run
+`e095307e-…` returned `sent: 1`. transactional-email-service's mailing-list release
+self-halt (the brake on a 30,013-address send whose complaint spike would suspend
+the whole Postmark account) reads through that path and had therefore never been
+able to fire.
+
+Two things fix it and both are load-bearing:
+
+- **`parent_run_id`** (migration 0018, bronze + silver, indexed) — the inbound
+  `x-run-id`, i.e. the run the caller was already tracking. The writer held it all
+  along (it is what `openSendLedger` passes as `parentRunId`) and threw it away, so
+  the read side had nothing that could name a multi-message operation. Persist at
+  write; do not reconstruct it from runs-service at read.
+- **`GET /internal/operations/{operationRunId}/stats`** — one indexed aggregate over
+  `idx_messages_parent_run`, whatever the operation's size, and **404 with no stats
+  block** when the operation has no messages. A 200 always carries `messagesMatched`
+  > 0. There is deliberately no all-zero body to misread, and no filter on `/stats`
+  was widened: `runIds` still means the child run, exactly as before.
+
+**Do not reach for `tag` as the operation handle.** It looks like one — every send,
+delivery, bounce, open, click, complaint and subscription-change row carries it —
+but it is the `eventType` transactional-email-service reads out of its own
+`email_templates` table, so it is per-TEMPLATE, not per-operation. Prod at the time
+of writing: 11 separate mailing-list releases over 8 days all sharing
+`tag = 'mailing-list-newsletter-test'`. A tag-keyed read would have over-counted by
+the number of past releases, silently and in the reassuring direction.
+
 ## Shared contract
 
 Cross-provider canonical shapes (`StatusScope`, `RecipientStats`, `EmailStats`, `StepStats`, `RepliesDetail`, `ChannelStats`, `ProviderStatus`, `GlobalStatus`, `ReplyClassification`) live in [`@shamanic-technologies/email-domain-contract`](https://github.com/shamanic-technologies/email-domain-contract). Do NOT redeclare these schemas locally — re-export from the package via `src/schemas.ts`. Same convention as email-gateway-service and (pending) instantly-service.
