@@ -5,7 +5,7 @@ import {
 } from "../../src/lib/lifecycle-tags";
 
 describe("platform lifecycle tags", () => {
-  // billing-service sends these seven; transactional-email-service forwards the
+  // billing-service sends every one of these; transactional-email-service forwards the
   // eventType verbatim as the tag. Every one of them reports on the org's billing
   // state, so billing the org for the send lets the report re-trigger the charge
   // path it reports on — the 2026-08-29 authorization storm.
@@ -17,6 +17,24 @@ describe("platform lifecycle tags", () => {
     "credit-depleted-blocked",
     "credit-depleted-followup-3d-blocked",
     "credit-depleted-followup-10d-blocked",
+    // The debt pair is sent BECAUSE the org cannot pay: org-billed, its balance
+    // refused both (prod 2026-10-01, 402 Insufficient credits).
+    "credit-debt-card-required",
+    "unpaid_debt_uncollectable",
+    "credit-card-unusable",
+    "subscription-credits-used",
+    "subscription-monthly-update",
+    "referral-reward-opened",
+    "referral-credits-granted",
+    "brand_daily_budget_changed",
+  ];
+
+  // Delivered to our own staff list, never to the customer: never the customer's spend.
+  const STAFF_ALERTS = [
+    "payment_method_removed",
+    "staff_daily_digest",
+    "provider_credits_exhausted",
+    "campaign_failing",
   ];
 
   const ACCOUNT_LIFECYCLE = [
@@ -28,6 +46,10 @@ describe("platform lifecycle tags", () => {
   ];
 
   it.each(BILLING_NOTIFICATIONS)("exempts the billing notification %s", (tag) => {
+    expect(isPlatformLifecycleTag(tag)).toBe(true);
+  });
+
+  it.each(STAFF_ALERTS)("exempts the staff alert %s", (tag) => {
     expect(isPlatformLifecycleTag(tag)).toBe(true);
   });
 
@@ -47,7 +69,7 @@ describe("platform lifecycle tags", () => {
 
   it("exempts nothing beyond the declared set", () => {
     expect([...PLATFORM_LIFECYCLE_TAGS].sort()).toEqual(
-      [...ACCOUNT_LIFECYCLE, ...BILLING_NOTIFICATIONS].sort()
+      [...ACCOUNT_LIFECYCLE, ...BILLING_NOTIFICATIONS, ...STAFF_ALERTS].sort()
     );
   });
 });

@@ -46,6 +46,27 @@ export const PLATFORM_LIFECYCLE_TAGS = new Set([
   "credit-depleted-blocked",
   "credit-depleted-followup-3d-blocked",
   "credit-depleted-followup-10d-blocked",
+  // The rest of billing-service's sends (2026-10-04). Same family, missed when each
+  // was added there: `credit-debt-card-required` and `unpaid_debt_uncollectable` go
+  // out BECAUSE the org owes money it cannot pay, so authorizing them against that
+  // org's balance refused every one (prod 2026-10-01: 402 Insufficient credits, the
+  // customer and the staff were both never told).
+  "credit-debt-card-required",
+  "unpaid_debt_uncollectable",
+  "credit-card-unusable",
+  "subscription-credits-used",
+  "subscription-monthly-update",
+  "referral-reward-opened",
+  "referral-credits-granted",
+  "brand_daily_budget_changed",
+  // Staff alerts: delivered to our own staff list (transactional-email-service
+  // ADMIN_NOTIFICATION_EVENTS), never to the customer, so never the customer's
+  // spend. Most are raised exactly when the org is in trouble (a failing campaign,
+  // a removed card), which is when its balance would refuse them.
+  "payment_method_removed",
+  "staff_daily_digest",
+  "provider_credits_exhausted",
+  "campaign_failing",
 ]);
 
 /** True when this send is a platform lifecycle mail and must skip the credit gate. */

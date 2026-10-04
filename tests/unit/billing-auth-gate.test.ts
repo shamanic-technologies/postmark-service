@@ -367,6 +367,23 @@ describe("billing credit authorization gate", () => {
       "credit-depleted-blocked",
       "credit-depleted-followup-3d-blocked",
       "credit-depleted-followup-10d-blocked",
+      // Every other eventType billing-service sends (its src/instrument.ts list).
+      "credit-debt-card-required",
+      "unpaid_debt_uncollectable",
+      "credit-card-unusable",
+      "subscription-credits-used",
+      "subscription-monthly-update",
+      "referral-reward-opened",
+      "referral-credits-granted",
+      "brand_daily_budget_changed",
+      // Staff-list alerts (transactional-email-service ADMIN_NOTIFICATION_EVENTS).
+      "signup_notification",
+      "signin_notification",
+      "user_active",
+      "payment_method_removed",
+      "staff_daily_digest",
+      "provider_credits_exhausted",
+      "campaign_failing",
     ];
 
     beforeEach(() => {
