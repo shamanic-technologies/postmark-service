@@ -51,8 +51,9 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
     const caller = { method: "POST" as const, path: "/send" };
     const decryptedKey = await getOrgKey(orgId, userId, "postmark", caller, trackingHeaders);
 
-    // 2. Resolve message stream from key-service
-    const messageStream = await getStreamId(orgId, userId, "broadcast", caller, trackingHeaders);
+    // 2. Resolve message stream from key-service. Broadcast unless the caller asked
+    //    for the transactional stream (person-to-person mail: no List-Unsubscribe).
+    const messageStream = await getStreamId(orgId, userId, body.stream ?? "broadcast", caller, trackingHeaders);
 
     // 3. Resolve "from" address: use caller-provided value, or fall back to key-service
     const fromAddress = body.from ?? await getFromAddress(orgId, userId, caller, trackingHeaders);
@@ -246,13 +247,19 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
 
   // Resolve key, stream, and default from once for the batch (same org for all emails)
   let keySource: "platform" | "org";
-  let messageStream: string;
+  let broadcastStream: string;
+  // Resolved only when at least one email asks for it, so a batch that never does
+  // makes exactly the key-service calls it made before the option existed.
+  let transactionalStream: string | undefined;
   let defaultFrom: string;
   try {
     const batchCaller = { method: "POST" as const, path: "/send/batch" };
     const decryptedKey = await getOrgKey(orgId, userId, "postmark", batchCaller, trackingHeaders);
     keySource = decryptedKey.keySource;
-    messageStream = await getStreamId(orgId, userId, "broadcast", batchCaller, trackingHeaders);
+    broadcastStream = await getStreamId(orgId, userId, "broadcast", batchCaller, trackingHeaders);
+    if (emails.some((e) => e.stream === "transactional")) {
+      transactionalStream = await getStreamId(orgId, userId, "transactional", batchCaller, trackingHeaders);
+    }
     defaultFrom = await getFromAddress(orgId, userId, batchCaller, trackingHeaders);
 
     // Credit authorization for the batch (platform keys only). Only the org-paid
@@ -335,6 +342,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         // 3. Send email via Postmark
         const batchCaller = { method: "POST" as const, path: "/send/batch" };
         const fromAddress = email.from ?? defaultFrom;
+        const messageStream = email.stream === "transactional" ? transactionalStream! : broadcastStream;
         const sendParams: SendEmailParams = {
           from: fromAddress,
           to: email.to,

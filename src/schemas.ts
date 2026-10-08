@@ -85,6 +85,18 @@ const PayerSchema = z.enum(["platform", "org"]).openapi({
     "must not be able to move that state. Omit it for work done for the customer.",
 });
 
+const StreamSchema = z.enum(["broadcast", "transactional"]).openapi({
+  description:
+    "Which Postmark message stream carries this send. 'broadcast' (the default) is " +
+    "the stream every send has used since Feb 2026: Postmark adds a List-Unsubscribe " +
+    "header and Gmail shows an Unsubscribe link next to the sender. 'transactional' " +
+    "sends on the outbound (transactional) stream resolved from key-service " +
+    "(postmark-transactional-stream): no List-Unsubscribe header, so the mail reads as " +
+    "plain one-to-one email. Use it ONLY for a mail meant to be answered like a normal " +
+    "email from a person. Mailing lists, marketing and anything a recipient can ask " +
+    "to stop must stay on 'broadcast'. Cost declaration is identical on both streams.",
+});
+
 // ===== Send Email =====
 
 export const SendEmailRequestSchema = z
@@ -104,6 +116,7 @@ export const SendEmailRequestSchema = z
     replyTo: z.string().optional(),
     tag: z.string().optional(),
     payer: PayerSchema.optional(),
+    stream: StreamSchema.optional(),
     headers: z.array(EmailHeaderSchema).optional(),
     metadata: z.record(z.string(), z.string()).optional(),
     trackOpens: z.boolean().optional().default(true),
@@ -151,6 +164,7 @@ export const BatchSendRequestSchema = z
           replyTo: z.string().optional(),
           tag: z.string().optional(),
           payer: PayerSchema.optional(),
+          stream: StreamSchema.optional(),
           headers: z.array(EmailHeaderSchema).optional(),
           metadata: z.record(z.string(), z.string()).optional(),
           trackOpens: z.boolean().optional().default(true),
