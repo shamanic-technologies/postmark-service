@@ -125,6 +125,10 @@ reported 11 messages instead of 1 — over-counting by the number of past releas
 silently, in the reassuring direction. The silver `tag` column and its index survive
 that retirement as a plain denormalization; nothing reads them today.
 
+## Message stream — broadcast by default, transactional on request
+
+Every send goes out on the **broadcast** stream (key-service `postmark-broadcast-stream`) unless the caller sends `stream: "transactional"` (single send body, or per email in a batch), which resolves `postmark-transactional-stream` instead. Broadcast makes Postmark add a `List-Unsubscribe` header (Gmail shows "Unsubscribe" beside the sender); transactional does not, so a person-to-person mail (instantly-service's "answer it yourself", Reply-To = the prospect) reads as plain one-to-one email. The stream id actually used is recorded in `postmark_sendings.message_stream`. Cost declaration is identical on both. **Never flip the default**: mailing lists and anything a recipient can ask to stop must keep broadcast. A batch resolves the transactional id only if some email asks for it. `tests/unit/stream-routing.test.ts` pins both paths.
+
 ## BCC — this service never adds a recipient of its own
 
 `sendEmail` forwards `params.bcc` verbatim (and sends no BCC when the caller supplied none). **Do NOT reintroduce a service-added BCC — not hardcoded, not behind an env var.** Postmark bills PER RECIPIENT and counts blind copies: a hardcoded staff BCC, concatenated on top of the list transactional-email-service already sent, billed that address twice on every message and drove a 4.45x multiplier (July 2026: 628 API calls → 2,797 billed emails, against a 100/month free-plan cap). The archival need is already covered — Postmark keeps the full message 45 days in Activity, and `postmark_sendings` keeps a permanent metadata row per send.

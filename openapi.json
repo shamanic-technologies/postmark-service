@@ -198,6 +198,14 @@
             ],
             "description": "Who is charged for this send. 'org' (the default) bills the organization: the cost is declared on the org's run and billing-service counts it in that org's usage. 'platform' declares the same cost on an org-less platform run — still priced and still traceable, but no org-spend total can reach it. Send 'platform' for platform-initiated notifications (billing/dunning alerts, account lifecycle mail): a notification about an organization's billing state must not be able to move that state. Omit it for work done for the customer."
           },
+          "stream": {
+            "type": "string",
+            "enum": [
+              "broadcast",
+              "transactional"
+            ],
+            "description": "Which Postmark message stream carries this send. 'broadcast' (the default) is the stream every send has used since Feb 2026: Postmark adds a List-Unsubscribe header and Gmail shows an Unsubscribe link next to the sender. 'transactional' sends on the outbound (transactional) stream resolved from key-service (postmark-transactional-stream): no List-Unsubscribe header, so the mail reads as plain one-to-one email. Use it ONLY for a mail meant to be answered like a normal email from a person. Mailing lists, marketing and anything a recipient can ask to stop must stay on 'broadcast'. Cost declaration is identical on both streams."
+          },
           "headers": {
             "type": "array",
             "items": {
@@ -351,6 +359,14 @@
                     "org"
                   ],
                   "description": "Who is charged for this send. 'org' (the default) bills the organization: the cost is declared on the org's run and billing-service counts it in that org's usage. 'platform' declares the same cost on an org-less platform run — still priced and still traceable, but no org-spend total can reach it. Send 'platform' for platform-initiated notifications (billing/dunning alerts, account lifecycle mail): a notification about an organization's billing state must not be able to move that state. Omit it for work done for the customer."
+                },
+                "stream": {
+                  "type": "string",
+                  "enum": [
+                    "broadcast",
+                    "transactional"
+                  ],
+                  "description": "Which Postmark message stream carries this send. 'broadcast' (the default) is the stream every send has used since Feb 2026: Postmark adds a List-Unsubscribe header and Gmail shows an Unsubscribe link next to the sender. 'transactional' sends on the outbound (transactional) stream resolved from key-service (postmark-transactional-stream): no List-Unsubscribe header, so the mail reads as plain one-to-one email. Use it ONLY for a mail meant to be answered like a normal email from a person. Mailing lists, marketing and anything a recipient can ask to stop must stay on 'broadcast'. Cost declaration is identical on both streams."
                 },
                 "headers": {
                   "type": "array",
