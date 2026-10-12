@@ -27,6 +27,7 @@ describe("platform lifecycle tags", () => {
     "referral-reward-opened",
     "referral-credits-granted",
     "brand_daily_budget_changed",
+    "monthly-charge-limit-reached",
   ];
 
   // Delivered to our own staff list, never to the customer: never the customer's spend.
