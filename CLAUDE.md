@@ -45,7 +45,10 @@ stores them, which would put the cost straight back into that org's usage total 
 passing them would undo the fix while looking like better attribution. The recipient
 org stays on `postmark_sendings.org_id`, and `postmark_sendings.payer` (migration
 0016) records which side paid, so a platform-paid send is auditable from this service
-alone.
+alone. `upsertSilver` copies it onto `postmark_messages.payer` (migration 0017); until
+v-next it did not, so every silver row read the default `org` (124 platform sends
+mislabelled, backfilled from bronze 2026-10-13). A new bronze column = a line in BOTH
+the silver insert and its `onConflictDoUpdate` set.
 
 **Classification, highest precedence first:** the caller's `payer` field on the send
 body → the `PLATFORM_LIFECYCLE_TAGS` backstop → `org`. The tag list cannot be the
