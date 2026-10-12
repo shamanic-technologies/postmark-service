@@ -3,6 +3,8 @@ import { getOrgKey, CallerContext } from "./key-client";
 
 // Cache clients per token for multi-org support
 const clients: Map<string, ServerClient> = new Map();
+// Clients for sends made with an already-resolved token (org-less platform send)
+const tokenClients: Map<string, ServerClient> = new Map();
 
 /**
  * Get a Postmark client for a given org.
@@ -60,7 +62,35 @@ export interface SendEmailResult {
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const caller = params.caller || { method: "POST", path: "/send" };
   const postmarkClient = await getClient(params.orgId, params.userId, caller);
+  return deliver(postmarkClient, params);
+}
 
+/**
+ * Parameters for a send made with an already-resolved server token and no org
+ * (the org-less platform send). Same message fields as `SendEmailParams`.
+ */
+export type SendWithTokenParams = Omit<SendEmailParams, "orgId" | "userId" | "caller"> & {
+  serverToken: string;
+};
+
+/**
+ * Send with a server token the caller already resolved (the platform token from
+ * key-service `GET /keys/platform/postmark/decrypt`). No org is involved at any
+ * point. Clients are cached per token, apart from the per-org cache above.
+ */
+export async function sendEmailWithToken(params: SendWithTokenParams): Promise<SendEmailResult> {
+  let client = tokenClients.get(params.serverToken);
+  if (!client) {
+    client = new ServerClient(params.serverToken);
+    tokenClients.set(params.serverToken, client);
+  }
+  return deliver(client, params);
+}
+
+async function deliver(
+  postmarkClient: ServerClient,
+  params: Omit<SendEmailParams, "orgId" | "userId" | "caller">
+): Promise<SendEmailResult> {
   const message: Models.Message = {
     From: params.from,
     To: params.to,
@@ -103,4 +133,5 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
  */
 export function clearClientCache(): void {
   clients.clear();
+  tokenClients.clear();
 }

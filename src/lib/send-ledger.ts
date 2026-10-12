@@ -50,26 +50,7 @@ export async function openSendLedger(
   const { payer, orgId, userId, trackingHeaders } = params;
 
   if (payer === "platform") {
-    const run = await createPlatformRun(
-      { serviceName: "postmark-service", taskName: "email-send" },
-      trackingHeaders
-    );
-    return {
-      runId: run.id,
-      addSendCost: async (costSource) => {
-        await addPlatformCosts(
-          run.id,
-          [{ costName: "postmark-email-send", quantity: 1, costSource }],
-          trackingHeaders
-        );
-      },
-      complete: async () => {
-        await updatePlatformRun(run.id, "completed", undefined, trackingHeaders);
-      },
-      fail: async (error?: string) => {
-        await updatePlatformRun(run.id, "failed", error, trackingHeaders);
-      },
-    };
+    return openPlatformSendLedger(trackingHeaders);
   }
 
   const run = await createRun(
@@ -103,6 +84,38 @@ export async function openSendLedger(
     },
     fail: async (error?: string) => {
       await updateRun(run.id, "failed", orgId, userId, error, trackingHeaders);
+    },
+  };
+}
+
+/**
+ * The platform branch on its own: an ORG-LESS platform run (`POST
+ * /v1/platform-runs`, no `x-org-id` / `x-user-id`) carrying the same
+ * `postmark-email-send` cost every send declares. `openSendLedger` uses it for a
+ * platform-paid send, and `POST /internal/platform-send` uses it directly, because
+ * a send made before any organization exists has no org to pass at all.
+ */
+export async function openPlatformSendLedger(
+  trackingHeaders: Record<string, string> = {}
+): Promise<SendLedger> {
+  const run = await createPlatformRun(
+    { serviceName: "postmark-service", taskName: "email-send" },
+    trackingHeaders
+  );
+  return {
+    runId: run.id,
+    addSendCost: async (costSource) => {
+      await addPlatformCosts(
+        run.id,
+        [{ costName: "postmark-email-send", quantity: 1, costSource }],
+        trackingHeaders
+      );
+    },
+    complete: async () => {
+      await updatePlatformRun(run.id, "completed", undefined, trackingHeaders);
+    },
+    fail: async (error?: string) => {
+      await updatePlatformRun(run.id, "failed", error, trackingHeaders);
     },
   };
 }

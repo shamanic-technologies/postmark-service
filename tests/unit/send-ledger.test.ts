@@ -17,7 +17,7 @@ import {
   updatePlatformRun,
   addPlatformCosts,
 } from "../../src/lib/runs-client";
-import { openSendLedger } from "../../src/lib/send-ledger";
+import { openSendLedger, openPlatformSendLedger } from "../../src/lib/send-ledger";
 
 const base = {
   orgId: "org-1",
@@ -157,5 +157,31 @@ describe("openSendLedger", () => {
     await expect(
       openSendLedger({ ...base, payer: "org" })
     ).rejects.toThrow("runs-service down");
+  });
+});
+
+describe("openPlatformSendLedger", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("opens an org-less platform run and declares the usual send cost", async () => {
+    const ledger = await openPlatformSendLedger();
+    await ledger.addSendCost("platform");
+    await ledger.complete();
+
+    expect(ledger.runId).toBe("platform-run-1");
+    expect(createPlatformRun).toHaveBeenCalledWith(
+      { serviceName: "postmark-service", taskName: "email-send" },
+      {}
+    );
+    expect(addPlatformCosts).toHaveBeenCalledWith(
+      "platform-run-1",
+      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform" }],
+      {}
+    );
+    expect(updatePlatformRun).toHaveBeenCalledWith("platform-run-1", "completed", undefined, {});
+    expect(createRun).not.toHaveBeenCalled();
+    expect(addCosts).not.toHaveBeenCalled();
   });
 });

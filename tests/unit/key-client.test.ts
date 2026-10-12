@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getOrgKey, getStreamId, getFromAddress } from "../../src/lib/key-client";
+import { getOrgKey, getStreamId, getFromAddress, getPlatformKey } from "../../src/lib/key-client";
 
 describe("key-client", () => {
   const originalFetch = globalThis.fetch;
@@ -258,5 +258,41 @@ describe("getFromAddress", () => {
     await expect(getFromAddress("unknown-org", "user-1", defaultCaller)).rejects.toThrow(
       'No Postmark key configured for orgId "unknown-org"'
     );
+  });
+
+  describe("getPlatformKey", () => {
+    it("reads the platform key with NO org and NO user headers", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ provider: "postmark", key: "platform-token" }),
+      });
+
+      const key = await getPlatformKey("postmark", { method: "POST", path: "/internal/platform-send" });
+
+      expect(key).toBe("platform-token");
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://key-service:3001/keys/platform/postmark/decrypt",
+        {
+          method: "GET",
+          headers: {
+            "x-api-key": "test-key-service-api-key",
+            "X-Caller-Service": "postmark-service",
+            "X-Caller-Method": "POST",
+            "X-Caller-Path": "/internal/platform-send",
+          },
+        }
+      );
+    });
+
+    it("throws loud on a non-2xx", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve("not found"),
+      });
+      await expect(
+        getPlatformKey("postmark", { method: "POST", path: "/internal/platform-send" })
+      ).rejects.toThrow(/keys\/platform\/postmark\/decrypt failed: 404/);
+    });
   });
 });
