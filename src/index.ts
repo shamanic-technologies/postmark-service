@@ -16,6 +16,7 @@ import statusRoutes from "./routes/status";
 import webhooksRoutes from "./routes/webhooks";
 import performanceRoutes from "./routes/performance";
 import transferRoutes from "./routes/transfer";
+import platformSendRoutes from "./routes/platform-send";
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -79,6 +80,8 @@ app.use("/public", apiKeyAuth, performanceRoutes);
 // ── Internal (API key only) ───────────────────────────────────────────────────
 app.use("/internal", apiKeyAuth, statusRoutes.internal);
 app.use("/internal", apiKeyAuth, transferRoutes);
+// Org-less, platform-paid send (sign-up code mail): no x-org-id by design
+app.use("/internal", apiKeyAuth, platformSendRoutes);
 
 // ── Org-scoped (API key + x-org-id required) ─────────────────────────────────
 app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
