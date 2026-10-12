@@ -46,6 +46,7 @@ export async function insertTestSending(data: {
   audienceId?: string;
   leadId?: string;
   tag?: string;
+  payer?: "org" | "platform";
 }) {
   const [sending] = await db
     .insert(postmarkSendings)
@@ -64,6 +65,7 @@ export async function insertTestSending(data: {
       audienceId: data.audienceId,
       leadId: data.leadId,
       tag: data.tag,
+      payer: data.payer,
       errorCode: 0,
       message: "OK",
       submittedAt: new Date(),

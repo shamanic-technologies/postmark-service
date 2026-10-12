@@ -107,6 +107,20 @@ describe("upsertSilver — idempotency & implication chain (integration)", () =>
     expect(second.bounced).toBe(first.bounced);
   });
 
+  it("silver records the payer the send path applied (platform-paid send is not shown as org)", async () => {
+    const platformId = randomUUID();
+    const orgId = randomUUID();
+    await insertTestSending({ messageId: platformId, payer: "platform" });
+    await insertTestSending({ messageId: orgId, payer: "org" });
+    // A webhook rebuild must keep it, not reset it to the column default.
+    await insertTestDelivery(platformId);
+
+    const [p] = await db.select().from(postmarkMessages).where(eq(postmarkMessages.messageId, platformId));
+    const [o] = await db.select().from(postmarkMessages).where(eq(postmarkMessages.messageId, orgId));
+    expect(p.payer).toBe("platform");
+    expect(o.payer).toBe("org");
+  });
+
   it("upsertSilver is a no-op when no sending row exists (handles webhook-before-send race)", async () => {
     const messageId = randomUUID();
     await upsertSilver(messageId);

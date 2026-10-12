@@ -109,6 +109,9 @@ export async function upsertSilver(messageId: string): Promise<void> {
       workflowSlug: sending.workflowSlug,
       audienceId: sending.audienceId,
       tag: sending.tag,
+      // Who paid, as the send path classified it (resolvePayer). Without this line
+      // every silver row took the column default 'org', platform-paid sends included.
+      payer: sending.payer,
       leadId: sending.leadId,
       submittedAt: sending.submittedAt,
       errorCode: sending.errorCode,
@@ -152,6 +155,7 @@ export async function upsertSilver(messageId: string): Promise<void> {
         workflowSlug: sql`excluded.workflow_slug`,
         audienceId: sql`excluded.audience_id`,
         tag: sql`excluded.tag`,
+        payer: sql`excluded.payer`,
         leadId: sql`excluded.lead_id`,
         submittedAt: sql`excluded.submitted_at`,
         errorCode: sql`excluded.error_code`,
