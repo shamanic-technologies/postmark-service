@@ -59,6 +59,9 @@ export const PLATFORM_LIFECYCLE_TAGS = new Set([
   "referral-reward-opened",
   "referral-credits-granted",
   "brand_daily_budget_changed",
+  // Sent the moment the org's monthly charge limit stops its spending: the org
+  // cannot be charged any more by construction, so an org-billed send is refused.
+  "monthly-charge-limit-reached",
   // Staff alerts: delivered to our own staff list (transactional-email-service
   // ADMIN_NOTIFICATION_EVENTS), never to the customer, so never the customer's
   // spend. Most are raised exactly when the org is in trouble (a failing campaign,

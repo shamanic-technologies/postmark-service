@@ -376,6 +376,7 @@ describe("billing credit authorization gate", () => {
       "referral-reward-opened",
       "referral-credits-granted",
       "brand_daily_budget_changed",
+      "monthly-charge-limit-reached",
       // Staff-list alerts (transactional-email-service ADMIN_NOTIFICATION_EVENTS).
       "signup_notification",
       "signin_notification",
