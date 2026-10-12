@@ -8,6 +8,7 @@ import statusRoutes from "../../src/routes/status";
 import webhooksRoutes from "../../src/routes/webhooks";
 import performanceRoutes from "../../src/routes/performance";
 import transferRoutes from "../../src/routes/transfer";
+import platformSendRoutes from "../../src/routes/platform-send";
 
 /**
  * Create a test Express app instance
@@ -41,6 +42,7 @@ export function createTestApp() {
   // ── Internal (API key only) ───────────────────────────────────────────────
   app.use("/internal", apiKeyAuth, statusRoutes.internal);
   app.use("/internal", apiKeyAuth, transferRoutes);
+  app.use("/internal", apiKeyAuth, platformSendRoutes);
 
   // ── Org-scoped (API key + x-org-id required) ─────────────────────────────
   app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);

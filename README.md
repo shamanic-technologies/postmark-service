@@ -6,6 +6,7 @@ Email sending and tracking service built on [Postmark](https://postmarkapp.com/)
 
 ### Email Sending
 - **POST /send** - Send a single email (runId, from, to, subject, htmlBody/textBody required; orgId, brandId, appId, campaignId, cc/bcc/tag/replyTo optional). When orgId is provided, creates a run in runs-service with `clerkOrgId` (org resolved server-side), `appId` (defaults to `mcpfactory`), and optional `brandId`/`campaignId`. All emails are automatically BCC'd to kevin.lourd@gmail.com.
+- **POST /internal/platform-send** - Send ONE email with **no organization and no user**, paid by the platform (the self-serve sign-up code, sent before any org exists). Service API key only; send no `x-org-id` / `x-user-id` (400 `IDENTITY_NOT_ALLOWED`) and body `payer: "platform"` (else 400 `PLATFORM_PAYER_REQUIRED`). Platform Postmark keys from key-service `/keys/platform`, no credit authorization, cost `postmark-email-send` declared on an org-less platform run, send recorded with `org_id` NULL. 200 = accepted by Postmark; 502 `POSTMARK_REJECTED`; 500 `SEND_FAILED`. Body: same message fields as `/orgs/send` (`to`, `subject`, `htmlBody`/`textBody`, optional `from`, `cc`, `bcc`, `replyTo`, `tag`, `stream`, `headers`, `metadata`, `trackOpens`, `trackLinks`).
 - **POST /send/batch** - Send up to 500 emails in one request (same fields per email). Same runs-service integration per email. All emails are automatically BCC'd to kevin.lourd@gmail.com.
 
 ### Email Status
@@ -110,6 +111,7 @@ src/
   routes/
     health.ts           # Health check routes
     send.ts             # Email sending (single + batch)
+    platform-send.ts    # Org-less, platform-paid single send (POST /internal/platform-send)
     status.ts           # Email status queries + stats
     webhooks.ts         # Postmark webhook handlers
 scripts/

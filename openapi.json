@@ -249,6 +249,168 @@
           "subject"
         ]
       },
+      "PlatformSendResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sendingId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string",
+            "description": "The org-less platform run the send cost is declared on"
+          }
+        },
+        "required": [
+          "success",
+          "messageId",
+          "sendingId",
+          "runId"
+        ]
+      },
+      "PlatformSendError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "INVALID_REQUEST",
+              "PLATFORM_PAYER_REQUIRED",
+              "IDENTITY_NOT_ALLOWED",
+              "POSTMARK_REJECTED",
+              "SEND_FAILED"
+            ]
+          },
+          "details": {
+            "nullable": true
+          },
+          "errorCode": {
+            "type": "number",
+            "description": "Postmark ErrorCode (POSTMARK_REJECTED only)"
+          },
+          "message": {
+            "type": "string",
+            "description": "Postmark message (POSTMARK_REJECTED only)"
+          },
+          "sendingId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "code"
+        ]
+      },
+      "PlatformSendRequest": {
+        "type": "object",
+        "properties": {
+          "payer": {
+            "type": "string",
+            "enum": [
+              "platform",
+              "org"
+            ],
+            "description": "MUST be 'platform'. An org-less send has no organization to bill, so the only payer it can have is the platform. Absent or 'org' is refused with 400 PLATFORM_PAYER_REQUIRED, never defaulted."
+          },
+          "from": {
+            "type": "string",
+            "description": "Sender address. If omitted, the PLATFORM default from key-service (postmark-from-address)."
+          },
+          "to": {
+            "type": "string",
+            "description": "Recipient email address"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject line"
+          },
+          "htmlBody": {
+            "type": "string",
+            "description": "HTML email body"
+          },
+          "textBody": {
+            "type": "string",
+            "description": "Plain text email body"
+          },
+          "cc": {
+            "type": "string"
+          },
+          "bcc": {
+            "type": "string"
+          },
+          "replyTo": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string",
+            "description": "Postmark tag (the caller's eventType, e.g. 'signup_code')"
+          },
+          "stream": {
+            "type": "string",
+            "enum": [
+              "broadcast",
+              "transactional"
+            ],
+            "description": "Which Postmark message stream carries this send. 'broadcast' (the default) is the stream every send has used since Feb 2026: Postmark adds a List-Unsubscribe header and Gmail shows an Unsubscribe link next to the sender. 'transactional' sends on the outbound (transactional) stream resolved from key-service (postmark-transactional-stream): no List-Unsubscribe header, so the mail reads as plain one-to-one email. Use it ONLY for a mail meant to be answered like a normal email from a person. Mailing lists, marketing and anything a recipient can ask to stop must stay on 'broadcast'. Cost declaration is identical on both streams."
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ]
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "trackOpens": {
+            "type": "boolean",
+            "default": true
+          },
+          "trackLinks": {
+            "type": "string",
+            "enum": [
+              "None",
+              "HtmlAndText",
+              "HtmlOnly",
+              "TextOnly"
+            ]
+          }
+        },
+        "required": [
+          "to",
+          "subject"
+        ]
+      },
       "BatchSendResponse": {
         "type": "object",
         "properties": {
@@ -2329,6 +2491,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/platform-send": {
+      "post": {
+        "summary": "Send one email with NO organization, paid by the platform",
+        "description": "For a mail sent before any organization or user exists (the self-serve sign-up code). Service API key only. Send NO x-org-id and NO x-user-id (either is refused with 400 IDENTITY_NOT_ALLOWED) and body payer:'platform' (anything else is refused with 400 PLATFORM_PAYER_REQUIRED). The Postmark token, stream and default from address are the PLATFORM keys (key-service /keys/platform). No credit authorization is made. The run is an org-less platform run (runs-service /v1/platform-runs) carrying the usual postmark-email-send cost, costSource 'platform'. The per-send record is kept with org_id NULL and payer 'platform'. Optional x-run-id is stored as the send's parent run. A send that did not go out is never a 2xx: 502 POSTMARK_REJECTED when Postmark refused it, 500 SEND_FAILED when keys, runs-service or the database failed.",
+        "tags": [
+          "Email Sending"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's own run, stored as the send's parent_run_id"
+            },
+            "required": false,
+            "description": "Caller's own run, stored as the send's parent_run_id",
+            "name": "x-run-id",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email accepted by Postmark; cost declared on an org-less platform run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSendResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST | PLATFORM_PAYER_REQUIRED | IDENTITY_NOT_ALLOWED. Nothing was sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing API key"
+          },
+          "403": {
+            "description": "Invalid API key"
+          },
+          "500": {
+            "description": "SEND_FAILED: key-service, runs-service or the database failed. Nothing was sent, or the send could not be recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSendError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "POSTMARK_REJECTED: Postmark refused the message. Not sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSendError"
                 }
               }
             }

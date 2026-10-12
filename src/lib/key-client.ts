@@ -100,3 +100,43 @@ export async function getOrgKey(
 
   return response.json() as Promise<DecryptedKey>;
 }
+
+/**
+ * Fetch a PLATFORM key from key-service with no org and no user at all
+ * (`GET /keys/platform/:provider/decrypt`). Used only by the org-less platform send
+ * (`POST /internal/platform-send`), for a mail sent before any organization exists
+ * (the sign-up code). Org-bearing sends never call this: they resolve through
+ * `getOrgKey`, which may return the org's own BYOK key.
+ *
+ * A platform key is always paid by the platform, so the caller treats the result
+ * as `keySource: "platform"`.
+ */
+export async function getPlatformKey(
+  provider: string,
+  caller: CallerContext
+): Promise<string> {
+  const url = `${getKeyServiceUrl()}/keys/platform/${encodeURIComponent(provider)}/decrypt`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "x-api-key": getKeyServiceApiKey(),
+      "X-Caller-Service": "postmark-service",
+      "X-Caller-Method": caller.method,
+      "X-Caller-Path": caller.path,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `key-service GET /keys/platform/${provider}/decrypt failed: ${response.status} - ${errorText}`
+    );
+  }
+
+  const body = (await response.json()) as { key?: string };
+  if (!body.key) {
+    throw new Error(`key-service GET /keys/platform/${provider}/decrypt returned no key`);
+  }
+  return body.key;
+}

@@ -34,6 +34,7 @@ describe("OpenAPI spec", () => {
     expect(paths).toContain("/health");
     expect(paths).toContain("/orgs/send");
     expect(paths).toContain("/orgs/send/batch");
+    expect(paths).toContain("/internal/platform-send");
     expect(paths).toContain("/internal/status/{messageId}");
     expect(paths).toContain("/internal/status/by-org/{orgId}");
     expect(paths).toContain("/internal/status/by-run/{runId}");

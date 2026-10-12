@@ -30,7 +30,7 @@ vi.mock("postmark", () => {
   };
 });
 
-import { sendEmail, clearClientCache } from "../../src/lib/postmark-client";
+import { sendEmail, sendEmailWithToken, clearClientCache } from "../../src/lib/postmark-client";
 import { getOrgKey } from "../../src/lib/key-client";
 import { ServerClient } from "postmark";
 
@@ -223,6 +223,24 @@ describe("postmark-client key resolution", () => {
 
       expect(failResult.success).toBe(false);
       expect(failResult.errorCode).toBe(300);
+    });
+  });
+
+  describe("sendEmailWithToken (org-less platform send)", () => {
+    it("sends with the given token and never resolves an org key", async () => {
+      const { orgId: _o, userId: _u, ...noOrg } = baseSendParams;
+      const result = await sendEmailWithToken({ ...noOrg, serverToken: "platform-token" });
+
+      expect(result.success).toBe(true);
+      expect(mockedGetOrgKey).not.toHaveBeenCalled();
+      expect(getCreatedTokens()).toEqual(["platform-token"]);
+      expect(mockSendEmail.mock.calls[0][0]).toMatchObject({
+        To: "recipient@example.com",
+        MessageStream: "broadcast",
+      });
+
+      await sendEmailWithToken({ ...noOrg, serverToken: "platform-token" });
+      expect(getCreatedTokens()).toEqual(["platform-token"]); // cached per token
     });
   });
 });

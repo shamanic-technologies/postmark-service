@@ -66,6 +66,10 @@ state. billing-service capped its own amplification afterwards (per-org reload
 backoff + one notification per failure streak, 2,939 → 7), but the cycle only stops
 existing once the notification costs the org nothing.
 
+## Org-less send — `POST /internal/platform-send`, the only path with no org
+
+A mail sent before any organization exists (the self-serve sign-up code, owner 2026-10-12) has no org to resolve keys against and none to bill; a placeholder org id is banned fleet-wide. `src/routes/platform-send.ts` serves it: PLATFORM keys only (`getPlatformKey` → key-service `/keys/platform/:provider/decrypt`, no identity headers), **no `authorizeCredits` call ever** (authorizing against a brand-new org makes billing create its account and grant the welcome gift), `openPlatformSendLedger` (org-less platform run, same `postmark-email-send` cost), and a `postmark_sendings` row with `org_id` NULL, `payer = 'platform'`. It refuses `x-org-id` / `x-user-id` (400 `IDENTITY_NOT_ALLOWED`) and any `payer` other than an explicit `"platform"` (400 `PLATFORM_PAYER_REQUIRED`, never defaulted). A send that did not go out is never a 2xx (502 `POSTMARK_REJECTED`, 500 `SEND_FAILED`). Do not route an org-bearing send here, and do not add the org path's tag backstop to it.
+
 ## Credit-authorize gate — platform lifecycle tags are never gated
 
 `/orgs/send` + `/orgs/send/batch` call billing-service `authorizeCredits` for platform-key sends (BYOK/org keys never authorize — the org pays the provider). **Exception:** platform-paid sends (`resolvePayer` → `platform`) are platform-initiated (the platform sends them; not customer-value delivery) and must NEVER be blocked on the recipient org's credit balance — a brand-new org sits at $0 (→402) and billing cold-start cascades 502. The allowlist `PLATFORM_LIFECYCLE_TAGS` (in `src/lib/lifecycle-tags.ts`) is the backstop `resolvePayer` reads; run + cost accounting still happens, on a platform run (see above). `/send/batch` authorizes only the org-paid email count and opens each email's ledger against its own payer.
@@ -150,6 +154,7 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 - `src/zod-setup.ts` — Side-effect module that extends Zod with `.openapi()`. Import it BEFORE any module that creates `z.object(...).openapi("Name")` schemas.
 - `src/index.ts` — Express app setup, CORS, middleware
 - `src/routes/send.ts` — Email sending (single + batch)
+- `src/routes/platform-send.ts` — Org-less, platform-paid single send (see above)
 - `src/routes/status.ts` — Email status queries + aggregated stats
 - `src/routes/webhooks.ts` — Postmark webhook handlers
 - `src/routes/health.ts` — Health check routes

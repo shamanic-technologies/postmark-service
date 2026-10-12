@@ -142,6 +142,65 @@ export const SendEmailResponseSchema = z
 
 export type SendEmailResponse = z.infer<typeof SendEmailResponseSchema>;
 
+// ===== Org-less platform send =====
+
+export const PlatformSendRequestSchema = z
+  .object({
+    payer: PayerSchema.optional().openapi({
+      description:
+        "MUST be 'platform'. An org-less send has no organization to bill, so the only " +
+        "payer it can have is the platform. Absent or 'org' is refused with 400 " +
+        "PLATFORM_PAYER_REQUIRED, never defaulted.",
+    }),
+    from: z.string().optional().openapi({ description: "Sender address. If omitted, the PLATFORM default from key-service (postmark-from-address)." }),
+    to: z.string().openapi({ description: "Recipient email address" }),
+    subject: z.string().openapi({ description: "Email subject line" }),
+    htmlBody: z.string().optional().openapi({ description: "HTML email body" }),
+    textBody: z.string().optional().openapi({ description: "Plain text email body" }),
+    cc: z.string().optional(),
+    bcc: z.string().optional(),
+    replyTo: z.string().optional(),
+    tag: z.string().optional().openapi({ description: "Postmark tag (the caller's eventType, e.g. 'signup_code')" }),
+    stream: StreamSchema.optional(),
+    headers: z.array(EmailHeaderSchema).optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+    trackOpens: z.boolean().optional().default(true),
+    trackLinks: TrackLinksSchema.optional(),
+  })
+  .refine((data) => data.htmlBody || data.textBody, {
+    message: "Either htmlBody or textBody is required",
+  })
+  .openapi("PlatformSendRequest");
+
+export type PlatformSendRequest = z.infer<typeof PlatformSendRequestSchema>;
+
+export const PlatformSendResponseSchema = z
+  .object({
+    success: z.literal(true),
+    messageId: z.string(),
+    submittedAt: z.string().optional().openapi({ format: "date-time" }),
+    sendingId: z.string(),
+    runId: z.string().openapi({ description: "The org-less platform run the send cost is declared on" }),
+  })
+  .openapi("PlatformSendResponse");
+
+export const PlatformSendErrorSchema = z
+  .object({
+    error: z.string(),
+    code: z.enum([
+      "INVALID_REQUEST",
+      "PLATFORM_PAYER_REQUIRED",
+      "IDENTITY_NOT_ALLOWED",
+      "POSTMARK_REJECTED",
+      "SEND_FAILED",
+    ]),
+    details: z.any().optional(),
+    errorCode: z.number().optional().openapi({ description: "Postmark ErrorCode (POSTMARK_REJECTED only)" }),
+    message: z.string().optional().openapi({ description: "Postmark message (POSTMARK_REJECTED only)" }),
+    sendingId: z.string().optional(),
+  })
+  .openapi("PlatformSendError");
+
 // ===== Batch Send =====
 
 export const BatchSendRequestSchema = z
@@ -548,6 +607,54 @@ registry.registerPath({
     500: {
       description: "Server error",
       content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/internal/platform-send",
+  summary: "Send one email with NO organization, paid by the platform",
+  description:
+    "For a mail sent before any organization or user exists (the self-serve sign-up " +
+    "code). Service API key only. Send NO x-org-id and NO x-user-id (either is refused " +
+    "with 400 IDENTITY_NOT_ALLOWED) and body payer:'platform' (anything else is refused " +
+    "with 400 PLATFORM_PAYER_REQUIRED). The Postmark token, stream and default from " +
+    "address are the PLATFORM keys (key-service /keys/platform). No credit " +
+    "authorization is made. The run is an org-less platform run (runs-service " +
+    "/v1/platform-runs) carrying the usual postmark-email-send cost, costSource " +
+    "'platform'. The per-send record is kept with org_id NULL and payer 'platform'. " +
+    "Optional x-run-id is stored as the send's parent run. A send that did not go out " +
+    "is never a 2xx: 502 POSTMARK_REJECTED when Postmark refused it, 500 SEND_FAILED " +
+    "when keys, runs-service or the database failed.",
+  tags: ["Email Sending"],
+  security: [{ apiKey: [] }],
+  request: {
+    headers: z.object({
+      "x-run-id": z.string().optional().openapi({ description: "Caller's own run, stored as the send's parent_run_id" }),
+    }),
+    body: {
+      content: { "application/json": { schema: PlatformSendRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Email accepted by Postmark; cost declared on an org-less platform run",
+      content: { "application/json": { schema: PlatformSendResponseSchema } },
+    },
+    400: {
+      description: "INVALID_REQUEST | PLATFORM_PAYER_REQUIRED | IDENTITY_NOT_ALLOWED. Nothing was sent.",
+      content: { "application/json": { schema: PlatformSendErrorSchema } },
+    },
+    401: { description: "Missing API key" },
+    403: { description: "Invalid API key" },
+    500: {
+      description: "SEND_FAILED: key-service, runs-service or the database failed. Nothing was sent, or the send could not be recorded.",
+      content: { "application/json": { schema: PlatformSendErrorSchema } },
+    },
+    502: {
+      description: "POSTMARK_REJECTED: Postmark refused the message. Not sent.",
+      content: { "application/json": { schema: PlatformSendErrorSchema } },
     },
   },
 });
