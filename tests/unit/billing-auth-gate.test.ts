@@ -89,8 +89,42 @@ describe("billing credit authorization gate", () => {
         .send(validBody);
 
       expect(res.status).toBe(402);
-      expect(res.body.error).toBe("Insufficient credits");
-      expect(res.body.balance_cents).toBe(0);
+      expect(res.body).toEqual({ error: "Insufficient credits", balance_cents: 0, required_cents: 1 });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("should return 402 naming the sales funnel max budget, with billing's reason + sales_funnel_cap verbatim", async () => {
+      const cap = {
+        salesFunnelId: "sf-1",
+        salesFunnelCampaignId: "sfc-1",
+        amountCents: 5000,
+        period: "monthly",
+        consumedCents: 5000,
+        reservedCents: 0,
+      };
+      vi.mocked(getOrgKey).mockResolvedValue({
+        provider: "postmark",
+        key: "platform-token",
+        keySource: "platform",
+      });
+      vi.mocked(authorizeCredits).mockResolvedValue({
+        sufficient: false,
+        balance_cents: 9000,
+        required_cents: 1,
+        reason: "sales_funnel_max_budget_reached",
+        sales_funnel_cap: cap,
+      });
+
+      const res = await request(app)
+        .post("/orgs/send")
+        .set(getAuthHeaders())
+        .send(validBody);
+
+      expect(res.status).toBe(402);
+      expect(res.body.error).toBe("Sales funnel max budget reached");
+      expect(res.body.reason).toBe("sales_funnel_max_budget_reached");
+      expect(res.body.sales_funnel_cap).toEqual(cap);
+      expect(res.body.balance_cents).toBe(9000);
       expect(sendEmail).not.toHaveBeenCalled();
     });
 
@@ -257,7 +291,41 @@ describe("billing credit authorization gate", () => {
         .send(batchBody);
 
       expect(res.status).toBe(402);
-      expect(res.body.error).toBe("Insufficient credits");
+      expect(res.body).toEqual({ error: "Insufficient credits", balance_cents: 1, required_cents: 3 });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("should return 402 naming the sales funnel max budget for batch, with reason + sales_funnel_cap", async () => {
+      const cap = {
+        salesFunnelId: "sf-1",
+        salesFunnelCampaignId: "sfc-1",
+        amountCents: 5000,
+        period: "monthly",
+        consumedCents: 5000,
+        reservedCents: 0,
+      };
+      vi.mocked(getOrgKey).mockResolvedValue({
+        provider: "postmark",
+        key: "platform-token",
+        keySource: "platform",
+      });
+      vi.mocked(authorizeCredits).mockResolvedValue({
+        sufficient: false,
+        balance_cents: 9000,
+        required_cents: 3,
+        reason: "sales_funnel_max_budget_unreadable",
+        sales_funnel_cap: cap,
+      });
+
+      const res = await request(app)
+        .post("/orgs/send/batch")
+        .set(getAuthHeaders())
+        .send(batchBody);
+
+      expect(res.status).toBe(402);
+      expect(res.body.error).toBe("Sales funnel max budget unreadable");
+      expect(res.body.reason).toBe("sales_funnel_max_budget_unreadable");
+      expect(res.body.sales_funnel_cap).toEqual(cap);
       expect(sendEmail).not.toHaveBeenCalled();
     });
 

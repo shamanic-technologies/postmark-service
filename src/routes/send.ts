@@ -5,6 +5,7 @@ import { eq, and, ne } from "drizzle-orm";
 import { sendEmail, SendEmailParams } from "../lib/postmark-client";
 import { getOrgKey, getStreamId, getFromAddress } from "../lib/key-client";
 import { authorizeCredits } from "../lib/billing-client";
+import { creditRefusalBody } from "../lib/credit-refusal";
 import { SendEmailRequestSchema, BatchSendRequestSchema } from "../schemas";
 import { upsertSilver } from "../lib/silver";
 import { resolvePayer } from "../lib/payer";
@@ -72,11 +73,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
         trackingHeaders,
       });
       if (!auth.sufficient) {
-        return res.status(402).json({
-          error: "Insufficient credits",
-          balance_cents: auth.balance_cents,
-          required_cents: auth.required_cents,
-        });
+        return res.status(402).json(creditRefusalBody(auth));
       }
     }
 
@@ -277,11 +274,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         trackingHeaders,
       });
       if (!auth.sufficient) {
-        return res.status(402).json({
-          error: "Insufficient credits",
-          balance_cents: auth.balance_cents,
-          required_cents: auth.required_cents,
-        });
+        return res.status(402).json(creditRefusalBody(auth));
       }
     }
   } catch (error: any) {
