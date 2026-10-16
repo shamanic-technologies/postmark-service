@@ -118,8 +118,11 @@
           "error": {
             "type": "string",
             "enum": [
-              "Insufficient credits"
-            ]
+              "Insufficient credits",
+              "Sales funnel max budget reached",
+              "Sales funnel max budget unreadable"
+            ],
+            "description": "Why billing refused the send. \"Insufficient credits\" = the balance (adding credit helps). \"Sales funnel max budget reached\" / \"... unreadable\" = the campaign's max budget refused it whatever the balance: adding credit cannot help, raising the campaign's max budget can."
           },
           "balance_cents": {
             "type": "number",
@@ -127,6 +130,70 @@
           },
           "required_cents": {
             "type": "number"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "sales_funnel_max_budget_reached",
+              "sales_funnel_max_budget_unreadable"
+            ],
+            "description": "billing-service's refusal reason, verbatim. Present only when a sales funnel max budget refused the send, absent on a balance refusal."
+          },
+          "sales_funnel_cap": {
+            "type": "object",
+            "properties": {
+              "salesFunnelId": {
+                "type": "string"
+              },
+              "salesFunnelCampaignId": {
+                "type": "string"
+              },
+              "amountCents": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "period": {
+                "type": "string"
+              },
+              "consumedCents": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "reservedCents": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "salesFunnelId",
+              "salesFunnelCampaignId",
+              "amountCents",
+              "period",
+              "consumedCents",
+              "reservedCents"
+            ],
+            "additionalProperties": {
+              "nullable": true
+            },
+            "description": "billing-service's sales funnel cap object, verbatim. Present only with `reason`."
           }
         },
         "required": [

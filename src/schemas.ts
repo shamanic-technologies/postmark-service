@@ -529,9 +529,37 @@ const ErrorResponseSchema = z
 
 const InsufficientCreditsResponseSchema = z
   .object({
-    error: z.literal("Insufficient credits"),
+    error: z
+      .enum(["Insufficient credits", "Sales funnel max budget reached", "Sales funnel max budget unreadable"])
+      .openapi({
+        description:
+          "Why billing refused the send. \"Insufficient credits\" = the balance (adding credit helps). " +
+          "\"Sales funnel max budget reached\" / \"... unreadable\" = the campaign's max budget refused it " +
+          "whatever the balance: adding credit cannot help, raising the campaign's max budget can.",
+      }),
     balance_cents: z.number().nullable(),
     required_cents: z.number(),
+    reason: z
+      .enum(["sales_funnel_max_budget_reached", "sales_funnel_max_budget_unreadable"])
+      .optional()
+      .openapi({
+        description:
+          "billing-service's refusal reason, verbatim. Present only when a sales funnel max budget refused the send, absent on a balance refusal.",
+      }),
+    sales_funnel_cap: z
+      .object({
+        salesFunnelId: z.string(),
+        salesFunnelCampaignId: z.string(),
+        amountCents: z.union([z.number(), z.string()]),
+        period: z.string(),
+        consumedCents: z.union([z.number(), z.string()]),
+        reservedCents: z.union([z.number(), z.string()]),
+      })
+      .passthrough()
+      .optional()
+      .openapi({
+        description: "billing-service's sales funnel cap object, verbatim. Present only with `reason`.",
+      }),
   })
   .openapi("InsufficientCreditsResponse");
 
