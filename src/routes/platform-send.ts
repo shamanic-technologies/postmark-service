@@ -1,3 +1,4 @@
+import { messageOf } from "../lib/db-error.js";
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
@@ -134,7 +135,7 @@ router.post("/platform-send", async (req: Request, res: Response) => {
         runId: ledger.runId,
       });
     } catch (error: any) {
-      await ledger.fail(error.message).catch(() => {});
+      await ledger.fail(messageOf(error)).catch(() => {});
       throw error;
     }
   } catch (error: any) {
@@ -142,7 +143,7 @@ router.post("/platform-send", async (req: Request, res: Response) => {
     return res.status(500).json({
       error: "Failed to send email",
       code: "SEND_FAILED",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });

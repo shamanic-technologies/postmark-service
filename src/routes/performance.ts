@@ -1,3 +1,4 @@
+import { messageOf } from "../lib/db-error.js";
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
@@ -61,7 +62,7 @@ router.get("/performance/leaderboard", async (_req: Request, res: Response) => {
     console.error("[postmark-service] Error getting leaderboard:", error);
     res.status(500).json({
       error: "Failed to get leaderboard",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });

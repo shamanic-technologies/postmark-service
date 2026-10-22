@@ -2,6 +2,8 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
+import { queryErrorHandler } from "./lib/db-error.js";
+
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -86,6 +88,7 @@ app.use("/internal", apiKeyAuth, platformSendRoutes);
 // ── Org-scoped (API key + x-org-id required) ─────────────────────────────────
 app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, statusRoutes.orgs);
+app.use(queryErrorHandler);
 
 // Only start server if not in test environment
 if (process.env.NODE_ENV !== "test") {
