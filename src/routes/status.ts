@@ -1,3 +1,4 @@
+import { messageOf } from "../lib/db-error.js";
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkMessages, postmarkSendings } from "../db/schema";
@@ -82,7 +83,7 @@ internalRouter.get("/status/:messageId", async (req: Request, res: Response) => 
     console.error("[postmark-service] Error getting message status:", error);
     res.status(500).json({
       error: "Failed to get message status",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });
@@ -123,7 +124,7 @@ internalRouter.get("/status/by-org/:orgId", async (req: Request, res: Response) 
     console.error("[postmark-service] Error getting org emails:", error);
     res.status(500).json({
       error: "Failed to get org emails",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });
@@ -161,7 +162,7 @@ internalRouter.get("/status/by-run/:runId", async (req: Request, res: Response) 
     console.error("[postmark-service] Error getting run emails:", error);
     res.status(500).json({
       error: "Failed to get run emails",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });
@@ -248,7 +249,7 @@ internalRouter.get("/operations/:operationRunId/stats", async (req: Request, res
     console.error("[postmark-service] Error getting operation stats:", error);
     res.status(500).json({
       error: "Failed to get operation stats",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });
@@ -465,7 +466,7 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
     console.error("[postmark-service] Error checking status:", error);
     res.status(500).json({
       error: "Failed to check status",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });
@@ -702,7 +703,7 @@ async function handleStats(
     console.error("[postmark-service] Error getting stats:", error);
     res.status(500).json({
       error: "Failed to get stats",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 }
