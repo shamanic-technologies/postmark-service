@@ -1,3 +1,4 @@
+import { messageOf } from "./db-error.js";
 import { ServerClient, Models } from "postmark";
 import { getOrgKey, CallerContext } from "./key-client";
 
@@ -123,7 +124,7 @@ async function deliver(
     return {
       success: false,
       errorCode: error.code || -1,
-      message: error.message || "Unknown error",
+      message: messageOf(error) || "Unknown error",
     };
   }
 }

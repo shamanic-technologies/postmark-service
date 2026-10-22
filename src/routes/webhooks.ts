@@ -1,3 +1,4 @@
+import { messageOf } from "../lib/db-error.js";
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import {
@@ -79,13 +80,13 @@ router.post("/postmark", async (req: Request, res: Response) => {
       console.error(`[postmark-service] Inbound forward failed: ${error.message}`);
       return res.status(error.statusCode).json({
         error: "Failed to forward Inbound webhook to email-gateway",
-        details: error.message,
+        details: messageOf(error),
       });
     }
     console.error(`[postmark-service] Error handling ${recordType} webhook:`, error);
     res.status(500).json({
       error: "Failed to process webhook",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });

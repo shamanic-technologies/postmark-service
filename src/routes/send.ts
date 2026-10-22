@@ -1,3 +1,4 @@
+import { messageOf } from "../lib/db-error.js";
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
@@ -194,16 +195,16 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       }
     } catch (error: any) {
       // Email send or DB failed — mark run as failed
-      await ledger.fail(error.message);
+      await ledger.fail(messageOf(error));
       throw error;
     }
   } catch (error: any) {
     console.error(
-      `[send] Failed to process email — to=${req.body?.to} error="${error.message}"`
+      `[send] Failed to process email — to=${req.body?.to} error="${messageOf(error)}"`
     );
     res.status(500).json({
       error: "Failed to send email",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 });
@@ -279,11 +280,11 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     }
   } catch (error: any) {
     console.error(
-      `[send/batch] Failed to resolve keys — error="${error.message}"`
+      `[send/batch] Failed to resolve keys — error="${messageOf(error)}"`
     );
     return res.status(500).json({
       error: "Failed to resolve Postmark keys",
-      details: error.message,
+      details: messageOf(error),
     });
   }
 
@@ -407,14 +408,14 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         });
       } catch (error: any) {
         // Email send or DB failed — mark run as failed
-        await ledger.fail(error.message);
+        await ledger.fail(messageOf(error));
         throw error;
       }
     } catch (error: any) {
       results.push({
         to: email.to,
         success: false,
-        error: error.message,
+        error: messageOf(error),
       });
     }
   }
