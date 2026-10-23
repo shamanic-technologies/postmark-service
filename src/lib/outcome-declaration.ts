@@ -36,6 +36,15 @@ import type { Payer } from "./payer";
  */
 
 export const MESSAGE_SENT = "message_sent";
+
+/**
+ * A send's outcome happened when its run started: one run per send, opened just
+ * before the provider call. Declared with that time, a send whose declaration
+ * lands late (outage, catch-up up to 30 days later, a caller's backfill) still
+ * counts on its send day and resolves against the inputs that existed then,
+ * exactly as if declared on time (runs-service backfill semantics, migration 0060).
+ */
+export const SEND_OCCURRED_AT = "run_started_at";
 export const LEAD_SERVICE = "lead-service";
 
 export interface OutcomeSubject {
@@ -59,6 +68,7 @@ export function buildSendDeclaration(
   return {
     produced: [{ outcomeKey: MESSAGE_SENT, ...subject }],
     consumed: (consumedOutcomeKeys ?? []).map((outcomeKey) => ({ outcomeKey, ...subject })),
+    occurredAt: SEND_OCCURRED_AT,
   };
 }
 
