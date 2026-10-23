@@ -97,6 +97,30 @@ const StreamSchema = z.enum(["broadcast", "transactional"]).openapi({
     "to stop must stay on 'broadcast'. Cost declaration is identical on both streams.",
 });
 
+const OutcomeSubjectSchema = z
+  .object({
+    subjectService: z.string().min(1).openapi({ description: "Service that holds the person, e.g. 'lead-service' or 'transactional-email-service'" }),
+    subjectId: z.string().min(1).openapi({ description: "The person's id in that service" }),
+  })
+  .openapi({
+    description:
+      "The ONE person this send reaches on a mailing list or campaign. When set (or when " +
+      "only `leadId` is set, which names the lead in lead-service), a successful send " +
+      "declares `message_sent` for that person on its run to runs-service's production-cost " +
+      "ledger. Omit it for support mail (receipts, codes, alerts): nothing is declared. " +
+      "Declared after the send, never blocking it; a failed declaration is retried.",
+  });
+
+const ConsumedOutcomeKeysSchema = z
+  .array(z.string().min(1))
+  .max(20)
+  .openapi({
+    description:
+      "Outcome keys (features-service catalogue) this send CONSUMED for the same subject, " +
+      "e.g. ['email_checked'] for a list address verified before the send, or " +
+      "['message_written'] for a written cold email. Requires a subject.",
+  });
+
 // ===== Send Email =====
 
 export const SendEmailRequestSchema = z
@@ -105,7 +129,9 @@ export const SendEmailRequestSchema = z
     featureSlug: z.string().optional().openapi({ description: "Feature slug for tracking" }),
     workflowSlug: z.string().optional().openapi({ description: "Workflow slug for tracking/grouping" }),
     audienceId: z.string().optional().openapi({ description: "Audience ID for cost attribution. Header x-audience-id takes precedence." }),
-    leadId: z.string().optional().openapi({ description: "Lead ID for tracking and dedup" }),
+    leadId: z.string().optional().openapi({ description: "Lead ID for tracking and dedup. Also names the outcome subject (lead-service) when `outcomeSubject` is absent." }),
+    outcomeSubject: OutcomeSubjectSchema.optional(),
+    consumedOutcomeKeys: ConsumedOutcomeKeysSchema.optional(),
     from: z.string().optional().openapi({ description: "Sender email address. If omitted, resolved from key-service (provider: postmark-from-address)." }),
     to: z.string().openapi({ description: "Recipient email address" }),
     subject: z.string().openapi({ description: "Email subject line" }),
@@ -124,6 +150,9 @@ export const SendEmailRequestSchema = z
   })
   .refine((data) => data.htmlBody || data.textBody, {
     message: "Either htmlBody or textBody is required",
+  })
+  .refine((data) => !data.consumedOutcomeKeys?.length || data.outcomeSubject || data.leadId, {
+    message: "consumedOutcomeKeys requires outcomeSubject or leadId",
   })
   .openapi("SendEmailRequest");
 
@@ -213,6 +242,8 @@ export const BatchSendRequestSchema = z
           workflowSlug: z.string().optional(),
           audienceId: z.string().optional(),
           leadId: z.string().optional(),
+          outcomeSubject: OutcomeSubjectSchema.optional(),
+          consumedOutcomeKeys: ConsumedOutcomeKeysSchema.optional(),
           from: z.string().optional(),
           to: z.string(),
           subject: z.string(),
@@ -228,6 +259,9 @@ export const BatchSendRequestSchema = z
           metadata: z.record(z.string(), z.string()).optional(),
           trackOpens: z.boolean().optional().default(true),
           trackLinks: TrackLinksSchema.optional(),
+        })
+        .refine((e) => !e.consumedOutcomeKeys?.length || e.outcomeSubject || e.leadId, {
+          message: "consumedOutcomeKeys requires outcomeSubject or leadId",
         })
       )
       .min(1)

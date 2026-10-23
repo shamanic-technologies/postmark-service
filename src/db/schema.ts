@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Postmark email sendings - records of emails we sent
@@ -48,11 +49,24 @@ export const postmarkSendings = pgTable(
     // auditable from this service alone (the run it points at carries no org).
     payer: text("payer").notNull().default("org"),
     leadId: text("lead_id"),
+    // The person this send produced `message_sent` for, as the caller names them
+    // (COST-ACCOUNTING-1023, src/lib/outcome-declaration.ts). NULL = a support
+    // mail (receipt, code, alert): nothing is declared.
+    outcomeSubjectService: text("outcome_subject_service"),
+    outcomeSubjectId: text("outcome_subject_id"),
+    consumedOutcomeKeys: text("consumed_outcome_keys").array(),
+    // runs-service accepted the declaration. NULL with a subject = still owed.
+    outcomeDeclaredAt: timestamp("outcome_declared_at", { withTimezone: true }),
+    // runs-service refused it for good (4xx): logged loud, never retried.
+    outcomeDeclareError: text("outcome_declare_error"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("idx_sendings_message_id").on(table.messageId),
+    index("idx_sendings_outcome_pending")
+      .on(table.createdAt)
+      .where(sql`${table.outcomeSubjectId} IS NOT NULL AND ${table.outcomeDeclaredAt} IS NULL AND ${table.outcomeDeclareError} IS NULL`),
     index("idx_sendings_org").on(table.orgId),
     index("idx_sendings_run").on(table.runId),
     index("idx_sendings_parent_run").on(table.parentRunId),
