@@ -223,7 +223,36 @@
           },
           "leadId": {
             "type": "string",
-            "description": "Lead ID for tracking and dedup"
+            "description": "Lead ID for tracking and dedup. Also names the outcome subject (lead-service) when `outcomeSubject` is absent."
+          },
+          "outcomeSubject": {
+            "type": "object",
+            "properties": {
+              "subjectService": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Service that holds the person, e.g. 'lead-service' or 'transactional-email-service'"
+              },
+              "subjectId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The person's id in that service"
+              }
+            },
+            "required": [
+              "subjectService",
+              "subjectId"
+            ],
+            "description": "The ONE person this send reaches on a mailing list or campaign. When set (or when only `leadId` is set, which names the lead in lead-service), a successful send declares `message_sent` for that person on its run to runs-service's production-cost ledger. Omit it for support mail (receipts, codes, alerts): nothing is declared. Declared after the send, never blocking it; a failed declaration is retried."
+          },
+          "consumedOutcomeKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxItems": 20,
+            "description": "Outcome keys (features-service catalogue) this send CONSUMED for the same subject, e.g. ['email_checked'] for a list address verified before the send, or ['message_written'] for a written cold email. Requires a subject."
           },
           "from": {
             "type": "string",
@@ -553,6 +582,35 @@
                 },
                 "leadId": {
                   "type": "string"
+                },
+                "outcomeSubject": {
+                  "type": "object",
+                  "properties": {
+                    "subjectService": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Service that holds the person, e.g. 'lead-service' or 'transactional-email-service'"
+                    },
+                    "subjectId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The person's id in that service"
+                    }
+                  },
+                  "required": [
+                    "subjectService",
+                    "subjectId"
+                  ],
+                  "description": "The ONE person this send reaches on a mailing list or campaign. When set (or when only `leadId` is set, which names the lead in lead-service), a successful send declares `message_sent` for that person on its run to runs-service's production-cost ledger. Omit it for support mail (receipts, codes, alerts): nothing is declared. Declared after the send, never blocking it; a failed declaration is retried."
+                },
+                "consumedOutcomeKeys": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "maxItems": 20,
+                  "description": "Outcome keys (features-service catalogue) this send CONSUMED for the same subject, e.g. ['email_checked'] for a list address verified before the send, or ['message_written'] for a written cold email. Requires a subject."
                 },
                 "from": {
                   "type": "string"

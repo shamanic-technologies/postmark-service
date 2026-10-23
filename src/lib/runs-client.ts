@@ -57,6 +57,14 @@ export interface CostItem {
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
 
+/** A non-2xx answer from runs-service; `status` lets a caller tell a refusal (4xx) from an outage. */
+export class RunsHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "RunsHttpError";
+  }
+}
+
 async function runsRequest<T>(
   path: string,
   options: {
@@ -81,8 +89,9 @@ async function runsRequest<T>(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(
-      `runs-service ${method} ${path} failed: ${response.status} - ${errorText}`
+    throw new RunsHttpError(
+      `runs-service ${method} ${path} failed: ${response.status} - ${errorText}`,
+      response.status
     );
   }
 
@@ -207,5 +216,47 @@ export async function addPlatformCosts(
     method: "POST",
     body: { items },
     identityHeaders: platformIdentityHeaders(trackingHeaders),
+  });
+}
+
+// ─── Outcome occurrences (production-cost ledger) ────────────────────────────
+//
+// `POST /v1/runs/:id/outcomes` (org run: x-org-id must be the run's org) and
+// `POST /v1/platform-runs/:id/outcomes` (org-less run: x-service-name only, for
+// the same reason the platform cost calls carry no org). Idempotent per (run,
+// direction, outcomeKey, subject): a replay answers `already_recorded`.
+
+export interface OutcomeOccurrence {
+  outcomeKey: string;
+  subjectService: string;
+  subjectId: string;
+  quantity?: number;
+}
+
+export interface OutcomeDeclaration {
+  produced: OutcomeOccurrence[];
+  consumed: Omit<OutcomeOccurrence, "quantity">[];
+}
+
+export async function addOutcomes(
+  runId: string,
+  declaration: OutcomeDeclaration,
+  orgId: string
+): Promise<unknown> {
+  return runsRequest(`/v1/runs/${runId}/outcomes`, {
+    method: "POST",
+    body: declaration,
+    identityHeaders: { "x-org-id": orgId, "x-run-id": runId },
+  });
+}
+
+export async function addPlatformOutcomes(
+  runId: string,
+  declaration: OutcomeDeclaration
+): Promise<unknown> {
+  return runsRequest(`/v1/platform-runs/${runId}/outcomes`, {
+    method: "POST",
+    body: declaration,
+    identityHeaders: platformIdentityHeaders({}),
   });
 }

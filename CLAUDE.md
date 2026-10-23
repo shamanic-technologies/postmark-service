@@ -69,6 +69,12 @@ state. billing-service capped its own amplification afterwards (per-org reload
 backoff + one notification per failure streak, 2,939 → 7), but the cycle only stops
 existing once the notification costs the org nothing.
 
+## Outcome declared per send — `message_sent`, named by the CALLER (COST-ACCOUNTING-1023)
+
+runs-service is the production-cost ledger (agent-config skill `cost-accounting`): a run states the outcome occurrences it PRODUCED/CONSUMED, else its spend reads "produced none". `src/lib/outcome-declaration.ts` is the one mechanism here: a send whose body names its person (`outcomeSubject: {subjectService, subjectId}`, or bare `leadId` = lead-service) produced `message_sent` for that person, declared on its OWN send run (`POST /v1/runs/:id/outcomes` with the run's org, or `/v1/platform-runs/:id/outcomes` for a platform-paid one), plus the caller's `consumedOutcomeKeys` on the same subject. A send naming nobody (receipt, code, staff alert = support function) declares nothing. **Never classify by tag/slug here** (same reason as `payer`: only the caller knows it mailed one person on a list/campaign). Only a send that went out stores the subject (a failure is never an outcome).
+
+Never blocks the send: declared after success, off the request path. Owed = `outcome_subject_id` set, `outcome_declared_at` NULL (migration 0020, partial index). Outage → logged `FAILED, owed`, retried by `catchUpOwedDeclarations` (rides on sends, ≤1/min, once 60 s after boot, 2-min grace, 30-day window; no timer: idle = no query). 4xx (not 408/429) → `outcome_declare_error`, logged `REFUSED`, never retried. A replay is runs-service's `already_recorded`. Pinned: `tests/unit/outcome-declaration.test.ts`, `tests/unit/send-outcome-routing.test.ts`, `tests/integration/outcome-declaration.test.ts`.
+
 ## Org-less send — `POST /internal/platform-send`, the only path with no org
 
 A mail sent before any organization exists (the self-serve sign-up code, owner 2026-10-12) has no org to resolve keys against and none to bill; a placeholder org id is banned fleet-wide. `src/routes/platform-send.ts` serves it: PLATFORM keys only (`getPlatformKey` → key-service `/keys/platform/:provider/decrypt`, no identity headers), **no `authorizeCredits` call ever** (authorizing against a brand-new org makes billing create its account and grant the welcome gift), `openPlatformSendLedger` (org-less platform run, same `postmark-email-send` cost), and a `postmark_sendings` row with `org_id` NULL, `payer = 'platform'`. It refuses `x-org-id` / `x-user-id` (400 `IDENTITY_NOT_ALLOWED`) and any `payer` other than an explicit `"platform"` (400 `PLATFORM_PAYER_REQUIRED`, never defaulted). A send that did not go out is never a 2xx (502 `POSTMARK_REJECTED`, 500 `SEND_FAILED`). Do not route an org-bearing send here, and do not add the org path's tag backstop to it.
@@ -165,6 +171,7 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 - `src/lib/postmark-client.ts` — Postmark SDK wrapper (multi-project)
 - `src/lib/payer.ts` — `resolvePayer` — who is charged for a send (`platform` | `org`)
 - `src/lib/send-ledger.ts` — `openSendLedger` — opens the run + cost ledger against that payer
+- `src/lib/outcome-declaration.ts` — `message_sent` declared per send to runs-service's outcome ledger (see above)
 - `src/lib/runs-client.ts` — Runs service HTTP client
 - `src/db/schema.ts` — Drizzle table definitions
 - `src/db/index.ts` — Database connection
