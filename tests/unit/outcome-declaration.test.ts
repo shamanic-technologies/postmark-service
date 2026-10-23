@@ -75,6 +75,7 @@ describe("outcome declaration — keys and subjects", () => {
     ).toEqual({
       produced: [{ outcomeKey: "message_sent", subjectService: "lead-service", subjectId: "lead-1" }],
       consumed: [{ outcomeKey: "message_written", subjectService: "lead-service", subjectId: "lead-1" }],
+      occurredAt: "run_started_at",
     });
     expect(buildSendDeclaration({ subjectService: "s", subjectId: "i" }, null).consumed).toEqual([]);
   });
@@ -93,6 +94,7 @@ describe("declareSendOutcome", () => {
       {
         produced: [{ outcomeKey: "message_sent", subjectService: "transactional-email-service", subjectId: "subscriber-1" }],
         consumed: [{ outcomeKey: "email_checked", subjectService: "transactional-email-service", subjectId: "subscriber-1" }],
+        occurredAt: "run_started_at",
       },
       "org-1"
     );
@@ -146,6 +148,16 @@ describe("catchUpOwedDeclarations", () => {
     expect(n).toBe(2);
     expect(addOutcomes).toHaveBeenCalledTimes(1);
     expect(addPlatformOutcomes).toHaveBeenCalledTimes(1);
+  });
+
+  it("declares a late (caught-up) send at its run's start, never at catch-up time", async () => {
+    selectRows.push({ ...owed });
+    await catchUpOwedDeclarations(1_000_000);
+    expect(addOutcomes).toHaveBeenCalledWith(
+      "run-1",
+      expect.objectContaining({ occurredAt: "run_started_at" }),
+      "org-1"
+    );
   });
 
   it("runs at most once a minute", async () => {

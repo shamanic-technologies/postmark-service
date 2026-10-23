@@ -236,6 +236,12 @@ export interface OutcomeOccurrence {
 export interface OutcomeDeclaration {
   produced: OutcomeOccurrence[];
   consumed: Omit<OutcomeOccurrence, "quantity">[];
+  /**
+   * Effective declaration time (runs-service COST-BACKFILL-1023-RUNS). Every rule
+   * (consumption resolution, reuse rank, the day an occurrence counts on) keys on
+   * it, never on when the call arrives. Absent = now.
+   */
+  occurredAt?: "run_started_at" | string;
 }
 
 export async function addOutcomes(
