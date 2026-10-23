@@ -65,7 +65,7 @@ npm run dev
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start dev server (nodemon) |
+| `npm run dev` | Start dev server (tsx watch) |
 | `npm run build` | Compile TypeScript + generate OpenAPI spec |
 | `npm run generate:openapi` | Generate OpenAPI spec only |
 | `npm start` | Run compiled app |
