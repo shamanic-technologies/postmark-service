@@ -4,7 +4,7 @@ Email sending and tracking service using Postmark. Handles delivery via broadcas
 
 ## Commands
 
-- `npm run dev` — local dev server (nodemon)
+- `npm run dev` — local dev server (tsx watch)
 - `npm run build` — compile TypeScript + generate OpenAPI spec
 - `npm run generate:openapi` — regenerate openapi.json only
 - `npm start` — run compiled app
