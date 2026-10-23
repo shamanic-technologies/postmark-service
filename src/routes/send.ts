@@ -11,6 +11,7 @@ import { SendEmailRequestSchema, BatchSendRequestSchema } from "../schemas";
 import { upsertSilver } from "../lib/silver";
 import { resolvePayer } from "../lib/payer";
 import { openSendLedger } from "../lib/send-ledger";
+import { resolveOutcomeSubject, scheduleOutcomeDeclaration } from "../lib/outcome-declaration";
 
 const router = Router();
 
@@ -138,6 +139,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       };
 
       const result = await sendEmail(sendParams);
+      const outcomeSubject = resolveOutcomeSubject({ outcomeSubject: body.outcomeSubject, leadId: body.leadId });
 
       // 7. Record in database
       const [sending] = await db
@@ -165,6 +167,12 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           audienceId,
           payer,
           leadId: body.leadId,
+          // Only a send that went out produced anything (a failure is never an outcome).
+          ...(result.success && outcomeSubject && {
+            outcomeSubjectService: outcomeSubject.subjectService,
+            outcomeSubjectId: outcomeSubject.subjectId,
+            consumedOutcomeKeys: body.consumedOutcomeKeys ?? null,
+          }),
           metadata: body.metadata,
         })
         .returning();
@@ -176,6 +184,18 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       if (result.success) {
         await ledger.addSendCost(decryptedKey.keySource);
         await ledger.complete();
+
+        // 8b. Declare what the send produced (off the request path, never blocking).
+        if (outcomeSubject) {
+          scheduleOutcomeDeclaration({
+            sendingId: sending.id,
+            runId: sendRunId,
+            payer,
+            orgId,
+            ...outcomeSubject,
+            consumedOutcomeKeys: body.consumedOutcomeKeys ?? null,
+          });
+        }
 
         res.status(200).json({
           success: true,
@@ -358,6 +378,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         };
 
         const result = await sendEmail(sendParams);
+        const outcomeSubject = resolveOutcomeSubject({ outcomeSubject: email.outcomeSubject, leadId: email.leadId });
 
         // 3. Record in database
         const [sending] = await db
@@ -383,6 +404,11 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             audienceId: emailAudienceId,
             payer: emailPayer,
             leadId: email.leadId,
+            ...(result.success && outcomeSubject && {
+              outcomeSubjectService: outcomeSubject.subjectService,
+              outcomeSubjectId: outcomeSubject.subjectId,
+              consumedOutcomeKeys: email.consumedOutcomeKeys ?? null,
+            }),
             metadata: email.metadata,
           })
           .returning();
@@ -394,6 +420,16 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         if (result.success) {
           await ledger.addSendCost(keySource);
           await ledger.complete();
+          if (outcomeSubject) {
+            scheduleOutcomeDeclaration({
+              sendingId: sending.id,
+              runId: sendRunId,
+              payer: emailPayer,
+              orgId,
+              ...outcomeSubject,
+              consumedOutcomeKeys: email.consumedOutcomeKeys ?? null,
+            });
+          }
         } else {
           await ledger.fail(result.message);
         }
