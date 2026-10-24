@@ -61,6 +61,8 @@ vi.mock("../../src/lib/silver", () => ({
 }));
 
 import { sendEmail } from "../../src/lib/postmark-client";
+import { createRun } from "../../src/lib/runs-client";
+import { SEND_SUPPORT } from "../../src/lib/send-support";
 import { scheduleOutcomeDeclaration } from "../../src/lib/outcome-declaration";
 import request from "supertest";
 import { createTestApp, getAuthHeaders } from "../helpers/test-app";
@@ -96,10 +98,16 @@ describe("POST /orgs/send — the outcome a send produced", () => {
     );
   });
 
-  it("declares nothing for a support mail that names nobody", async () => {
+  it("declares nothing for a support mail that names nobody, and opens its run as support", async () => {
     const res = await request(app).post("/orgs/send").set(getAuthHeaders()).send(validBody);
     expect(res.status).toBe(200);
     expect(scheduleOutcomeDeclaration).not.toHaveBeenCalled();
+    expect(vi.mocked(createRun).mock.calls[0][0]).toMatchObject({ support: SEND_SUPPORT });
+  });
+
+  it("a send naming its person opens a production run (no support mark)", async () => {
+    await request(app).post("/orgs/send").set(getAuthHeaders()).send({ ...validBody, leadId: "lead-1" });
+    expect(vi.mocked(createRun).mock.calls[0][0]).not.toHaveProperty("support");
   });
 
   it("declares nothing when Postmark rejected the send", async () => {

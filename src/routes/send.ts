@@ -12,6 +12,7 @@ import { upsertSilver } from "../lib/silver";
 import { resolvePayer } from "../lib/payer";
 import { openSendLedger } from "../lib/send-ledger";
 import { resolveOutcomeSubject, scheduleOutcomeDeclaration } from "../lib/outcome-declaration";
+import { sendSupportFor } from "../lib/send-support";
 
 const router = Router();
 
@@ -90,6 +91,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       featureSlug,
       workflowSlug,
       audienceId,
+      support: sendSupportFor(resolveOutcomeSubject({ outcomeSubject: body.outcomeSubject, leadId: body.leadId })),
       trackingHeaders,
     });
     const sendRunId = ledger.runId;
@@ -329,6 +331,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         featureSlug: emailFeatureSlug,
         workflowSlug: emailWorkflowSlug,
         audienceId: emailAudienceId,
+        support: sendSupportFor(resolveOutcomeSubject({ outcomeSubject: email.outcomeSubject, leadId: email.leadId })),
         trackingHeaders,
       });
       const sendRunId = ledger.runId;

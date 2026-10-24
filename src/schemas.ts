@@ -107,7 +107,8 @@ const OutcomeSubjectSchema = z
       "The ONE person this send reaches on a mailing list or campaign. When set (or when " +
       "only `leadId` is set, which names the lead in lead-service), a successful send " +
       "declares `message_sent` for that person on its run to runs-service's production-cost " +
-      "ledger. Omit it for support mail (receipts, codes, alerts): nothing is declared. " +
+      "ledger. Omit it for support mail (receipts, codes, alerts): nothing is declared and " +
+      "the send's run is marked SUPPORT (function product_feature) at creation. " +
       "Declared after the send, never blocking it; a failed declaration is retried.",
   });
 

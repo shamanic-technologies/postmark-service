@@ -47,6 +47,24 @@ export interface CreateRunParams {
   featureSlug?: string;
   workflowSlug?: string;
   audienceId?: string;
+  /** Marks the run SUPPORT at creation (runs-service `support` on POST /v1/runs). */
+  support?: RunSupport;
+}
+
+/**
+ * A support function the run serves: spend that produces no outcome BY DESIGN,
+ * reported apart by runs-service (cost-accounting doctrine, closed list there).
+ */
+export interface RunSupport {
+  kind:
+    | "payment_fees"
+    | "brand_setup"
+    | "copilot"
+    | "platform_llm"
+    | "staff_experiment"
+    | "product_feature"
+    | "retired_product";
+  reason: string;
 }
 
 export interface CostItem {
@@ -175,6 +193,7 @@ export async function addCosts(
 export interface CreatePlatformRunParams {
   serviceName: string;
   taskName: string;
+  support?: RunSupport;
 }
 
 function platformIdentityHeaders(
@@ -263,6 +282,50 @@ export async function addPlatformOutcomes(
   return runsRequest(`/v1/platform-runs/${runId}/outcomes`, {
     method: "POST",
     body: declaration,
+    identityHeaders: platformIdentityHeaders({}),
+  });
+}
+
+// ─── Support marks on past runs (owner door) ─────────────────────────────────
+
+export interface OwnSupportMarkRequest {
+  kind: RunSupport["kind"];
+  reason: string;
+  markedBy: string;
+  /** Exclusive with the selection fields below. */
+  runIds?: string[];
+  taskNames?: string[];
+  startedAfter?: string;
+  startedBefore?: string;
+  topLevelOnly?: boolean;
+  withSpendOnly?: boolean;
+  offOutcomeOnly?: boolean;
+}
+
+export interface SupportSelectionResult {
+  matchedRunCount: number;
+  toMarkCount: number;
+  alreadyMarkedCount: number;
+  declaresOutcomesCount: number;
+  onOutcomeNowCount: number | null;
+  leftOnOutcomeCount: number | null;
+  spend: { grossCents: string; netCents: string };
+  maxRuns: number;
+  tooMany: boolean;
+}
+
+/**
+ * Preview or apply a SUPPORT mark on this service's own past runs
+ * (`POST /v1/platform-runs/support-marks/{preview,apply}`). runs-service checks
+ * every run is ours, refuses a run that declared an outcome, and is idempotent.
+ */
+export async function markOwnRunsSupport(
+  step: "preview" | "apply",
+  body: OwnSupportMarkRequest
+): Promise<SupportSelectionResult & Record<string, unknown>> {
+  return runsRequest(`/v1/platform-runs/support-marks/${step}`, {
+    method: "POST",
+    body,
     identityHeaders: platformIdentityHeaders({}),
   });
 }
