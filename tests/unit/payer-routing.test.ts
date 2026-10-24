@@ -126,7 +126,11 @@ describe("POST /orgs/send — who the spend is declared against", () => {
 
     expect(res.status).toBe(200);
     expect(createPlatformRun).toHaveBeenCalledWith(
-      { serviceName: "postmark-service", taskName: "email-send" },
+      {
+        serviceName: "postmark-service",
+        taskName: "email-send",
+        support: expect.objectContaining({ kind: "product_feature" }),
+      },
       expect.any(Object)
     );
     expect(addPlatformCosts).toHaveBeenCalledWith(

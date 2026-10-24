@@ -7,6 +7,7 @@ import { getPlatformKey } from "../lib/key-client";
 import { PlatformSendRequestSchema } from "../schemas";
 import { upsertSilver } from "../lib/silver";
 import { openPlatformSendLedger } from "../lib/send-ledger";
+import { SEND_SUPPORT } from "../lib/send-support";
 
 const router = Router();
 
@@ -66,7 +67,8 @@ router.post("/platform-send", async (req: Request, res: Response) => {
     );
     const fromAddress = body.from ?? (await getPlatformKey("postmark-from-address", caller));
 
-    const ledger = await openPlatformSendLedger();
+    // An org-less send names nobody (no subject field on this route): support from creation.
+    const ledger = await openPlatformSendLedger({}, SEND_SUPPORT);
 
     try {
       const result = await sendEmailWithToken({

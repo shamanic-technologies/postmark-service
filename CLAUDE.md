@@ -77,6 +77,12 @@ Every declaration carries `occurredAt: "run_started_at"` (one run per send, open
 
 Never blocks the send: declared after success, off the request path. Owed = `outcome_subject_id` set, `outcome_declared_at` NULL (migration 0020, partial index). Outage → logged `FAILED, owed`, retried by `catchUpOwedDeclarations` (rides on sends, ≤1/min, once 60 s after boot, 2-min grace, 30-day window; no timer: idle = no query). 4xx (not 408/429) → `outcome_declare_error`, logged `REFUSED`, never retried. A replay is runs-service's `already_recorded`. Pinned: `tests/unit/outcome-declaration.test.ts`, `tests/unit/send-outcome-routing.test.ts`, `tests/integration/outcome-declaration.test.ts`.
 
+## A send naming nobody is SUPPORT, marked at run creation (LEDGER-HISTORY-1024)
+
+Every dollar of this service's spend lands on exactly one of: a declared `message_sent` (the send named its person), a SUPPORT mark (the send named nobody), or a run with no output (a failed send carries no cost). `src/lib/send-support.ts` holds the one rule: `sendSupportFor(subject)` → no subject = `support: {kind: "product_feature"}` on the run at creation (`POST /v1/runs` / `/v1/platform-runs` body), on `/orgs/send`, `/orgs/send/batch` (per email) and `/internal/platform-send` (always: it carries no subject). No tag/slug read, same reason as `payer`. A support run can declare nothing (runs-service 409 `run_marked_support`) and stops the anchor walk, so a caller that wants its notification cost to ride its own outcome must name a subject instead.
+
+**History** (`scripts/backfill-support-marks.ts`, preview by default, `--apply` writes, idempotent; run inside the container with `npx tsx`): before the first send that named a subject (`min(created_at)` of `outcome_subject_id`, 2026-10-23) no send could name one, so runs-service's owner-door selection marks every `email-send` run with spend started before it, `offOutcomeOnly` (newsletter sends riding transactional-email-service's release declarations stay on production); after it, the runs of our own successful subject-less sends by runIds, refused loud if any rides an ancestor's outcome. Prod 2026-10-24 before: $389.74 of $395.98 covered, $0.60 support, $5.64 undeclared on 72 days (1,502 runs: 1,074 subject-less sends + 428 Feb-May runs predating our bronze, all notifications).
+
 ## Org-less send — `POST /internal/platform-send`, the only path with no org
 
 A mail sent before any organization exists (the self-serve sign-up code, owner 2026-10-12) has no org to resolve keys against and none to bill; a placeholder org id is banned fleet-wide. `src/routes/platform-send.ts` serves it: PLATFORM keys only (`getPlatformKey` → key-service `/keys/platform/:provider/decrypt`, no identity headers), **no `authorizeCredits` call ever** (authorizing against a brand-new org makes billing create its account and grant the welcome gift), `openPlatformSendLedger` (org-less platform run, same `postmark-email-send` cost), and a `postmark_sendings` row with `org_id` NULL, `payer = 'platform'`. It refuses `x-org-id` / `x-user-id` (400 `IDENTITY_NOT_ALLOWED`) and any `payer` other than an explicit `"platform"` (400 `PLATFORM_PAYER_REQUIRED`, never defaulted). A send that did not go out is never a 2xx (502 `POSTMARK_REJECTED`, 500 `SEND_FAILED`). Do not route an org-bearing send here, and do not add the org path's tag backstop to it.
@@ -174,6 +180,7 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 - `src/lib/payer.ts` — `resolvePayer` — who is charged for a send (`platform` | `org`)
 - `src/lib/send-ledger.ts` — `openSendLedger` — opens the run + cost ledger against that payer
 - `src/lib/outcome-declaration.ts` — `message_sent` declared per send to runs-service's outcome ledger (see above)
+- `src/lib/send-support.ts` — a send naming nobody = support run (`product_feature`) + the history backfill
 - `src/lib/runs-client.ts` — Runs service HTTP client
 - `src/db/schema.ts` — Drizzle table definitions
 - `src/db/index.ts` — Database connection
