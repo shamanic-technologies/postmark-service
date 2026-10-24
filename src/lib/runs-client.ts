@@ -300,6 +300,8 @@ export interface OwnSupportMarkRequest {
   topLevelOnly?: boolean;
   withSpendOnly?: boolean;
   offOutcomeOnly?: boolean;
+  /** Leave out runs whose cost already stops on an ANCESTOR's support mark (never relabel another owner's mark). */
+  offAncestorMarkOnly?: boolean;
 }
 
 export interface SupportSelectionResult {
@@ -309,6 +311,9 @@ export interface SupportSelectionResult {
   declaresOutcomesCount: number;
   onOutcomeNowCount: number | null;
   leftOnOutcomeCount: number | null;
+  /** Runs to mark whose cost stops on an ancestor's support mark today (absent on a runs-service without the flag). */
+  onAncestorMarkNowCount?: number | null;
+  leftOnAncestorMarkCount?: number | null;
   spend: { grossCents: string; netCents: string };
   maxRuns: number;
   tooMany: boolean;

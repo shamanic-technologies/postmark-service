@@ -62,7 +62,8 @@ export interface SupportBackfillReport {
  * - Before the first send that named a subject (`cutover`, read from
  *   postmark_sendings), no send of this service could name one: every run then
  *   is a send naming nobody. Selected by runs-service over our runs with spend,
- *   leaving out any whose cost rides an ancestor's outcome today.
+ *   leaving out any whose cost rides an ancestor's outcome today or already
+ *   stops on an ancestor's support mark (that owner's function stays).
  * - From the cutover on, the runs of our own successful sends that named nobody.
  *   A batch whose preview says a run rides an ancestor's outcome is refused
  *   (fail loud): the mark would take that cost off production.
@@ -88,9 +89,14 @@ export async function backfillSendSupportMarks(apply: boolean): Promise<SupportB
       startedBefore,
       withSpendOnly: true,
       offOutcomeOnly: true,
+      offAncestorMarkOnly: true,
     };
     const result = await markOwnRunsSupport("preview", body);
     if (result.tooMany) throw new Error(`selection too large for ${startedAfter}..${startedBefore}: ${JSON.stringify(result)}`);
+    // A runs-service that does not know the flag strips it and would relabel another owner's mark.
+    if (typeof result.leftOnAncestorMarkCount !== "number") {
+      throw new Error("runs-service did not apply offAncestorMarkOnly (leftOnAncestorMarkCount absent): refusing");
+    }
     if (apply && result.toMarkCount > 0) await markOwnRunsSupport("apply", body);
     beforeCutover.push({ startedAfter, startedBefore, result });
   }
@@ -107,6 +113,11 @@ export async function backfillSendSupportMarks(apply: boolean): Promise<SupportB
   for (let i = 0; i < runIds.length; i += RUN_IDS_PER_CALL) {
     const body = { ...mark, runIds: runIds.slice(i, i + RUN_IDS_PER_CALL) };
     const preview = await markOwnRunsSupport("preview", body);
+    if (preview.onAncestorMarkNowCount !== 0) {
+      throw new Error(
+        `refused: ${preview.onAncestorMarkNowCount ?? "unknown"} run(s) of this batch stop on an ancestor's support mark; marking them would relabel that owner's decision`
+      );
+    }
     if (preview.onOutcomeNowCount !== 0) {
       throw new Error(
         `refused: ${preview.onOutcomeNowCount ?? "unknown"} run(s) of this batch ride an ancestor's outcome today; marking them would take that cost off production`
