@@ -31,12 +31,25 @@ export function sendSupportFor(subject: OutcomeSubject | null): RunSupport | und
 }
 
 export const BACKFILL_MARKED_BY = "postmark-service LEDGER-HISTORY-1024 backfill";
+/** Before this service's first run (the ledger's first postmark-service spend day is 2026-02-05). */
+export const SERVICE_INCEPTION = "2026-01-01T00:00:00.000Z";
+
+/** [start, end) windows of 7 days from `from` up to `to`, the last one ending exactly at `to`. */
+export function weeklyWindows(from: string, to: string): [string, string][] {
+  const out: [string, string][] = [];
+  const end = new Date(to).getTime();
+  for (let t = new Date(from).getTime(); t < end; t += 7 * 86_400_000) {
+    out.push([new Date(t).toISOString(), new Date(Math.min(t + 7 * 86_400_000, end)).toISOString()]);
+  }
+  return out;
+}
 const RUN_IDS_PER_CALL = 5000;
 
 export interface SupportBackfillReport {
   /** First send that named a subject: before it, no send of this service could. */
   cutover: string;
-  beforeCutover: SupportSelectionResult;
+  /** One selection per week (a single all-history selection outlives the 300 s client timeout). */
+  beforeCutover: { startedAfter: string; startedBefore: string; result: SupportSelectionResult }[];
   afterCutover: { runIds: number; batches: SupportSelectionResult[] };
   applied: boolean;
 }
@@ -66,16 +79,21 @@ export async function backfillSendSupportMarks(apply: boolean): Promise<SupportB
   const cutover = new Date(rawCutover).toISOString();
 
   const mark = { ...SEND_SUPPORT, markedBy: BACKFILL_MARKED_BY };
-  const beforeBody = {
-    ...mark,
-    taskNames: ["email-send"],
-    startedBefore: cutover,
-    withSpendOnly: true,
-    offOutcomeOnly: true,
-  };
-  const beforeCutover = await markOwnRunsSupport("preview", beforeBody);
-  if (beforeCutover.tooMany) throw new Error(`before-cutover selection too large: ${JSON.stringify(beforeCutover)}`);
-  if (apply && beforeCutover.toMarkCount > 0) await markOwnRunsSupport("apply", beforeBody);
+  const beforeCutover: SupportBackfillReport["beforeCutover"] = [];
+  for (const [startedAfter, startedBefore] of weeklyWindows(SERVICE_INCEPTION, cutover)) {
+    const body = {
+      ...mark,
+      taskNames: ["email-send"],
+      startedAfter,
+      startedBefore,
+      withSpendOnly: true,
+      offOutcomeOnly: true,
+    };
+    const result = await markOwnRunsSupport("preview", body);
+    if (result.tooMany) throw new Error(`selection too large for ${startedAfter}..${startedBefore}: ${JSON.stringify(result)}`);
+    if (apply && result.toMarkCount > 0) await markOwnRunsSupport("apply", body);
+    beforeCutover.push({ startedAfter, startedBefore, result });
+  }
 
   const { rows: after } = await db.execute<{ run_id: string }>(sql`
     SELECT DISTINCT run_id FROM postmark_sendings
