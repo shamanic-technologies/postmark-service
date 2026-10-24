@@ -130,6 +130,8 @@ describe("runs-service BLOCKING behavior", () => {
       brandId: "brand_1",
       campaignId: "campaign_1",
       workflowSlug: undefined,
+      // Names nobody: support from creation (LEDGER-HISTORY-1024).
+      support: expect.objectContaining({ kind: "product_feature" }),
     }, { "x-brand-id": "brand_1", "x-campaign-id": "campaign_1" });
   });
 

@@ -160,6 +160,24 @@ describe("openSendLedger", () => {
   });
 });
 
+describe("support mark at creation", () => {
+  beforeEach(() => vi.clearAllMocks());
+  const support = { kind: "product_feature" as const, reason: "names nobody" };
+
+  it("org run carries the support mark", async () => {
+    await openSendLedger({ ...base, payer: "org", support });
+    expect(vi.mocked(createRun).mock.calls[0][0]).toMatchObject({ support });
+  });
+
+  it("platform run carries the support mark, still org-less", async () => {
+    await openSendLedger({ ...base, payer: "platform", support });
+    expect(createPlatformRun).toHaveBeenCalledWith(
+      { serviceName: "postmark-service", taskName: "email-send", support },
+      base.trackingHeaders
+    );
+  });
+});
+
 describe("openPlatformSendLedger", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -6,6 +6,7 @@ import {
   updatePlatformRun,
   addPlatformCosts,
   CostItem,
+  RunSupport,
 } from "./runs-client";
 import type { Payer } from "./payer";
 
@@ -41,6 +42,8 @@ export interface OpenSendLedgerParams {
   featureSlug?: string;
   workflowSlug?: string;
   audienceId?: string;
+  /** Set when the send names nobody: the run is support from creation (see send-support.ts). */
+  support?: RunSupport;
   trackingHeaders: Record<string, string>;
 }
 
@@ -50,7 +53,7 @@ export async function openSendLedger(
   const { payer, orgId, userId, trackingHeaders } = params;
 
   if (payer === "platform") {
-    return openPlatformSendLedger(trackingHeaders);
+    return openPlatformSendLedger(trackingHeaders, params.support);
   }
 
   const run = await createRun(
@@ -65,6 +68,7 @@ export async function openSendLedger(
       featureSlug: params.featureSlug,
       workflowSlug: params.workflowSlug,
       audienceId: params.audienceId,
+      ...(params.support ? { support: params.support } : {}),
     },
     trackingHeaders
   );
@@ -96,10 +100,11 @@ export async function openSendLedger(
  * a send made before any organization exists has no org to pass at all.
  */
 export async function openPlatformSendLedger(
-  trackingHeaders: Record<string, string> = {}
+  trackingHeaders: Record<string, string> = {},
+  support?: RunSupport
 ): Promise<SendLedger> {
   const run = await createPlatformRun(
-    { serviceName: "postmark-service", taskName: "email-send" },
+    { serviceName: "postmark-service", taskName: "email-send", ...(support ? { support } : {}) },
     trackingHeaders
   );
   return {

@@ -97,6 +97,8 @@ describe("POST /internal/platform-send — org-less, platform-paid", () => {
 
     // Ledger: org-less platform run + the usual send cost
     expect(createPlatformRun).toHaveBeenCalledTimes(1);
+    // Names nobody: support from creation (LEDGER-HISTORY-1024).
+    expect(vi.mocked(createPlatformRun).mock.calls[0][0]).toMatchObject({ support: { kind: "product_feature" } });
     expect(createRun).not.toHaveBeenCalled();
     expect(addCosts).not.toHaveBeenCalled();
     expect(addPlatformCosts).toHaveBeenCalledWith(
