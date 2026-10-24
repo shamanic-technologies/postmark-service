@@ -15,7 +15,7 @@ import {
 
 const selection = (o: Partial<Record<string, unknown>> = {}) => ({
   matchedRunCount: 3, toMarkCount: 3, alreadyMarkedCount: 0, declaresOutcomesCount: 0,
-  onOutcomeNowCount: 0, leftOnOutcomeCount: 0, spend: { grossCents: "1", netCents: "1" },
+  onOutcomeNowCount: 0, leftOnOutcomeCount: 0, onAncestorMarkNowCount: 0, leftOnAncestorMarkCount: 0, spend: { grossCents: "1", netCents: "1" },
   maxRuns: 50000, tooMany: false, ...o,
 });
 
@@ -42,6 +42,7 @@ describe("backfillSendSupportMarks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     execute
+      .mockReset()
       .mockResolvedValueOnce({ rows: [{ cutover: new Date("2026-10-23T14:33:00Z") }] })
       .mockResolvedValueOnce({ rows: [{ run_id: "r1" }, { run_id: "r2" }] });
   });
@@ -68,6 +69,7 @@ describe("backfillSendSupportMarks", () => {
       startedBefore: windows[0][1],
       withSpendOnly: true,
       offOutcomeOnly: true,
+      offAncestorMarkOnly: true,
     });
     expect(applies[windows.length - 1]).toMatchObject({ startedBefore: "2026-10-23T14:33:00.000Z" });
     expect(applies[windows.length]).toEqual({ ...SEND_SUPPORT, markedBy: BACKFILL_MARKED_BY, runIds: ["r1", "r2"] });
@@ -84,6 +86,18 @@ describe("backfillSendSupportMarks", () => {
       selection(body.runIds ? { onOutcomeNowCount: 1 } : { toMarkCount: 0 })) as never);
     await expect(backfillSendSupportMarks(true)).rejects.toThrow(/ride an ancestor's outcome/);
     expect(vi.mocked(markOwnRunsSupport).mock.calls.some((c) => c[0] === "apply")).toBe(false);
+  });
+
+  it("refuses when runs-service ignored offAncestorMarkOnly", async () => {
+    vi.mocked(markOwnRunsSupport).mockResolvedValue(selection({ leftOnAncestorMarkCount: undefined }) as never);
+    await expect(backfillSendSupportMarks(true)).rejects.toThrow(/did not apply offAncestorMarkOnly/);
+    expect(vi.mocked(markOwnRunsSupport).mock.calls.some((c) => c[0] === "apply")).toBe(false);
+  });
+
+  it("never relabels an ancestor's support mark by runIds", async () => {
+    vi.mocked(markOwnRunsSupport).mockImplementation((async (_step: string, body: { runIds?: string[] }) =>
+      selection(body.runIds ? { onAncestorMarkNowCount: 2 } : { toMarkCount: 0 })) as never);
+    await expect(backfillSendSupportMarks(true)).rejects.toThrow(/relabel/);
   });
 
   it("fails loud when no send has named a subject yet", async () => {
