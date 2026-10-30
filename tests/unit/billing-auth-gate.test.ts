@@ -435,6 +435,9 @@ describe("billing credit authorization gate", () => {
       "credit-depleted-blocked",
       "credit-depleted-followup-3d-blocked",
       "credit-depleted-followup-10d-blocked",
+      "credit-depleted-postpaid",
+      "credit-depleted-followup-3d-postpaid",
+      "credit-depleted-followup-10d-postpaid",
       // Every other eventType billing-service sends (its src/instrument.ts list).
       "credit-debt-card-required",
       "unpaid_debt_uncollectable",

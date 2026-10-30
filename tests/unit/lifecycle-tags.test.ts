@@ -17,6 +17,9 @@ describe("platform lifecycle tags", () => {
     "credit-depleted-blocked",
     "credit-depleted-followup-3d-blocked",
     "credit-depleted-followup-10d-blocked",
+    "credit-depleted-postpaid",
+    "credit-depleted-followup-3d-postpaid",
+    "credit-depleted-followup-10d-postpaid",
     // The debt pair is sent BECAUSE the org cannot pay: org-billed, its balance
     // refused both (prod 2026-10-01, 402 Insufficient credits).
     "credit-debt-card-required",
