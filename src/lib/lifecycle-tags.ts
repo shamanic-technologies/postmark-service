@@ -46,6 +46,10 @@ export const PLATFORM_LIFECYCLE_TAGS = new Set([
   "credit-depleted-blocked",
   "credit-depleted-followup-3d-blocked",
   "credit-depleted-followup-10d-blocked",
+  // Postpaid twins (POSTPAID-DUNNING-1030): same dunning stages, sent to postpaid orgs.
+  "credit-depleted-postpaid",
+  "credit-depleted-followup-3d-postpaid",
+  "credit-depleted-followup-10d-postpaid",
   // The rest of billing-service's sends (2026-10-04). Same family, missed when each
   // was added there: `credit-debt-card-required` and `unpaid_debt_uncollectable` go
   // out BECAUSE the org owes money it cannot pay, so authorizing them against that
