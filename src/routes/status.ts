@@ -2,7 +2,8 @@ import { messageOf } from "../lib/db-error.js";
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { postmarkMessages, postmarkSendings } from "../db/schema";
-import { eq, inArray, and, arrayContains, sql, SQL } from "drizzle-orm";
+import { eq, inArray, and, arrayContains, sql, SQL, Param } from "drizzle-orm";
+import { serializeStatusResults, GlobalFlags, StatusRow } from "../lib/status-results";
 import { StatsQuerySchema, StatusRequestSchema } from "../schemas";
 
 // ── Internal routes (API key only, no identity headers) ───────────────────────
@@ -258,6 +259,9 @@ internalRouter.get("/operations/:operationRunId/stats", async (req: Request, res
 
 const orgsRouter = Router();
 
+/** Above this many addresses, /orgs/status reads by scope + org instead of per address. */
+const BIG_ASK_ADDRESSES = 1_000;
+
 /**
  * POST /orgs/status
  * Batch status lookup by email with mode-dependent response shape.
@@ -286,182 +290,78 @@ orgsRouter.post("/status", async (req: Request, res: Response) => {
     const allEmails = [...new Set(items.map((i) => i.email))];
     const orgId = (req as any).orgContext?.orgId as string | undefined;
 
-    const conditions: SQL[] = [inArray(postmarkMessages.toEmail, allEmails)];
+    // ORGS-STATUS-TIMEOUT-1107: a big ask (our biggest brand sends ~60k addresses at once)
+    // is answered from its scope's rows and the org's flagged rows directly: probing the
+    // to_email index once per address cost ~1s per ask on prod, and the extra rows this reads
+    // are never looked up (results are keyed by the asked items). A small ask (a single
+    // follow-up) keeps the per-address probe, which is the cheap plan there.
+    // When used, the addresses ride ONE array bind parameter, never one per address
+    // (pg's 65,535 bind-parameter ceiling).
+    const addressConditions: SQL[] = [];
+    if (!orgId || allEmails.length <= BIG_ASK_ADDRESSES) {
+      addressConditions.push(sql`${postmarkMessages.toEmail} = ANY(${new Param(allEmails)}::text[])`);
+    }
     if (orgId) {
-      conditions.push(eq(postmarkMessages.orgId, orgId));
+      addressConditions.push(eq(postmarkMessages.orgId, orgId));
     }
 
-    const rows = await db
+    // ORGS-STATUS-TIMEOUT-1107: narrow to the asked scope IN SQL. Decoding every org row of
+    // every asked address (90k rows for our biggest brand) to keep 20 of them blocked the event
+    // loop for seconds per ask; under a features-service boot burst asks timed out at the caller.
+    const scopedRows: StatusRow[] =
+      mode === "global"
+        ? []
+        : await db
+            .select({
+              messageId: postmarkMessages.messageId,
+              toEmail: postmarkMessages.toEmail,
+              campaignId: postmarkMessages.campaignId,
+              brandIds: postmarkMessages.brandIds,
+              contacted: postmarkMessages.contacted,
+              sent: postmarkMessages.sent,
+              delivered: postmarkMessages.delivered,
+              opened: postmarkMessages.opened,
+              clicked: postmarkMessages.clicked,
+              bounced: postmarkMessages.bounced,
+              unsubscribed: postmarkMessages.unsubscribed,
+              lastDeliveredAt: postmarkMessages.lastDeliveredAt,
+              submittedAt: postmarkMessages.submittedAt,
+              createdAt: postmarkMessages.createdAt,
+              firstOpenedAt: postmarkMessages.firstOpenedAt,
+              firstClickedAt: postmarkMessages.firstClickedAt,
+              firstBouncedAt: postmarkMessages.firstBouncedAt,
+              firstUnsubscribedAt: postmarkMessages.firstUnsubscribedAt,
+            })
+            .from(postmarkMessages)
+            .where(
+              and(
+                ...addressConditions,
+                mode === "campaign"
+                  ? eq(postmarkMessages.campaignId, campaignId!)
+                  : sql`${postmarkMessages.brandIds} && ${new Param(brandIds)}::text[]`,
+              ),
+            );
+
+    // Org-wide health flags: only addresses carrying one come back (absent = both false).
+    const flagged = await db
       .select({
-        messageId: postmarkMessages.messageId,
         toEmail: postmarkMessages.toEmail,
-        campaignId: postmarkMessages.campaignId,
-        brandIds: postmarkMessages.brandIds,
-        contacted: postmarkMessages.contacted,
-        sent: postmarkMessages.sent,
-        delivered: postmarkMessages.delivered,
-        opened: postmarkMessages.opened,
-        clicked: postmarkMessages.clicked,
-        bounced: postmarkMessages.bounced,
-        unsubscribed: postmarkMessages.unsubscribed,
-        lastDeliveredAt: postmarkMessages.lastDeliveredAt,
-        submittedAt: postmarkMessages.submittedAt,
-        createdAt: postmarkMessages.createdAt,
-        firstOpenedAt: postmarkMessages.firstOpenedAt,
-        firstClickedAt: postmarkMessages.firstClickedAt,
-        firstBouncedAt: postmarkMessages.firstBouncedAt,
-        firstUnsubscribedAt: postmarkMessages.firstUnsubscribedAt,
+        bounced: sql<boolean>`bool_or(${postmarkMessages.bounced})`,
+        unsubscribed: sql<boolean>`bool_or(${postmarkMessages.unsubscribed})`,
       })
       .from(postmarkMessages)
-      .where(and(...conditions));
+      .where(
+        and(
+          ...addressConditions,
+          sql`(${postmarkMessages.bounced} OR ${postmarkMessages.unsubscribed})`,
+        ),
+      )
+      .groupBy(postmarkMessages.toEmail);
+    const flaggedEmails = new Map<string, GlobalFlags>(
+      flagged.map((f) => [f.toEmail, { bounced: f.bounced === true, unsubscribed: f.unsubscribed === true }]),
+    );
 
-    type Row = (typeof rows)[number];
-
-    const toDate = (v: Date | string | null): Date | null =>
-      v == null ? null : v instanceof Date ? v : new Date(v);
-    const earlier = (acc: Date | null, v: Date | null): Date | null =>
-      v == null ? acc : acc == null || v < acc ? v : acc;
-
-    function aggregateScope(group: Row[]) {
-      let contacted = false;
-      let sent = false;
-      let delivered = false;
-      let opened = false;
-      let clicked = false;
-      let bounced = false;
-      let unsubscribed = false;
-      let lastDeliveredAt: Date | null = null;
-      // Send-event COUNT: one postmarkMessages row = one transactional message,
-      // so the number of emails actually sent to this recipient in the scope is
-      // the count of rows whose `sent` is true. Brand scope groups all of the
-      // brand's campaign rows, so its count is the SUM across campaigns for free.
-      let sentCount = 0;
-
-      // First-occurrence (MIN) accumulators. firstContacted/Sent/Delivered are
-      // derived from existing columns (submitted_at / created_at / last_delivered_at);
-      // firstOpened/Clicked/Bounced/Unsub are stored on the silver row.
-      let firstContactedAt: Date | null = null;
-      let firstSentAt: Date | null = null;
-      let firstDeliveredAt: Date | null = null;
-      let firstOpenedAt: Date | null = null;
-      let firstClickedAt: Date | null = null;
-      let firstBouncedAt: Date | null = null;
-      let firstUnsubscribedAt: Date | null = null;
-
-      for (const r of group) {
-        if (r.contacted) contacted = true;
-        if (r.sent) sent = true;
-        if (r.delivered) delivered = true;
-        if (r.opened) opened = true;
-        if (r.clicked) clicked = true;
-        if (r.bounced) bounced = true;
-        if (r.unsubscribed) unsubscribed = true;
-        if (r.sent) sentCount++;
-        if (r.lastDeliveredAt) {
-          const dt = toDate(r.lastDeliveredAt)!;
-          if (!lastDeliveredAt || dt > lastDeliveredAt) lastDeliveredAt = dt;
-        }
-
-        // Per-message milestone timestamps, then MIN across the scope.
-        const rowContactedAt = toDate(r.submittedAt) ?? toDate(r.createdAt);
-        const rowOpenedAt = toDate(r.firstOpenedAt);
-        const rowDeliveredAt = r.delivered ? toDate(r.lastDeliveredAt) ?? rowOpenedAt : null;
-        firstContactedAt = earlier(firstContactedAt, rowContactedAt);
-        firstSentAt = earlier(firstSentAt, r.sent ? rowContactedAt : null);
-        firstDeliveredAt = earlier(firstDeliveredAt, rowDeliveredAt);
-        firstOpenedAt = earlier(firstOpenedAt, rowOpenedAt);
-        firstClickedAt = earlier(firstClickedAt, toDate(r.firstClickedAt));
-        firstBouncedAt = earlier(firstBouncedAt, toDate(r.firstBouncedAt));
-        firstUnsubscribedAt = earlier(firstUnsubscribedAt, toDate(r.firstUnsubscribedAt));
-      }
-
-      return {
-        contacted,
-        sent,
-        delivered,
-        opened,
-        clicked,
-        replied: false,
-        replyClassification: null as string | null,
-        bounced,
-        unsubscribed,
-        cancelled: false,
-        sentCount,
-        lastDeliveredAt: lastDeliveredAt?.toISOString() ?? null,
-        firstContactedAt: firstContactedAt?.toISOString() ?? null,
-        firstSentAt: firstSentAt?.toISOString() ?? null,
-        firstDeliveredAt: firstDeliveredAt?.toISOString() ?? null,
-        firstOpenedAt: firstOpenedAt?.toISOString() ?? null,
-        firstClickedAt: firstClickedAt?.toISOString() ?? null,
-        firstRepliedAt: null as string | null,
-        firstBouncedAt: firstBouncedAt?.toISOString() ?? null,
-        firstUnsubscribedAt: firstUnsubscribedAt?.toISOString() ?? null,
-      };
-    }
-
-    function aggregateGlobal(group: Row[]) {
-      let bounced = false;
-      let unsubscribed = false;
-      for (const r of group) {
-        if (r.bounced) bounced = true;
-        if (r.unsubscribed) unsubscribed = true;
-      }
-      return { email: { bounced, unsubscribed } };
-    }
-
-    const results = items.map((item) => {
-      const emailRows = rows.filter((r) => r.toEmail === item.email);
-      const global = aggregateGlobal(emailRows);
-
-      if (mode === "campaign") {
-        return {
-          email: item.email,
-          byCampaign: null,
-          brand: null,
-          campaign: aggregateScope(emailRows.filter((r) => r.campaignId === campaignId)),
-          global,
-        };
-      }
-
-      if (mode === "brand") {
-        const brandRows = emailRows.filter((r) => r.brandIds?.some((id) => brandIds.includes(id)));
-
-        const campaignGroups = new Map<string, Row[]>();
-        for (const r of brandRows) {
-          if (r.campaignId) {
-            let g = campaignGroups.get(r.campaignId);
-            if (!g) {
-              g = [];
-              campaignGroups.set(r.campaignId, g);
-            }
-            g.push(r);
-          }
-        }
-
-        const byCampaign: Record<string, ReturnType<typeof aggregateScope>> = {};
-        for (const [cId, group] of campaignGroups) {
-          byCampaign[cId] = aggregateScope(group);
-        }
-
-        return {
-          email: item.email,
-          byCampaign: Object.keys(byCampaign).length > 0 ? byCampaign : null,
-          brand: aggregateScope(brandRows),
-          campaign: null,
-          global,
-        };
-      }
-
-      return {
-        email: item.email,
-        byCampaign: null,
-        brand: null,
-        campaign: null,
-        global,
-      };
-    });
-
-    res.json({ results });
+    res.type("application/json").send(serializeStatusResults(items, scopedRows, flaggedEmails, mode));
   } catch (error: any) {
     console.error("[postmark-service] Error checking status:", error);
     res.status(500).json({
