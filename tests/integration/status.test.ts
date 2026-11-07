@@ -251,6 +251,39 @@ describe("Status Endpoints Integration", () => {
       expect(response.body.results).toHaveLength(6000);
     });
 
+    it("answers a big ask (>1000 addresses) with the same scoping as a small one (ORGS-STATUS-TIMEOUT-1107)", async () => {
+      // Brand row + another brand's bounced row for the same address, plus another org's row.
+      await insertTestSending({ messageId: randomUUID(), toEmail: "big-a@test.com", brandId, campaignId: "camp-big" });
+      const otherBrandMsg = randomUUID();
+      await insertTestSending({ messageId: otherBrandMsg, toEmail: "big-a@test.com", brandId: "brand-other", campaignId: "camp-o" });
+      await insertTestBounce(otherBrandMsg, "big-a@test.com");
+      const foreignMsg = randomUUID();
+      await insertTestSending({ messageId: foreignMsg, toEmail: "big-b@test.com", brandId, campaignId: "camp-big", orgId: "another-org" });
+      await insertTestBounce(foreignMsg, "big-b@test.com");
+
+      const asked = ["big-a@test.com", "big-b@test.com"];
+      const filler = Array.from({ length: 1500 }, (_, i) => `filler-${i}@bulk-status.com`);
+
+      for (const emails of [asked, [...asked, ...filler]]) {
+        const response = await request(app)
+          .post("/orgs/status")
+          .set(getAuthHeaders())
+          .send({ brandId, items: emails.map((email) => ({ email })) });
+
+        expect(response.status).toBe(200);
+        expect(response.body.results).toHaveLength(emails.length);
+        const [a, b] = response.body.results;
+        expect(a.email).toBe("big-a@test.com");
+        expect(a.brand.sentCount).toBe(1);
+        expect(Object.keys(a.byCampaign)).toEqual(["camp-big"]);
+        expect(a.global.email.bounced).toBe(true);
+        // another org's rows never leak in
+        expect(b.brand.contacted).toBe(false);
+        expect(b.byCampaign).toBeNull();
+        expect(b.global.email.bounced).toBe(false);
+      }
+    });
+
     // ── Global-only mode (no brandId, no campaignId) ──────────────────
 
     it("should return global-only mode when neither brandId nor campaignId provided", async () => {
