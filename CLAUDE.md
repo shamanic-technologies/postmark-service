@@ -196,7 +196,9 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 
 Stats and status endpoints read from the **silver** table `postmark_messages` (Layer 2 already materialized). Bronze event tables are write-only on the read path: never JOINed at query time, never JS-aggregated. That is what keeps a stats query cheap no matter how much bronze accumulates behind it.
 
-> **No gold/rollup layer.** A `postmark_stats_daily` gold rollup + 5-min refresh cron existed historically but was **removed** (migration `0013_drop_stats_daily`): it had zero readers across the fleet, and the 5-min cron kept the database awake around the clock (the compute was Neon then, and the cron blocked its scale-to-zero). The zero-readers half is the part that still decides: a rollup nobody reads is one to delete whatever it costs to keep warm. The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug` — kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). Live silver is always real-time; there is no rollup staleness to manage.
+> **No gold/rollup layer.** A `postmark_stats_daily` gold rollup + 5-min refresh cron existed historically but was **removed** (migration `0013_drop_stats_daily`): it had zero readers across the fleet, and the 5-min cron kept the database awake around the clock (the compute was Neon then, and the cron blocked its scale-to-zero). The zero-readers half is the part that still decides: a rollup nobody reads is one to delete whatever it costs to keep warm. **`POST /orgs/status` must stay O(items + scoped rows)** (ORGS-STATUS-TIMEOUT-1107): our biggest brand asks ~60k addresses at once against ~90k org rows. Never filter rows per item, never decode every org row of every asked address (SQL narrows to the scope), never one bind param per address; empty items are written from a cached JSON fragment (`serializeStatusResults`, byte-equal to `JSON.stringify` by test). Before: 10k items = 15s, the 60k/50k asks of a features-service boot burst hit email-gateway's 10s abort; after: 13-way prod-shape burst max 4.9s.
+
+The cross-org feature leaderboard is served **live from silver** via `GET /internal/stats?groupBy=workflowSlug` — kept fast by the covering index `idx_messages_feature_workflow_email` (migration 0012). Live silver is always real-time; there is no rollup staleness to manage.
 
 ### Bronze — Layer 1: raw Postmark events (write-only)
 
@@ -309,7 +311,7 @@ No timer/cron touches the DB: when the service is idle (no sends, no webhooks) n
 GET  /internal/status/:messageId    → SELECT FROM postmark_messages WHERE message_id
 GET  /internal/status/by-org/:orgId → SELECT FROM postmark_messages WHERE org_id
 GET  /internal/status/by-run/:runId → SELECT FROM postmark_messages WHERE run_id
-POST /orgs/status                   → SELECT FROM postmark_messages WHERE to_email IN (...) AND org_id
+POST /orgs/status                   → scope rows (brand_ids && / campaign_id) + org's bounced/unsub flags; to_email = ANY($1) only when ≤1000 addresses
 GET  /orgs/stats, /internal/stats   → SELECT COUNT(*) FILTER (...) FROM postmark_messages WHERE <filters>
 GET  /public/performance/leaderboard→ SELECT FROM postmark_messages GROUP BY workflow_slug  (silver, global)
 ```
