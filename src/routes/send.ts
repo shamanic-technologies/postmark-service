@@ -11,7 +11,8 @@ import { SendEmailRequestSchema, BatchSendRequestSchema } from "../schemas";
 import { upsertSilver } from "../lib/silver";
 import { resolvePayer } from "../lib/payer";
 import { openSendLedger } from "../lib/send-ledger";
-import { resolveOutcomeSubject, scheduleOutcomeDeclaration } from "../lib/outcome-declaration";
+import { resolveOutcomeSubject } from "../lib/outcome-declaration";
+import { scheduleLedgerSettlement } from "../lib/ledger-settlement";
 import { sendSupportFor } from "../lib/send-support";
 
 const router = Router();
@@ -20,7 +21,8 @@ const router = Router();
 /**
  * POST /send
  * Send an email via Postmark and record it in the database
- * BLOCKING: runs-service must succeed before email is sent
+ * BLOCKING: the run must open before the email is sent; its cost + completion
+ * settle after the response (ledger-settlement.ts)
  */
 router.post("/send", async (req: Request & { orgContext?: import("../middleware/serviceAuth").OrgContext }, res: Response) => {
   const parsed = SendEmailRequestSchema.safeParse(req.body);
@@ -169,6 +171,9 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           audienceId,
           payer,
           leadId: body.leadId,
+          // What the run still owes, settled after the response (ledger-settlement.ts).
+          ledgerStatus: result.success ? "completed" : "failed",
+          ledgerCostSource: result.success ? decryptedKey.keySource : null,
           // Only a send that went out produced anything (a failure is never an outcome).
           ...(result.success && outcomeSubject && {
             outcomeSubjectService: outcomeSubject.subjectService,
@@ -182,23 +187,10 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       // 7b. Initialize silver row so subsequent webhooks UPSERT against an existing row.
       if (result.messageId) await upsertSilver(result.messageId);
 
-      // 8. Log costs and complete run
+      // 8. Answer now: Postmark's verdict is all the caller needs. The run's cost +
+      //    completion (and then the outcome) settle off the request path, owed on
+      //    the row until runs-service accepts them (SIGNUP-EMAILS-1111).
       if (result.success) {
-        await ledger.addSendCost(decryptedKey.keySource);
-        await ledger.complete();
-
-        // 8b. Declare what the send produced (off the request path, never blocking).
-        if (outcomeSubject) {
-          scheduleOutcomeDeclaration({
-            sendingId: sending.id,
-            runId: sendRunId,
-            payer,
-            orgId,
-            ...outcomeSubject,
-            consumedOutcomeKeys: body.consumedOutcomeKeys ?? null,
-          });
-        }
-
         res.status(200).json({
           success: true,
           messageId: result.messageId,
@@ -206,8 +198,6 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           sendingId: sending.id,
         });
       } else {
-        await ledger.fail(result.message);
-
         res.status(400).json({
           success: false,
           errorCode: result.errorCode,
@@ -215,6 +205,29 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           sendingId: sending.id,
         });
       }
+      scheduleLedgerSettlement(
+        {
+          sendingId: sending.id,
+          runId: sendRunId,
+          payer,
+          orgId,
+          userId,
+          status: result.success ? "completed" : "failed",
+          costSource: result.success ? decryptedKey.keySource : null,
+          error: result.success ? null : result.message ?? null,
+          trackingHeaders,
+        },
+        result.success && outcomeSubject
+          ? {
+              sendingId: sending.id,
+              runId: sendRunId,
+              payer,
+              orgId,
+              ...outcomeSubject,
+              consumedOutcomeKeys: body.consumedOutcomeKeys ?? null,
+            }
+          : null
+      );
     } catch (error: any) {
       // Email send or DB failed — mark run as failed
       await ledger.fail(messageOf(error));
@@ -407,6 +420,8 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             audienceId: emailAudienceId,
             payer: emailPayer,
             leadId: email.leadId,
+            ledgerStatus: result.success ? "completed" : "failed",
+            ledgerCostSource: result.success ? keySource : null,
             ...(result.success && outcomeSubject && {
               outcomeSubjectService: outcomeSubject.subjectService,
               outcomeSubjectId: outcomeSubject.subjectId,
@@ -419,23 +434,30 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         // 3b. Initialize silver row so subsequent webhooks UPSERT against an existing row.
         if (result.messageId) await upsertSilver(result.messageId);
 
-        // 4. Log costs and complete run
-        if (result.success) {
-          await ledger.addSendCost(keySource);
-          await ledger.complete();
-          if (outcomeSubject) {
-            scheduleOutcomeDeclaration({
-              sendingId: sending.id,
-              runId: sendRunId,
-              payer: emailPayer,
-              orgId,
-              ...outcomeSubject,
-              consumedOutcomeKeys: email.consumedOutcomeKeys ?? null,
-            });
-          }
-        } else {
-          await ledger.fail(result.message);
-        }
+        // 4. Settle the run off the request path (owed on the row, SIGNUP-EMAILS-1111).
+        scheduleLedgerSettlement(
+          {
+            sendingId: sending.id,
+            runId: sendRunId,
+            payer: emailPayer,
+            orgId,
+            userId,
+            status: result.success ? "completed" : "failed",
+            costSource: result.success ? keySource : null,
+            error: result.success ? null : result.message ?? null,
+            trackingHeaders,
+          },
+          result.success && outcomeSubject
+            ? {
+                sendingId: sending.id,
+                runId: sendRunId,
+                payer: emailPayer,
+                orgId,
+                ...outcomeSubject,
+                consumedOutcomeKeys: email.consumedOutcomeKeys ?? null,
+              }
+            : null
+        );
 
         results.push({
           to: email.to,

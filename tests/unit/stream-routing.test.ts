@@ -120,7 +120,7 @@ describe("POST /orgs/send — message stream", () => {
 
     expect(addCosts).toHaveBeenCalledWith(
       "org-run-1",
-      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform" }],
+      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" }],
       expect.any(String),
       expect.any(String),
       expect.any(Object)

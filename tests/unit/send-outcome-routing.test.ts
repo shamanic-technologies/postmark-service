@@ -49,12 +49,8 @@ vi.mock("../../src/db", () => ({
   },
 }));
 
-vi.mock("../../src/lib/outcome-declaration", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/outcome-declaration")>(
-    "../../src/lib/outcome-declaration"
-  );
-  return { ...actual, scheduleOutcomeDeclaration: vi.fn() };
-});
+// The run settles after the response; its outcome follows the settlement.
+vi.mock("../../src/lib/ledger-settlement", () => ({ scheduleLedgerSettlement: vi.fn() }));
 
 vi.mock("../../src/lib/silver", () => ({
   upsertSilver: vi.fn().mockResolvedValue(undefined),
@@ -63,7 +59,10 @@ vi.mock("../../src/lib/silver", () => ({
 import { sendEmail } from "../../src/lib/postmark-client";
 import { createRun } from "../../src/lib/runs-client";
 import { SEND_SUPPORT } from "../../src/lib/send-support";
-import { scheduleOutcomeDeclaration } from "../../src/lib/outcome-declaration";
+import { scheduleLedgerSettlement } from "../../src/lib/ledger-settlement";
+
+/** The outcomes handed to the settlement, one per send (null = declares nothing). */
+const declared = () => vi.mocked(scheduleLedgerSettlement).mock.calls.map((c) => c[1]).filter(Boolean);
 import request from "supertest";
 import { createTestApp, getAuthHeaders } from "../helpers/test-app";
 
@@ -81,27 +80,27 @@ describe("POST /orgs/send — the outcome a send produced", () => {
       .set(getAuthHeaders())
       .send({ ...validBody, outcomeSubject: subscriber, consumedOutcomeKeys: ["email_checked"] });
     expect(res.status).toBe(200);
-    expect(scheduleOutcomeDeclaration).toHaveBeenCalledWith({
+    expect(declared()).toEqual([{
       sendingId: "sending-1",
       runId: "org-run-1",
       payer: "org",
       orgId: expect.any(String),
       ...subscriber,
       consumedOutcomeKeys: ["email_checked"],
-    });
+    }]);
   });
 
   it("names the lead in lead-service when only leadId is sent", async () => {
     await request(app).post("/orgs/send").set(getAuthHeaders()).send({ ...validBody, leadId: "lead-1" });
-    expect(scheduleOutcomeDeclaration).toHaveBeenCalledWith(
-      expect.objectContaining({ subjectService: "lead-service", subjectId: "lead-1", consumedOutcomeKeys: null })
-    );
+    expect(declared()).toEqual([
+      expect.objectContaining({ subjectService: "lead-service", subjectId: "lead-1", consumedOutcomeKeys: null }),
+    ]);
   });
 
   it("declares nothing for a support mail that names nobody, and opens its run as support", async () => {
     const res = await request(app).post("/orgs/send").set(getAuthHeaders()).send(validBody);
     expect(res.status).toBe(200);
-    expect(scheduleOutcomeDeclaration).not.toHaveBeenCalled();
+    expect(declared()).toEqual([]);
     expect(vi.mocked(createRun).mock.calls[0][0]).toMatchObject({ support: SEND_SUPPORT });
   });
 
@@ -123,7 +122,7 @@ describe("POST /orgs/send — the outcome a send produced", () => {
       .set(getAuthHeaders())
       .send({ ...validBody, outcomeSubject: subscriber });
     expect(res.status).toBe(400);
-    expect(scheduleOutcomeDeclaration).not.toHaveBeenCalled();
+    expect(declared()).toEqual([]);
   });
 
   it("refuses consumed keys without a subject", async () => {
@@ -146,7 +145,7 @@ describe("POST /orgs/send/batch — per-email outcome", () => {
       .set(getAuthHeaders())
       .send({ emails: [{ ...validBody, outcomeSubject: subscriber }, { ...validBody, tag: "receipt" }] });
     expect(res.status).toBe(200);
-    expect(scheduleOutcomeDeclaration).toHaveBeenCalledTimes(1);
-    expect(scheduleOutcomeDeclaration).toHaveBeenCalledWith(expect.objectContaining(subscriber));
+    expect(scheduleLedgerSettlement).toHaveBeenCalledTimes(2);
+    expect(declared()).toEqual([expect.objectContaining(subscriber)]);
   });
 });

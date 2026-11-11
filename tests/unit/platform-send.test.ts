@@ -103,7 +103,7 @@ describe("POST /internal/platform-send — org-less, platform-paid", () => {
     expect(addCosts).not.toHaveBeenCalled();
     expect(addPlatformCosts).toHaveBeenCalledWith(
       "platform-run-1",
-      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform" }],
+      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" }],
       {}
     );
     expect(updatePlatformRun).toHaveBeenCalledWith("platform-run-1", "completed", undefined, {});
