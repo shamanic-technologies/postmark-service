@@ -59,6 +59,16 @@ export const postmarkSendings = pgTable(
     outcomeDeclaredAt: timestamp("outcome_declared_at", { withTimezone: true }),
     // runs-service refused it for good (4xx): logged loud, never retried.
     outcomeDeclareError: text("outcome_declare_error"),
+    // The send's run ledger, settled AFTER the response (SIGNUP-EMAILS-1111,
+    // src/lib/ledger-settlement.ts). ledger_status = what the run must become
+    // ('completed' | 'failed'); NULL = settled inline before this column existed.
+    ledgerStatus: text("ledger_status"),
+    // The key that paid Postmark: the cost row's costSource ('completed' only).
+    ledgerCostSource: text("ledger_cost_source"),
+    // runs-service accepted the settlement. NULL with a status = still owed.
+    ledgerSettledAt: timestamp("ledger_settled_at", { withTimezone: true }),
+    // runs-service refused it for good (4xx): logged loud, never retried.
+    ledgerSettleError: text("ledger_settle_error"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -67,6 +77,9 @@ export const postmarkSendings = pgTable(
     index("idx_sendings_outcome_pending")
       .on(table.createdAt)
       .where(sql`${table.outcomeSubjectId} IS NOT NULL AND ${table.outcomeDeclaredAt} IS NULL AND ${table.outcomeDeclareError} IS NULL`),
+    index("idx_sendings_ledger_pending")
+      .on(table.createdAt)
+      .where(sql`${table.ledgerStatus} IS NOT NULL AND ${table.ledgerSettledAt} IS NULL AND ${table.ledgerSettleError} IS NULL`),
     index("idx_sendings_org").on(table.orgId),
     index("idx_sendings_run").on(table.runId),
     index("idx_sendings_parent_run").on(table.parentRunId),

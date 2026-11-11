@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { postmarkSendings } from "../db/schema";
 import { messageOf } from "./db-error.js";
@@ -137,13 +137,8 @@ async function markRow(
   }
 }
 
-/**
- * Fire the declaration for a send that just succeeded, off the request path,
- * then let the catch-up settle anything still owed.
- */
-export function scheduleOutcomeDeclaration(owed: OwedDeclaration): void {
-  void declareSendOutcome(owed).then(() => catchUpOwedDeclarations());
-}
+// Fired off the request path once the send's run ledger settled
+// (ledger-settlement.ts `scheduleLedgerSettlement`), then the catch-up below.
 
 // ─── Catch-up ────────────────────────────────────────────────────────────────
 //
@@ -185,6 +180,9 @@ export async function catchUpOwedDeclarations(now: number = Date.now()): Promise
           isNotNull(postmarkSendings.outcomeSubjectId),
           isNull(postmarkSendings.outcomeDeclaredAt),
           isNull(postmarkSendings.outcomeDeclareError),
+          // The run holds its cost before its outcome: a send whose ledger is still
+          // owed (ledger-settlement.ts) waits for it to settle.
+          or(isNull(postmarkSendings.ledgerStatus), isNotNull(postmarkSendings.ledgerSettledAt)),
           lt(postmarkSendings.createdAt, new Date(now - GRACE_MS)),
           gt(postmarkSendings.createdAt, sql`now() - make_interval(days => ${OWED_WINDOW_DAYS})`)
         )

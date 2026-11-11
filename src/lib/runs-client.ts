@@ -71,6 +71,8 @@ export interface CostItem {
   costName: string;
   quantity: number;
   costSource: "platform" | "org";
+  /** Per-run dedup key: a replayed item returns the original row, never a second one. */
+  idempotencyKey?: string;
 }
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
@@ -96,8 +98,9 @@ async function runsRequest<T>(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-API-Key": RUNS_SERVICE_API_KEY,
-    ...identityHeaders,
   };
+  // An absent identity (no x-user-id on the send) is omitted, never sent as "" or "undefined".
+  for (const [k, v] of Object.entries(identityHeaders)) if (v) headers[k] = v;
 
   const response = await fetch(`${RUNS_SERVICE_URL}${path}`, {
     method,

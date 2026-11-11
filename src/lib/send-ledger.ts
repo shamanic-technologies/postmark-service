@@ -27,7 +27,11 @@ import type { Payer } from "./payer";
  */
 export interface SendLedger {
   runId: string;
-  addSendCost(costSource: "platform" | "org"): Promise<void>;
+  /**
+   * `idempotencyKey` makes a replay (catch-up after a lost answer) return the
+   * original cost row instead of writing a second one.
+   */
+  addSendCost(costSource: "platform" | "org", idempotencyKey?: string): Promise<void>;
   complete(): Promise<void>;
   fail(error?: string): Promise<void>;
 }
@@ -72,22 +76,42 @@ export async function openSendLedger(
     },
     trackingHeaders
   );
+  return attachSendLedger({ runId: run.id, payer, orgId, userId, trackingHeaders });
+}
+
+export interface AttachSendLedgerParams {
+  runId: string;
+  payer: Payer;
+  orgId: string | null;
+  userId: string | null;
+  trackingHeaders: Record<string, string>;
+}
+
+/**
+ * The ledger of a run that is ALREADY open: what settles a send after its
+ * response, inline or from the catch-up sweep, rebuilt from the sending row.
+ */
+export function attachSendLedger(params: AttachSendLedgerParams): SendLedger {
+  const { runId, trackingHeaders } = params;
+  if (params.payer === "platform") return platformLedger(runId, trackingHeaders);
+  const { orgId, userId } = params;
+  if (!orgId) throw new Error(`org-paid send run ${runId} has no org_id`);
   return {
-    runId: run.id,
-    addSendCost: async (costSource) => {
+    runId,
+    addSendCost: async (costSource, idempotencyKey) => {
       await addCosts(
-        run.id,
-        [{ costName: "postmark-email-send", quantity: 1, costSource }],
+        runId,
+        [{ costName: "postmark-email-send", quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
         orgId,
-        userId,
+        userId ?? "",
         trackingHeaders
       );
     },
     complete: async () => {
-      await updateRun(run.id, "completed", orgId, userId, undefined, trackingHeaders);
+      await updateRun(runId, "completed", orgId, userId ?? "", undefined, trackingHeaders);
     },
     fail: async (error?: string) => {
-      await updateRun(run.id, "failed", orgId, userId, error, trackingHeaders);
+      await updateRun(runId, "failed", orgId, userId ?? "", error, trackingHeaders);
     },
   };
 }
@@ -107,20 +131,24 @@ export async function openPlatformSendLedger(
     { serviceName: "postmark-service", taskName: "email-send", ...(support ? { support } : {}) },
     trackingHeaders
   );
+  return platformLedger(run.id, trackingHeaders);
+}
+
+function platformLedger(runId: string, trackingHeaders: Record<string, string>): SendLedger {
   return {
-    runId: run.id,
-    addSendCost: async (costSource) => {
+    runId,
+    addSendCost: async (costSource, idempotencyKey) => {
       await addPlatformCosts(
-        run.id,
-        [{ costName: "postmark-email-send", quantity: 1, costSource }],
+        runId,
+        [{ costName: "postmark-email-send", quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
         trackingHeaders
       );
     },
     complete: async () => {
-      await updatePlatformRun(run.id, "completed", undefined, trackingHeaders);
+      await updatePlatformRun(runId, "completed", undefined, trackingHeaders);
     },
     fail: async (error?: string) => {
-      await updatePlatformRun(run.id, "failed", error, trackingHeaders);
+      await updatePlatformRun(runId, "failed", error, trackingHeaders);
     },
   };
 }

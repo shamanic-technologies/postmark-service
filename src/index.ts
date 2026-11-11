@@ -20,6 +20,7 @@ import performanceRoutes from "./routes/performance";
 import transferRoutes from "./routes/transfer";
 import platformSendRoutes from "./routes/platform-send";
 import { catchUpOwedDeclarations } from "./lib/outcome-declaration";
+import { catchUpOwedLedgers } from "./lib/ledger-settlement";
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -105,9 +106,9 @@ if (process.env.NODE_ENV !== "test") {
       console.log("Migrations complete");
       app.listen(Number(PORT), "::", () => {
         console.log(`Service running on port ${PORT}`);
-        // Settle outcome declarations a previous container still owed (one-shot,
-        // after listen; later catch-ups ride on sends, no timer).
-        setTimeout(() => void catchUpOwedDeclarations(), 60_000);
+        // Settle run ledgers, then outcome declarations, a previous container still
+        // owed (one-shot, after listen; later catch-ups ride on sends, no timer).
+        setTimeout(() => void catchUpOwedLedgers().then(() => catchUpOwedDeclarations()), 60_000);
       });
     })
     .catch((err) => {

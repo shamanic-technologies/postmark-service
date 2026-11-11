@@ -68,6 +68,15 @@ describe("catch-up of owed outcome declarations", () => {
     expect(addOutcomes).toHaveBeenCalledTimes(1);
   });
 
+  it("waits for the send's run ledger to settle before declaring its outcome", async () => {
+    const owedLedger = await insertOwed(10, { ledgerStatus: "completed", ledgerCostSource: "platform" });
+    expect(await catchUpOwedDeclarations(Date.now())).toBe(0);
+
+    await db.update(postmarkSendings).set({ ledgerSettledAt: new Date() }).where(eq(postmarkSendings.id, owedLedger.id));
+    resetCatchUpStateForTests();
+    expect(await catchUpOwedDeclarations(Date.now())).toBe(1);
+  });
+
   it("leaves a refused row alone", async () => {
     await insertOwed(10, { outcomeDeclareError: "400 unknown_outcome_key" });
     expect(await catchUpOwedDeclarations(Date.now())).toBe(0);

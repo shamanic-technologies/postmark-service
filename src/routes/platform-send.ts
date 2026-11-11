@@ -7,6 +7,7 @@ import { getPlatformKey } from "../lib/key-client";
 import { PlatformSendRequestSchema } from "../schemas";
 import { upsertSilver } from "../lib/silver";
 import { openPlatformSendLedger } from "../lib/send-ledger";
+import { scheduleLedgerSettlement } from "../lib/ledger-settlement";
 import { SEND_SUPPORT } from "../lib/send-support";
 
 const router = Router();
@@ -106,14 +107,32 @@ router.post("/platform-send", async (req: Request, res: Response) => {
           runId: ledger.runId,
           parentRunId: parentRunId || null,
           payer: "platform",
+          // What the run still owes, settled after the response (ledger-settlement.ts).
+          ledgerStatus: result.success && result.messageId ? "completed" : "failed",
+          ledgerCostSource: result.success && result.messageId ? "platform" : null,
           metadata: body.metadata,
         })
         .returning();
 
       if (result.messageId) await upsertSilver(result.messageId);
 
-      if (!result.success || !result.messageId) {
-        await ledger.fail(result.message);
+      const sent = result.success && !!result.messageId;
+      scheduleLedgerSettlement(
+        {
+          sendingId: sending.id,
+          runId: ledger.runId,
+          payer: "platform",
+          orgId: null,
+          userId: null,
+          status: sent ? "completed" : "failed",
+          costSource: sent ? "platform" : null,
+          error: sent ? null : result.message ?? null,
+          trackingHeaders: {},
+        },
+        null
+      );
+
+      if (!sent) {
         console.error(
           `[platform-send] Postmark rejected — to=${body.to} errorCode=${result.errorCode} message="${result.message}"`
         );
@@ -125,9 +144,6 @@ router.post("/platform-send", async (req: Request, res: Response) => {
           sendingId: sending.id,
         });
       }
-
-      await ledger.addSendCost("platform");
-      await ledger.complete();
 
       return res.status(200).json({
         success: true,
