@@ -105,7 +105,7 @@ describe("POST /orgs/send — who the spend is declared against", () => {
     expect(createRun).toHaveBeenCalled();
     expect(addCosts).toHaveBeenCalledWith(
       "org-run-1",
-      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform" }],
+      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" }],
       expect.any(String),
       expect.any(String),
       expect.any(Object)
@@ -135,7 +135,7 @@ describe("POST /orgs/send — who the spend is declared against", () => {
     );
     expect(addPlatformCosts).toHaveBeenCalledWith(
       "platform-run-1",
-      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform" }],
+      [{ costName: "postmark-email-send", quantity: 1, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" }],
       expect.any(Object)
     );
     expect(updatePlatformRun).toHaveBeenCalledWith(
