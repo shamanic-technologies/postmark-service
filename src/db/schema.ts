@@ -69,11 +69,20 @@ export const postmarkSendings = pgTable(
     ledgerSettledAt: timestamp("ledger_settled_at", { withTimezone: true }),
     // runs-service refused it for good (4xx): logged loud, never retried.
     ledgerSettleError: text("ledger_settle_error"),
+    // Which provider carried the send (SES-PLATFORM-SENDS-1119, migration 0022):
+    // 'postmark' | 'ses' (src/lib/send-transport.ts). Also picks the run's cost name.
+    provider: text("provider").notNull().default("postmark"),
+    // SES's own MessageId (Message-ID header <id@email.amazonses.com>). For an SES
+    // send message_id is OUR minted uuid; NULL for Postmark (message_id is its id).
+    providerMessageId: text("provider_message_id"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("idx_sendings_message_id").on(table.messageId),
+    uniqueIndex("idx_sendings_provider_message_id")
+      .on(table.providerMessageId)
+      .where(sql`${table.providerMessageId} IS NOT NULL`),
     index("idx_sendings_outcome_pending")
       .on(table.createdAt)
       .where(sql`${table.outcomeSubjectId} IS NOT NULL AND ${table.outcomeDeclaredAt} IS NULL AND ${table.outcomeDeclareError} IS NULL`),

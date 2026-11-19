@@ -1,6 +1,6 @@
 # Project: postmark-service
 
-Email sending and tracking service using Postmark. Handles delivery via broadcast stream, webhook processing, and runs-service cost tracking.
+Email sending and tracking service using Postmark (and Amazon SES for our own product mail, see below). Handles delivery via broadcast stream, webhook processing, and runs-service cost tracking.
 
 ## Commands
 
@@ -154,6 +154,18 @@ that retirement as a plain denormalization; nothing reads them today.
 
 Every send goes out on the **broadcast** stream (key-service `postmark-broadcast-stream`) unless the caller sends `stream: "transactional"` (single send body, or per email in a batch), which resolves `postmark-transactional-stream` instead. Broadcast makes Postmark add a `List-Unsubscribe` header (Gmail shows "Unsubscribe" beside the sender); transactional does not, so a person-to-person mail (instantly-service's "answer it yourself", Reply-To = the prospect) reads as plain one-to-one email. The stream id actually used is recorded in `postmark_sendings.message_stream`. Cost declaration is identical on both. **Never flip the default**: mailing lists and anything a recipient can ask to stop must keep broadcast. A batch resolves the transactional id only if some email asks for it. `tests/unit/stream-routing.test.ts` pins both paths.
 
+## Our own product mail leaves through Amazon SES (SES-PLATFORM-SENDS-1119, owner 2026-11-19)
+
+« Yes switch all that we can on SES »: SES and Postmark measured identical on our seed mailboxes (Gmail 30/30 inbox each, DMARC pass), SES costs less. `src/lib/send-transport.ts` `chooseSendTransport` is the ONE rule, on `/orgs/send`, `/orgs/send/batch` (per email) and `/internal/platform-send`: **SES iff the send uses the PLATFORM Postmark key AND its From is on `distribute.you` itself** (sign-up codes, welcome, receipts, billing notices, staff alerts). Everything else stays on Postmark, unchanged: an org's own Postmark key (BYOK), any other From domain, and the newsletter (`news.distribute.you`, broadcast stream: the SES account is declared TRANSACTIONAL only, marketing must never go through it). Not keyed on the stream: our product mail rides Postmark's broadcast stream (486 of 499 product mails in 30 days), a stream rule would have moved 13 sign-up codes. Never touch Postmark server settings, the inbound stream or the broadcast stream for this.
+
+- **Transport**: SESv2 `SendEmail` (Simple content) signed by hand with SigV4 (`src/lib/ses-client.ts`, no AWS SDK). Credentials = key-service platform key `aws-ses-transactional` (JSON `{accessKeyId, secretAccessKey, region, account}`, read per send). Same From, To/Cc/Bcc (comma lists split, quotes kept), Reply-To, subject, HTML, text, caller headers; `tag` becomes an SES tag. Postmark open/click tracking and Metadata have no SES equivalent here (no configuration set): SES sends get no open/click/delivery/bounce webhooks.
+- **Unsubscribe**: email-gateway appends `{{{pm:unsubscribe}}}` (Postmark-only). On SES it is swapped for `{{amazonSESUnsubscribeUrl}}` with `ListManagementOptions` = contact list `distribute-product-mail` (created 2026-11-19): SES hosts the page, adds List-Unsubscribe, and never mails an opted-out contact on that list again. Never send that merge tag raw through SES.
+- **Ids**: `message_id` stays OUR uuid (minted for an SES send, so silver and `/internal/status/:messageId` keep working); SES's MessageId goes to `provider_message_id` (the delivered Message-ID header is `<id@email.amazonses.com>`); `provider` = `ses` | `postmark` (migration 0022); `message_stream` NULL for SES. Responses add `provider: "ses"` + `providerMessageId` (additive). platform-send refusal code `SES_REJECTED`.
+- **Cost**: an SES send declares (and an org-paid one authorizes) `ses-email-send` (costs-service, AWS list $0.10/1,000 x multiplier); the settlement/catch-up reads it from `provider`.
+- **Kill switch**: `PLATFORM_SEND_PROVIDER=postmark` in `env/postmark-service.env` (+ container recreate, no code deploy) puts every one of these sends back on Postmark; unset/`ses` = SES; any other value fails the send loud. An SES error is a failed send (400 / 502), NEVER a silent retry through Postmark.
+- **Bounces/complaints**: SES's account-level suppression list (bounces + complaints, on by default) does the suppressing. NOT ingested into our bronze/silver: an SES event destination needs SNS (or EventBridge), and the `distribute-ses` IAM user holds `AmazonSESFullAccess` only (`SNS:CreateTopic` / `SNS:Subscribe` / `SNS:SetTopicAttributes` refused, 2026-11-19). Postmark's bounce webhooks keep feeding everything still on Postmark.
+- Pinned: `tests/unit/send-transport.test.ts` (routing, kill switch, no fallback, cost names, per-route), `tests/unit/ses-client.test.ts` (body mapping, unsubscribe swap, SigV4 shape).
+
 ## BCC — this service never adds a recipient of its own
 
 `sendEmail` forwards `params.bcc` verbatim (and sends no BCC when the caller supplied none). **Do NOT reintroduce a service-added BCC — not hardcoded, not behind an env var.** Postmark bills PER RECIPIENT and counts blind copies: a hardcoded staff BCC, concatenated on top of the list transactional-email-service already sent, billed that address twice on every message and drove a 4.45x multiplier (July 2026: 628 API calls → 2,797 billed emails, against a 100/month free-plan cap). The archival need is already covered — Postmark keeps the full message 45 days in Activity, and `postmark_sendings` keeps a permanent metadata row per send.
@@ -181,6 +193,8 @@ The DB column (`postmark_sendings.brand_ids`) is `text[]` — the split happens 
 - `src/routes/health.ts` — Health check routes
 - `src/middleware/serviceAuth.ts` — API key auth middleware
 - `src/lib/postmark-client.ts` — Postmark SDK wrapper (multi-project)
+- `src/lib/send-transport.ts` — which provider carries a send (SES for our product mail) + kill switch + cost name
+- `src/lib/ses-client.ts` — Amazon SES SESv2 SendEmail, SigV4-signed, no SDK
 - `src/lib/payer.ts` — `resolvePayer` — who is charged for a send (`platform` | `org`)
 - `src/lib/send-ledger.ts` — `openSendLedger` — opens the run + cost ledger against that payer
 - `src/lib/outcome-declaration.ts` — `message_sent` declared per send to runs-service's outcome ledger (see above)
