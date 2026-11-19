@@ -15,6 +15,7 @@ vi.mock("../../src/db", () => ({
   },
 }));
 vi.mock("../../src/lib/silver", () => ({ upsertSilver: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../../src/lib/key-client", () => ({ getPlatformKey: vi.fn(async (p: string) => (p === "postmark" ? "pm-token" : "broadcast")) }));
 
 import {
   bounceTypeOf,
@@ -25,7 +26,7 @@ import {
   verifySnsMessage,
   SnsMessage,
 } from "../../src/lib/ses-events";
-import { SES_EVENTS_TOPIC_ARN } from "../../src/lib/ses-client";
+import { SES_EVENTS_TOPIC_ARN, SES_MARKETING } from "../../src/lib/ses-client";
 import { postmarkBounces, postmarkSpamComplaints, postmarkDeliveries } from "../../src/db/schema";
 import { upsertSilver } from "../../src/lib/silver";
 import request from "supertest";
@@ -169,5 +170,53 @@ describe("POST /webhooks/ses", () => {
     const res = await request(app).post("/webhooks/ses").set("content-type", "text/plain").send(JSON.stringify(m));
     expect(res.status).toBe(200);
     expect(fetchMock.mock.calls.map((c) => c[0])).toContain(sub);
+  });
+});
+
+describe("newsletter (marketing account) opt-outs reach Postmark's broadcast suppression list", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    inserted.length = 0;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  it("accepts the marketing account's topic", async () => {
+    clearSnsCertCacheForTests();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(publicKey.export({ type: "spki", format: "pem" }) as string)));
+    const m = signed({ Type: "Notification", MessageId: "n", TopicArn: SES_MARKETING.topicArn, Message: "{}", Timestamp: "t" });
+    await expect(verifySnsMessage(m)).resolves.toBeUndefined();
+  });
+
+  it("a permanent bounce of an SES newsletter is recorded AND suppressed on Postmark broadcast", async () => {
+    selected.rows = [{ messageId: "22222222-2222-4222-8222-222222222222", tag: "mailing-list-release-x", provider: "ses-marketing" }];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ Suppressions: [{ EmailAddress: "bounce@simulator.amazonses.com", Status: "Suppressed" }] })));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await recordSesEvent(JSON.stringify(sesBounce))).toBe("recorded");
+    expect(inserted[0].table).toBe(postmarkBounces);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.postmarkapp.com/message-streams/broadcast/suppressions");
+    expect(JSON.parse(init.body as string)).toEqual({ Suppressions: [{ EmailAddress: "bounce@simulator.amazonses.com" }] });
+  });
+
+  it("an unsubscribe of an SES newsletter is suppressed on Postmark broadcast", async () => {
+    selected.rows = [{ messageId: "22222222-2222-4222-8222-222222222222", tag: "t", provider: "ses-marketing" }];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ Suppressions: [{ EmailAddress: "a@x.com", Status: "Suppressed" }] })));
+    vi.stubGlobal("fetch", fetchMock);
+    await recordSesEvent(JSON.stringify({ eventType: "Subscription", mail: { messageId: "m", destination: ["a@x.com"] }, subscription: { newTopicPreferences: { unsubscribeAll: true } } }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("Postmark refusing the suppression fails loud (SNS retries)", async () => {
+    selected.rows = [{ messageId: "22222222-2222-4222-8222-222222222222", tag: "t", provider: "ses-marketing" }];
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ Suppressions: [{ EmailAddress: "x", Status: "Failed", Message: "nope" }] }))));
+    await expect(recordSesEvent(JSON.stringify(sesBounce))).rejects.toThrow(/refused/);
+  });
+
+  it("product mail (transactional account) writes nothing to Postmark", async () => {
+    selected.rows = [{ messageId: "11111111-1111-4111-8111-111111111111", tag: "welcome", provider: "ses" }];
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await recordSesEvent(JSON.stringify(sesBounce));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

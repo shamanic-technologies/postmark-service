@@ -1,14 +1,5 @@
 import { getPlatformKey } from "./key-client";
-import {
-  awsRequest,
-  parseSesCredentials,
-  SesCredentials,
-  SES_EVENTS_CONFIGURATION_SET,
-  SES_EVENTS_TOPIC_ARN,
-  SES_EVENTS_TOPIC_NAME,
-  SES_KEY_PROVIDER,
-  SES_PRODUCT_CONTACT_LIST,
-} from "./ses-client";
+import { awsRequest, parseSesCredentials, SesAccount, SesCredentials, SES_TRANSACTIONAL } from "./ses-client";
 
 /**
  * One-shot, idempotent SES/SNS configuration and the Postmark → SES carry-over of
@@ -20,8 +11,8 @@ import {
 export const SES_EVENTS_ENDPOINT = "https://postmark.distribute.you/webhooks/ses";
 const CALLER = { method: "POST", path: "/scripts/ses-setup" };
 
-async function creds(): Promise<SesCredentials> {
-  return parseSesCredentials(await getPlatformKey(SES_KEY_PROVIDER, CALLER));
+async function creds(account: SesAccount): Promise<SesCredentials> {
+  return parseSesCredentials(await getPlatformKey(account.keyProvider, CALLER));
 }
 
 function form(params: Record<string, string>): string {
@@ -43,12 +34,16 @@ async function sns(c: SesCredentials, params: Record<string, string>): Promise<s
 }
 
 /** Topic (signature v2, SES may publish), configuration set, event destination, HTTPS subscription. */
-export async function setupSesEvents(): Promise<string[]> {
-  const c = await creds();
+export async function setupSesEvents(account: SesAccount = SES_TRANSACTIONAL): Promise<string[]> {
+  const c = await creds(account);
+  const SES_EVENTS_TOPIC_NAME = account.topicName;
+  const SES_EVENTS_TOPIC_ARN = account.topicArn;
+  const SES_EVENTS_CONFIGURATION_SET = account.configurationSet;
+  const destinationName = account === SES_TRANSACTIONAL ? "sns-product-mail-events" : `sns-${account.topicName}`;
   const log: string[] = [];
   await sns(c, { Action: "CreateTopic", Name: SES_EVENTS_TOPIC_NAME });
   await sns(c, { Action: "SetTopicAttributes", TopicArn: SES_EVENTS_TOPIC_ARN, AttributeName: "SignatureVersion", AttributeValue: "2" });
-  const account = SES_EVENTS_TOPIC_ARN.split(":")[4];
+  const accountId = SES_EVENTS_TOPIC_ARN.split(":")[4];
   await sns(c, {
     Action: "SetTopicAttributes",
     TopicArn: SES_EVENTS_TOPIC_ARN,
@@ -57,12 +52,12 @@ export async function setupSesEvents(): Promise<string[]> {
       Version: "2012-10-17",
       Statement: [
         {
-          Sid: "ses-publishes-product-mail-events",
+          Sid: `ses-publishes-${account.topicName}`,
           Effect: "Allow",
           Principal: { Service: "ses.amazonaws.com" },
           Action: "SNS:Publish",
           Resource: SES_EVENTS_TOPIC_ARN,
-          Condition: { StringEquals: { "AWS:SourceAccount": account } },
+          Condition: { StringEquals: { "AWS:SourceAccount": accountId } },
         },
       ],
     }),
@@ -78,6 +73,19 @@ export async function setupSesEvents(): Promise<string[]> {
   if (cs.status !== 200 && !/AlreadyExists|already exists/i.test(cs.text)) throw new Error(`CreateConfigurationSet ${cs.status}: ${cs.text}`);
   log.push(`configuration set ${SES_EVENTS_CONFIGURATION_SET} ${cs.status === 200 ? "created" : "already there"}`);
 
+  // SES allows ONE contact list per account: read it first, create only if absent.
+  const existing = await awsRequest(c, { service: "ses", method: "GET", path: `/v2/email/contact-lists/${account.contactList}` });
+  if (existing.status !== 200) {
+    const cl = await awsRequest(c, {
+      service: "ses",
+      method: "POST",
+      path: "/v2/email/contact-lists",
+      body: JSON.stringify({ ContactListName: account.contactList, Description: `distribute.you ${account.name} mail: who unsubscribed` }),
+    });
+    if (cl.status !== 200) throw new Error(`CreateContactList ${cl.status}: ${cl.text}`);
+  }
+  log.push(`contact list ${account.contactList} ready`);
+
   const destination = {
     Enabled: true,
     MatchingEventTypes: ["BOUNCE", "COMPLAINT", "DELIVERY", "SUBSCRIPTION"],
@@ -88,14 +96,14 @@ export async function setupSesEvents(): Promise<string[]> {
     service: "ses",
     method: "POST",
     path: destPath,
-    body: JSON.stringify({ EventDestinationName: "sns-product-mail-events", EventDestination: destination }),
+    body: JSON.stringify({ EventDestinationName: destinationName, EventDestination: destination }),
   });
   if (ed.status !== 200) {
     if (!/AlreadyExists|already exists/i.test(ed.text)) throw new Error(`CreateEventDestination ${ed.status}: ${ed.text}`);
     const up = await awsRequest(c, {
       service: "ses",
       method: "PUT",
-      path: `${destPath}/sns-product-mail-events`,
+      path: `${destPath}/${destinationName}`,
       body: JSON.stringify({ EventDestination: destination }),
     });
     if (up.status !== 200) throw new Error(`UpdateEventDestination ${up.status}: ${up.text}`);
@@ -157,6 +165,31 @@ export function planSuppressionCarry(
   };
 }
 
+/**
+ * The newsletter (marketing account): everyone Postmark's BROADCAST stream
+ * suppresses (where every newsletter rode) is opted out of the SES newsletter
+ * contact list, and a hard bounce / spam complaint also goes on the marketing
+ * account's suppression list. The transactional stream is not the newsletter's.
+ */
+export function planMarketingCarry(dumps: Parameters<typeof planSuppressionCarry>[0]): CarryPlan {
+  const optOuts = new Set<string>();
+  const account = new Map<string, "BOUNCE" | "COMPLAINT">();
+  for (const d of dumps) {
+    if (d.type !== "Broadcasts") continue;
+    for (const s of d.suppressions) {
+      const email = s.EmailAddress.trim().toLowerCase();
+      if (!email) continue;
+      optOuts.add(email);
+      if (s.SuppressionReason === "HardBounce") account.set(email, "BOUNCE");
+      else if (s.SuppressionReason === "SpamComplaint") account.set(email, "COMPLAINT");
+    }
+  }
+  return {
+    contactOptOuts: [...optOuts].sort(),
+    accountSuppressions: [...account].map(([email, reason]) => ({ email, reason })).sort((a, b) => a.email.localeCompare(b.email)),
+  };
+}
+
 async function postmarkDumps(): Promise<Parameters<typeof planSuppressionCarry>[0]> {
   const token = await getPlatformKey("postmark", CALLER);
   const headers = { "X-Postmark-Server-Token": token, Accept: "application/json" };
@@ -182,20 +215,21 @@ async function sesWithRetry(c: SesCredentials, req: Parameters<typeof awsRequest
   }
 }
 
-export async function carryPostmarkSuppressionsToSes(apply: boolean) {
+export async function carryPostmarkSuppressionsToSes(apply: boolean, account: SesAccount = SES_TRANSACTIONAL) {
   const dumps = await postmarkDumps();
-  const plan = planSuppressionCarry(dumps);
+  const plan = account === SES_TRANSACTIONAL ? planSuppressionCarry(dumps) : planMarketingCarry(dumps);
   const report = {
     postmark: dumps.map((d) => ({ stream: d.stream, type: d.type, suppressed: d.suppressions.length })),
     contactOptOuts: plan.contactOptOuts.length,
     accountSuppressions: plan.accountSuppressions.length,
+    account: account.name,
     applied: apply,
     contactsWritten: 0,
     suppressionsWritten: 0,
   };
   if (!apply) return report;
-  const c = await creds();
-  const listPath = `/v2/email/contact-lists/${SES_PRODUCT_CONTACT_LIST}/contacts`;
+  const c = await creds(account);
+  const listPath = `/v2/email/contact-lists/${account.contactList}/contacts`;
   for (const email of plan.contactOptOuts) {
     const created = await sesWithRetry(c, { service: "ses", method: "POST", path: listPath, body: JSON.stringify({ EmailAddress: email, UnsubscribeAll: true }) });
     if (created.status !== 200) {

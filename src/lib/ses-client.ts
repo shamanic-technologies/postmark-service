@@ -39,6 +39,43 @@ export const SES_EVENTS_CONFIGURATION_SET = "distribute-product-mail-events";
 export const SES_EVENTS_TOPIC_NAME = "ses-product-mail-events";
 /** Account 030693215272 = SES account `distribute-transactional`, us-east-1. */
 export const SES_EVENTS_TOPIC_ARN = `arn:aws:sns:us-east-1:030693215272:${SES_EVENTS_TOPIC_NAME}`;
+
+/**
+ * The two SES accounts we send from. Each has its OWN credentials, contact list
+ * (unsubscribe), configuration set and SNS topic (events). Never mixed: the
+ * transactional account is declared TRANSACTIONAL (product mail only), the
+ * marketing one MARKETING (the newsletter, SES-NEWSLETTER-1119).
+ */
+export interface SesAccount {
+  name: "transactional" | "marketing";
+  keyProvider: string;
+  contactList: string;
+  configurationSet: string;
+  topicName: string;
+  topicArn: string;
+}
+
+export const SES_TRANSACTIONAL: SesAccount = {
+  name: "transactional",
+  keyProvider: SES_KEY_PROVIDER,
+  contactList: SES_PRODUCT_CONTACT_LIST,
+  configurationSet: SES_EVENTS_CONFIGURATION_SET,
+  topicName: SES_EVENTS_TOPIC_NAME,
+  topicArn: SES_EVENTS_TOPIC_ARN,
+};
+
+/** Account 168197326881 = SES account `distribute-marketing`, us-east-1, identity news.distribute.you. */
+export const SES_MARKETING: SesAccount = {
+  name: "marketing",
+  keyProvider: "aws-ses-marketing",
+  contactList: "distribute-newsletter",
+  configurationSet: "distribute-newsletter-events",
+  topicName: "ses-newsletter-events",
+  topicArn: "arn:aws:sns:us-east-1:168197326881:ses-newsletter-events",
+};
+
+export const SES_ACCOUNTS: SesAccount[] = [SES_TRANSACTIONAL, SES_MARKETING];
+
 const POSTMARK_UNSUBSCRIBE_TAG = /\{\{\{\s*pm:unsubscribe\s*\}\}\}/g;
 const SES_UNSUBSCRIBE_TAG = "{{amazonSESUnsubscribeUrl}}";
 
@@ -219,7 +256,7 @@ export interface SesSendResult {
 }
 
 /** The SESv2 SendEmail body for one message (pure, pinned by tests). */
-export function buildSesSendBody(params: SesSendParams): Record<string, unknown> {
+export function buildSesSendBody(params: SesSendParams, account: SesAccount = SES_TRANSACTIONAL): Record<string, unknown> {
   const hasUnsubscribe = [params.htmlBody, params.textBody].some(
     (b) => b !== undefined && new RegExp(POSTMARK_UNSUBSCRIBE_TAG.source).test(b)
   );
@@ -245,8 +282,8 @@ export function buildSesSendBody(params: SesSendParams): Record<string, unknown>
     Destination: destination,
     ...(replyTo.length > 0 && { ReplyToAddresses: replyTo }),
     Content: { Simple: simple },
-    ConfigurationSetName: SES_EVENTS_CONFIGURATION_SET,
-    ...(hasUnsubscribe && { ListManagementOptions: { ContactListName: SES_PRODUCT_CONTACT_LIST } }),
+    ConfigurationSetName: account.configurationSet,
+    ...(hasUnsubscribe && { ListManagementOptions: { ContactListName: account.contactList } }),
     ...(params.tag && {
       EmailTags: [{ Name: "tag", Value: params.tag.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256) }],
     }),
@@ -257,11 +294,12 @@ export function buildSesSendBody(params: SesSendParams): Record<string, unknown>
 export async function sesSendEmail(
   creds: SesCredentials,
   params: SesSendParams,
+  account: SesAccount = SES_TRANSACTIONAL,
   now: Date = new Date()
 ): Promise<SesSendResult> {
   const host = `email.${creds.region}.amazonaws.com`;
   const path = "/v2/email/outbound-emails";
-  const body = JSON.stringify(buildSesSendBody(params));
+  const body = JSON.stringify(buildSesSendBody(params, account));
   try {
     const headers = signAwsRequest({ method: "POST", host, path, body, service: "ses", creds, now });
     const response = await fetch(`https://${host}${path}`, { method: "POST", headers, body });

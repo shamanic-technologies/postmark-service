@@ -9,7 +9,7 @@ import { upsertSilver } from "../lib/silver";
 import { openPlatformSendLedger } from "../lib/send-ledger";
 import { scheduleLedgerSettlement } from "../lib/ledger-settlement";
 import { SEND_SUPPORT } from "../lib/send-support";
-import { chooseSendTransport, deliverViaSes, SesDeliveryResult } from "../lib/send-transport";
+import { resolveSendTransport, deliverViaSes, SesDeliveryResult } from "../lib/send-transport";
 
 const router = Router();
 
@@ -69,7 +69,7 @@ router.post("/platform-send", async (req: Request, res: Response) => {
     );
     const fromAddress = body.from ?? (await getPlatformKey("postmark-from-address", caller));
     // A platform key always: SES when the From is @distribute.you (send-transport.ts).
-    const transport = chooseSendTransport({ keySource: "platform", from: fromAddress });
+    const transport = await resolveSendTransport({ keySource: "platform", from: fromAddress });
 
     // An org-less send names nobody (no subject field on this route): support from creation.
     const ledger = await openPlatformSendLedger({}, SEND_SUPPORT);
@@ -92,8 +92,8 @@ router.post("/platform-send", async (req: Request, res: Response) => {
         trackLinks: body.trackLinks,
       };
       const result: SesDeliveryResult =
-        transport === "ses"
-          ? await deliverViaSes(message, caller)
+        transport !== "postmark"
+          ? await deliverViaSes(message, caller, transport)
           : await sendEmailWithToken({ serverToken, ...message });
 
       const [sending] = await db
@@ -104,7 +104,7 @@ router.post("/platform-send", async (req: Request, res: Response) => {
           fromEmail: fromAddress,
           subject: body.subject,
           tag: body.tag,
-          messageStream: transport === "ses" ? null : messageStream,
+          messageStream: transport !== "postmark" ? null : messageStream,
           provider: transport,
           providerMessageId: result.providerMessageId ?? null,
           errorCode: result.errorCode,
@@ -146,8 +146,8 @@ router.post("/platform-send", async (req: Request, res: Response) => {
           `[platform-send] ${transport} rejected — to=${body.to} errorCode=${result.errorCode} message="${result.message}"`
         );
         return res.status(502).json({
-          error: transport === "ses" ? "SES rejected the message" : "Postmark rejected the message",
-          code: transport === "ses" ? "SES_REJECTED" : "POSTMARK_REJECTED",
+          error: transport !== "postmark" ? "SES rejected the message" : "Postmark rejected the message",
+          code: transport !== "postmark" ? "SES_REJECTED" : "POSTMARK_REJECTED",
           errorCode: result.errorCode,
           message: result.message,
           sendingId: sending.id,
@@ -160,7 +160,7 @@ router.post("/platform-send", async (req: Request, res: Response) => {
         submittedAt: result.submittedAt,
         sendingId: sending.id,
         runId: ledger.runId,
-        ...(transport === "ses" && { provider: "ses", providerMessageId: result.providerMessageId }),
+        ...(transport !== "postmark" && { provider: transport, providerMessageId: result.providerMessageId }),
       });
     } catch (error: any) {
       await ledger.fail(messageOf(error)).catch(() => {});

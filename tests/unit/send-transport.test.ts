@@ -33,7 +33,7 @@ vi.mock("../../src/lib/key-client", () => ({
   getStreamId: vi.fn(async (_o: string, _u: string, type: string) => `${type}-stream-id`),
   getFromAddress: vi.fn().mockResolvedValue("Distribute <hello@distribute.you>"),
   getPlatformKey: vi.fn(async (provider: string) =>
-    provider === "aws-ses-transactional" ? SES_CREDS : `platform:${provider}`
+    provider.startsWith("aws-ses-") ? SES_CREDS : `platform:${provider}`
   ),
 }));
 
@@ -46,6 +46,10 @@ vi.mock("../../src/lib/ses-client", async (importOriginal) => ({
     errorCode: 0,
     message: "OK",
   }),
+}));
+
+vi.mock("../../src/lib/marketing-ramp", () => ({
+  marketingRampAllows: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("../../src/lib/billing-client", () => ({
@@ -66,10 +70,14 @@ import {
   costNameFor,
   platformSendProvider,
   KILL_SWITCH_ENV,
+  MARKETING_KILL_SWITCH_ENV,
+  marketingSendProvider,
 } from "../../src/lib/send-transport";
+import { marketingRampAllows } from "../../src/lib/marketing-ramp";
+import { SES_MARKETING, SES_TRANSACTIONAL } from "../../src/lib/ses-client";
 import { sesSendEmail } from "../../src/lib/ses-client";
 import { sendEmail, sendEmailWithToken } from "../../src/lib/postmark-client";
-import { getFromAddress, getOrgKey } from "../../src/lib/key-client";
+import { getFromAddress, getOrgKey, getPlatformKey } from "../../src/lib/key-client";
 import { addCosts, addPlatformCosts } from "../../src/lib/runs-client";
 import { authorizeCredits } from "../../src/lib/billing-client";
 import request from "supertest";
@@ -82,8 +90,15 @@ describe("chooseSendTransport — which sends SES carries", () => {
     expect(chooseSendTransport({ keySource: "platform", from: "hello@distribute.you" }, {})).toBe("ses");
     expect(chooseSendTransport({ keySource: "platform", from: "Distribute <Hello@Distribute.YOU>" }, {})).toBe("ses");
   });
-  it("the newsletter domain stays on Postmark (SES account is transactional only)", () => {
-    expect(chooseSendTransport({ keySource: "platform", from: "Kevin <kevin@news.distribute.you>" }, {})).toBe("postmark");
+  it("the newsletter domain goes to the MARKETING SES account, never the transactional one", () => {
+    expect(chooseSendTransport({ keySource: "platform", from: "Kevin <kevin@news.distribute.you>" }, {})).toBe("ses-marketing");
+    // The product-mail kill switch does not move the newsletter, and vice versa.
+    expect(chooseSendTransport({ keySource: "platform", from: "kevin@news.distribute.you" }, { [KILL_SWITCH_ENV]: "postmark" })).toBe("ses-marketing");
+    expect(chooseSendTransport({ keySource: "platform", from: "hello@distribute.you" }, { [MARKETING_KILL_SWITCH_ENV]: "postmark" })).toBe("ses");
+  });
+  it("newsletter kill switch MARKETING_SEND_PROVIDER=postmark puts it back on Postmark; unknown value fails loud", () => {
+    expect(chooseSendTransport({ keySource: "platform", from: "kevin@news.distribute.you" }, { [MARKETING_KILL_SWITCH_ENV]: "postmark" })).toBe("postmark");
+    expect(() => marketingSendProvider({ [MARKETING_KILL_SWITCH_ENV]: "mailchimp" })).toThrow(/neither/);
   });
   it("an org's own Postmark key, or another domain, stays on Postmark", () => {
     expect(chooseSendTransport({ keySource: "org", from: "hello@distribute.you" }, {})).toBe("postmark");
@@ -175,16 +190,40 @@ describe("routes — product mail leaves through SES", () => {
     ]);
   });
 
-  it("/orgs/send newsletter (news.distribute.you) stays on Postmark", async () => {
+  it("/orgs/send newsletter (news.distribute.you) leaves through the MARKETING SES account", async () => {
     const res = await request(app)
       .post("/orgs/send")
       .set(getAuthHeaders())
-      .send({ ...msg, from: "Kevin <kevin@news.distribute.you>", tag: "mailing-list-release-x" });
+      .send({ ...msg, from: "Kevin <kevin@news.distribute.you>", tag: "mailing-list-release-x", payer: "org" });
     expect(res.status).toBe(200);
-    expect(res.body.provider).toBeUndefined();
+    expect(res.body.provider).toBe("ses-marketing");
+    expect(sendEmail).not.toHaveBeenCalled();
+    const [, , account] = vi.mocked(sesSendEmail).mock.calls[0];
+    expect(account).toBe(SES_MARKETING);
+    expect(account).not.toBe(SES_TRANSACTIONAL);
+    expect(vi.mocked(getPlatformKey).mock.calls.map((c) => c[0])).toContain("aws-ses-marketing");
+    expect(vi.mocked(getPlatformKey).mock.calls.map((c) => c[0])).not.toContain("aws-ses-transactional");
+    expect(insertValues.mock.calls[0][0]).toMatchObject({ provider: "ses-marketing", messageStream: null });
+    expect(vi.mocked(authorizeCredits).mock.calls[0][0].items).toEqual([{ costName: "ses-email-send", quantity: 1 }]);
+  });
+
+  it("/orgs/send newsletter over today's ramp cap stays on Postmark broadcast (planned split)", async () => {
+    vi.mocked(marketingRampAllows).mockResolvedValueOnce(false);
+    const res = await request(app)
+      .post("/orgs/send")
+      .set(getAuthHeaders())
+      .send({ ...msg, from: "kevin@news.distribute.you", tag: "mailing-list-release-x" });
+    expect(res.status).toBe(200);
     expect(sesSendEmail).not.toHaveBeenCalled();
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(insertValues.mock.calls[0][0]).toMatchObject({ provider: "postmark", messageStream: "broadcast-stream-id" });
+  });
+
+  it("an SES marketing refusal is a failed send, never Postmark", async () => {
+    vi.mocked(sesSendEmail).mockResolvedValueOnce({ success: false, errorCode: 400, message: "SES 400: Throttling" });
+    const res = await request(app).post("/orgs/send").set(getAuthHeaders()).send({ ...msg, from: "kevin@news.distribute.you" });
+    expect(res.status).toBe(400);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("/orgs/send with an org's own Postmark key stays on Postmark", async () => {
@@ -212,7 +251,7 @@ describe("routes — product mail leaves through SES", () => {
     expect(addPlatformCosts).not.toHaveBeenCalled();
   });
 
-  it("/orgs/send/batch splits per email: product mail via SES, newsletter via Postmark, authorize per cost name", async () => {
+  it("/orgs/send/batch splits per email: product mail via SES, another domain via Postmark, authorize per cost name", async () => {
     vi.mocked(getFromAddress).mockResolvedValueOnce("hello@distribute.you");
     const res = await request(app)
       .post("/orgs/send/batch")
@@ -220,7 +259,7 @@ describe("routes — product mail leaves through SES", () => {
       .send({
         emails: [
           { to: "a@x.com", subject: "s", textBody: "t", payer: "org" },
-          { to: "b@x.com", subject: "s", textBody: "t", payer: "org", from: "kevin@news.distribute.you" },
+          { to: "b@x.com", subject: "s", textBody: "t", payer: "org", from: "hi@client.com" },
         ],
       });
     expect(res.status).toBe(200);

@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { getPlatformKey, CallerContext } from "./key-client";
-import { addressDomain, parseSesCredentials, sesSendEmail, SesSendParams, SES_KEY_PROVIDER } from "./ses-client";
+import {
+  addressDomain,
+  parseSesCredentials,
+  sesSendEmail,
+  SesAccount,
+  SesSendParams,
+  SES_MARKETING,
+  SES_TRANSACTIONAL,
+} from "./ses-client";
+import { marketingRampAllows } from "./marketing-ramp";
 import type { SendEmailResult } from "./postmark-client";
 
 /**
@@ -28,7 +37,27 @@ import type { SendEmailResult } from "./postmark-client";
  * error is a failed send, never a silent retry through Postmark.
  */
 
-export type SendTransport = "postmark" | "ses";
+/**
+ * `ses` = the TRANSACTIONAL SES account (product mail), `ses-marketing` = the
+ * MARKETING SES account (the newsletter, SES-NEWSLETTER-1119). Never mixed.
+ */
+export type SendTransport = "postmark" | "ses" | "ses-marketing";
+
+/**
+ * The newsletter's From domain (transactional-email-service mailing lists). Mail
+ * from it goes through the MARKETING SES account, never the transactional one.
+ */
+export const SES_MARKETING_FROM_DOMAIN = "news.distribute.you";
+
+/** Kill switch of the newsletter: `postmark` puts it back on Postmark's broadcast stream. */
+export const MARKETING_KILL_SWITCH_ENV = "MARKETING_SEND_PROVIDER";
+
+export function marketingSendProvider(env: NodeJS.ProcessEnv = process.env): SendTransport {
+  const raw = (env[MARKETING_KILL_SWITCH_ENV] ?? "").trim().toLowerCase();
+  if (raw === "" || raw === "ses") return "ses-marketing";
+  if (raw === "postmark") return "postmark";
+  throw new Error(`${MARKETING_KILL_SWITCH_ENV}="${env[MARKETING_KILL_SWITCH_ENV]}" is neither "ses" nor "postmark"`);
+}
 
 /** The only From domain SES carries (our verified SES domain identity). */
 export const SES_FROM_DOMAIN = "distribute.you";
@@ -48,13 +77,36 @@ export function chooseSendTransport(
   env: NodeJS.ProcessEnv = process.env
 ): SendTransport {
   if (params.keySource !== "platform") return "postmark";
-  if (addressDomain(params.from) !== SES_FROM_DOMAIN) return "postmark";
-  return platformSendProvider(env);
+  const domain = addressDomain(params.from);
+  if (domain === SES_FROM_DOMAIN) return platformSendProvider(env);
+  if (domain === SES_MARKETING_FROM_DOMAIN) return marketingSendProvider(env);
+  return "postmark";
+}
+
+/**
+ * `chooseSendTransport`, then the newsletter's warm-up ramp: a newsletter send
+ * over today's SES ramp cap stays on Postmark's broadcast stream (marketing-ramp.ts).
+ * That is a planned volume split, logged and recorded (provider column), not a
+ * fallback: an SES error is still a failed send.
+ */
+export async function resolveSendTransport(
+  params: { keySource: "platform" | "org"; from: string },
+  env: NodeJS.ProcessEnv = process.env
+): Promise<SendTransport> {
+  const transport = chooseSendTransport(params, env);
+  if (transport !== "ses-marketing") return transport;
+  return (await marketingRampAllows()) ? "ses-marketing" : "postmark";
+}
+
+export function sesAccountFor(transport: SendTransport): SesAccount {
+  if (transport === "ses") return SES_TRANSACTIONAL;
+  if (transport === "ses-marketing") return SES_MARKETING;
+  throw new Error(`transport ${transport} is not SES`);
 }
 
 /** The cost name a send's run declares (and billing authorizes), per provider. */
 export function costNameFor(transport: SendTransport): string {
-  return transport === "ses" ? "ses-email-send" : "postmark-email-send";
+  return transport === "postmark" ? "postmark-email-send" : "ses-email-send";
 }
 
 export interface SesDeliveryResult extends SendEmailResult {
@@ -68,9 +120,14 @@ export interface SesDeliveryResult extends SendEmailResult {
  * as `providerMessageId`. Never throws for an SES refusal; throws if the key
  * cannot be read (the route answers 500, nothing was sent).
  */
-export async function deliverViaSes(params: SesSendParams, caller: CallerContext): Promise<SesDeliveryResult> {
-  const creds = parseSesCredentials(await getPlatformKey(SES_KEY_PROVIDER, caller));
-  const result = await sesSendEmail(creds, params);
+export async function deliverViaSes(
+  params: SesSendParams,
+  caller: CallerContext,
+  transport: SendTransport = "ses"
+): Promise<SesDeliveryResult> {
+  const account = sesAccountFor(transport);
+  const creds = parseSesCredentials(await getPlatformKey(account.keyProvider, caller));
+  const result = await sesSendEmail(creds, params, account);
   if (!result.success) {
     return { success: false, errorCode: result.errorCode, message: result.message };
   }
