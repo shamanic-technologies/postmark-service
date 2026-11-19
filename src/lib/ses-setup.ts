@@ -75,7 +75,7 @@ export async function setupSesEvents(): Promise<string[]> {
     path: "/v2/email/configuration-sets",
     body: JSON.stringify({ ConfigurationSetName: SES_EVENTS_CONFIGURATION_SET }),
   });
-  if (cs.status !== 200 && !/AlreadyExists/.test(cs.text)) throw new Error(`CreateConfigurationSet ${cs.status}: ${cs.text}`);
+  if (cs.status !== 200 && !/AlreadyExists|already exists/i.test(cs.text)) throw new Error(`CreateConfigurationSet ${cs.status}: ${cs.text}`);
   log.push(`configuration set ${SES_EVENTS_CONFIGURATION_SET} ${cs.status === 200 ? "created" : "already there"}`);
 
   const destination = {
@@ -91,7 +91,7 @@ export async function setupSesEvents(): Promise<string[]> {
     body: JSON.stringify({ EventDestinationName: "sns-product-mail-events", EventDestination: destination }),
   });
   if (ed.status !== 200) {
-    if (!/AlreadyExists/.test(ed.text)) throw new Error(`CreateEventDestination ${ed.status}: ${ed.text}`);
+    if (!/AlreadyExists|already exists/i.test(ed.text)) throw new Error(`CreateEventDestination ${ed.status}: ${ed.text}`);
     const up = await awsRequest(c, {
       service: "ses",
       method: "PUT",
@@ -199,7 +199,7 @@ export async function carryPostmarkSuppressionsToSes(apply: boolean) {
   for (const email of plan.contactOptOuts) {
     const created = await sesWithRetry(c, { service: "ses", method: "POST", path: listPath, body: JSON.stringify({ EmailAddress: email, UnsubscribeAll: true }) });
     if (created.status !== 200) {
-      if (!/AlreadyExists/.test(created.text)) throw new Error(`CreateContact ${email} ${created.status}: ${created.text}`);
+      if (!/AlreadyExists|already exists/i.test(created.text)) throw new Error(`CreateContact ${email} ${created.status}: ${created.text}`);
       const up = await sesWithRetry(c, { service: "ses", method: "PUT", path: `${listPath}/${encodeURIComponent(email)}`, body: JSON.stringify({ UnsubscribeAll: true }) });
       if (up.status !== 200) throw new Error(`UpdateContact ${email} ${up.status}: ${up.text}`);
     }
