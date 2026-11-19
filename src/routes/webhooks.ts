@@ -1,5 +1,5 @@
 import { messageOf } from "../lib/db-error.js";
-import { Router, Request, Response } from "express";
+import express, { Router, Request, Response } from "express";
 import { db } from "../db";
 import {
   postmarkDeliveries,
@@ -14,6 +14,7 @@ import {
   GatewayForwardError,
 } from "../lib/email-gateway-client";
 import { upsertSilver } from "../lib/silver";
+import { isAwsSnsUrl, recordSesEvent, SnsMessage, verifySnsMessage } from "../lib/ses-events";
 
 const router = Router();
 
@@ -88,6 +89,48 @@ router.post("/postmark", async (req: Request, res: Response) => {
       error: "Failed to process webhook",
       details: messageOf(error),
     });
+  }
+});
+
+/**
+ * POST /webhooks/ses
+ * Amazon SNS delivery of SES events (bounce, complaint, delivery, list unsubscribe)
+ * for our product mail (src/lib/ses-events.ts). SNS posts text/plain JSON.
+ * - signature or topic wrong → 403, nothing recorded
+ * - SubscriptionConfirmation of OUR topic → confirmed by GETting its SubscribeURL
+ * - Notification → recorded into the same bronze tables as Postmark's, 200
+ * - DB error → 500 (SNS retries)
+ */
+router.post("/ses", express.text({ type: "*/*", limit: "1mb" }), async (req: Request, res: Response) => {
+  let message: SnsMessage;
+  try {
+    message = (typeof req.body === "string" ? JSON.parse(req.body) : req.body) as SnsMessage;
+  } catch {
+    return res.status(400).json({ error: "Body is not JSON" });
+  }
+  try {
+    await verifySnsMessage(message);
+  } catch (err) {
+    console.error(`[ses-events] refused SNS message ${message?.MessageId}: ${messageOf(err)}`);
+    return res.status(403).json({ error: "Not a verified SNS message of our topic" });
+  }
+  try {
+    if (message.Type === "SubscriptionConfirmation") {
+      if (!isAwsSnsUrl(message.SubscribeURL)) throw new Error(`SubscribeURL ${message.SubscribeURL} is not AWS SNS`);
+      const r = await fetch(message.SubscribeURL!);
+      if (!r.ok) throw new Error(`SubscribeURL answered ${r.status}`);
+      console.log(`[ses-events] subscription to ${message.TopicArn} confirmed`);
+      return res.status(200).json({ success: true, confirmed: true });
+    }
+    if (message.Type !== "Notification") {
+      console.warn(`[ses-events] SNS ${message.Type} on ${message.TopicArn}`);
+      return res.status(200).json({ success: true, ignored: message.Type });
+    }
+    const outcome = await recordSesEvent(message.Message);
+    return res.status(200).json({ success: true, outcome });
+  } catch (err) {
+    console.error(`[ses-events] failed on SNS message ${message.MessageId}: ${messageOf(err)}`);
+    return res.status(500).json({ error: "Failed to process SES event", details: messageOf(err) });
   }
 });
 
