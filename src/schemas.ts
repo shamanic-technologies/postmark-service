@@ -165,6 +165,14 @@ export const SendEmailResponseSchema = z
     messageId: z.string().optional(),
     submittedAt: z.string().optional().openapi({ format: "date-time" }),
     sendingId: z.string().optional(),
+    provider: z.literal("ses").optional().openapi({
+      description:
+        "Present only when Amazon SES carried the send (our own product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119). Absent = Postmark.",
+    }),
+    providerMessageId: z.string().optional().openapi({
+      description:
+        "SES's own MessageId (SES sends only). The delivered Message-ID header is <providerMessageId@email.amazonses.com>. `messageId` stays this service's uuid for the send.",
+    }),
     errorCode: z.number().optional(),
     message: z.string().optional(),
   })
@@ -211,6 +219,14 @@ export const PlatformSendResponseSchema = z
     submittedAt: z.string().optional().openapi({ format: "date-time" }),
     sendingId: z.string(),
     runId: z.string().openapi({ description: "The org-less platform run the send cost is declared on" }),
+    provider: z.literal("ses").optional().openapi({
+      description:
+        "Present only when Amazon SES carried the send (our own product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119). Absent = Postmark.",
+    }),
+    providerMessageId: z.string().optional().openapi({
+      description:
+        "SES's own MessageId (SES sends only). The delivered Message-ID header is <providerMessageId@email.amazonses.com>. `messageId` stays this service's uuid for the send.",
+    }),
   })
   .openapi("PlatformSendResponse");
 
@@ -222,6 +238,7 @@ export const PlatformSendErrorSchema = z
       "PLATFORM_PAYER_REQUIRED",
       "IDENTITY_NOT_ALLOWED",
       "POSTMARK_REJECTED",
+      "SES_REJECTED",
       "SEND_FAILED",
     ]),
     details: z.any().optional(),
@@ -277,6 +294,14 @@ const BatchResultItemSchema = z.object({
   success: z.boolean(),
   messageId: z.string().optional(),
   sendingId: z.string().optional(),
+    provider: z.literal("ses").optional().openapi({
+      description:
+        "Present only when Amazon SES carried the send (our own product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119). Absent = Postmark.",
+    }),
+    providerMessageId: z.string().optional().openapi({
+      description:
+        "SES's own MessageId (SES sends only). The delivered Message-ID header is <providerMessageId@email.amazonses.com>. `messageId` stays this service's uuid for the send.",
+    }),
   errorCode: z.number().optional(),
   message: z.string().optional(),
   error: z.string().optional(),

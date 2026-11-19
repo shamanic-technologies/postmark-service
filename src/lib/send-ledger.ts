@@ -31,7 +31,12 @@ export interface SendLedger {
    * `idempotencyKey` makes a replay (catch-up after a lost answer) return the
    * original cost row instead of writing a second one.
    */
-  addSendCost(costSource: "platform" | "org", idempotencyKey?: string): Promise<void>;
+  addSendCost(
+    costSource: "platform" | "org",
+    idempotencyKey?: string,
+    /** `postmark-email-send` | `ses-email-send` (send-transport.ts `costNameFor`). */
+    costName?: string
+  ): Promise<void>;
   complete(): Promise<void>;
   fail(error?: string): Promise<void>;
 }
@@ -98,10 +103,10 @@ export function attachSendLedger(params: AttachSendLedgerParams): SendLedger {
   if (!orgId) throw new Error(`org-paid send run ${runId} has no org_id`);
   return {
     runId,
-    addSendCost: async (costSource, idempotencyKey) => {
+    addSendCost: async (costSource, idempotencyKey, costName = "postmark-email-send") => {
       await addCosts(
         runId,
-        [{ costName: "postmark-email-send", quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
+        [{ costName, quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
         orgId,
         userId ?? "",
         trackingHeaders
@@ -137,10 +142,10 @@ export async function openPlatformSendLedger(
 function platformLedger(runId: string, trackingHeaders: Record<string, string>): SendLedger {
   return {
     runId,
-    addSendCost: async (costSource, idempotencyKey) => {
+    addSendCost: async (costSource, idempotencyKey, costName = "postmark-email-send") => {
       await addPlatformCosts(
         runId,
-        [{ costName: "postmark-email-send", quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
+        [{ costName, quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
         trackingHeaders
       );
     },

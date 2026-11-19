@@ -132,14 +132,15 @@ describe("POST /internal/platform-send — org-less, platform-paid", () => {
     const res = await request(app)
       .post("/internal/platform-send")
       .set(getServiceHeaders())
-      .send({ ...body, stream: undefined, from: "hello@distribute.you" });
+      // A From off distribute.you stays on Postmark (SES carries @distribute.you only, send-transport.ts).
+      .send({ ...body, stream: undefined, from: "hello@example.org" });
 
     expect(res.status).toBe(200);
     expect(vi.mocked(getPlatformKey).mock.calls.map((c) => c[0])).toEqual([
       "postmark",
       "postmark-broadcast-stream",
     ]);
-    expect(vi.mocked(sendEmailWithToken).mock.calls[0][0].from).toBe("hello@distribute.you");
+    expect(vi.mocked(sendEmailWithToken).mock.calls[0][0].from).toBe("hello@example.org");
   });
 
   it("refuses a request that is not platform-paid (absent payer)", async () => {
