@@ -27,6 +27,18 @@ export const SES_KEY_PROVIDER = "aws-ses-transactional";
  * again on this list. A mail with no such link carries no list (sign-up code).
  */
 export const SES_PRODUCT_CONTACT_LIST = "distribute-product-mail";
+
+/**
+ * Every SES send names this configuration set: its event destination publishes
+ * BOUNCE, COMPLAINT, DELIVERY and SUBSCRIPTION (list unsubscribe) to the SNS topic
+ * `SES_EVENTS_TOPIC_ARN`, which posts to `POST /webhooks/ses` (ses-events.ts).
+ * Created by `scripts/setup-ses-events.ts` (idempotent). Missing set = SES refuses
+ * the send (fail loud), never a send whose bounces nobody hears.
+ */
+export const SES_EVENTS_CONFIGURATION_SET = "distribute-product-mail-events";
+export const SES_EVENTS_TOPIC_NAME = "ses-product-mail-events";
+/** Account 030693215272 = SES account `distribute-transactional`, us-east-1. */
+export const SES_EVENTS_TOPIC_ARN = `arn:aws:sns:us-east-1:030693215272:${SES_EVENTS_TOPIC_NAME}`;
 const POSTMARK_UNSUBSCRIBE_TAG = /\{\{\{\s*pm:unsubscribe\s*\}\}\}/g;
 const SES_UNSUBSCRIBE_TAG = "{{amazonSESUnsubscribeUrl}}";
 
@@ -58,6 +70,17 @@ export function parseSesCredentials(raw: string): SesCredentials {
 }
 
 // ─── SigV4 ───────────────────────────────────────────────────────────────────
+
+/**
+ * SigV4 canonical URI for every AWS service but S3: each path segment URI-encoded
+ * AGAIN (a path carrying `%2B` signs as `%252B`). Plain paths are unchanged.
+ */
+export function canonicalUri(path: string): string {
+  return path
+    .split("/")
+    .map((seg) => encodeURIComponent(seg).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`))
+    .join("/");
+}
 
 function sha256Hex(data: string): string {
   return createHash("sha256").update(data, "utf8").digest("hex");
@@ -99,7 +122,7 @@ export function signAwsRequest(params: {
   const canonicalHeaders = signedHeaders.map((h) => `${h}:${headers[h].trim()}\n`).join("");
   const canonicalRequest = [
     method,
-    path,
+    canonicalUri(path),
     "",
     canonicalHeaders,
     signedHeaders.join(";"),
@@ -222,6 +245,7 @@ export function buildSesSendBody(params: SesSendParams): Record<string, unknown>
     Destination: destination,
     ...(replyTo.length > 0 && { ReplyToAddresses: replyTo }),
     Content: { Simple: simple },
+    ConfigurationSetName: SES_EVENTS_CONFIGURATION_SET,
     ...(hasUnsubscribe && { ListManagementOptions: { ContactListName: SES_PRODUCT_CONTACT_LIST } }),
     ...(params.tag && {
       EmailTags: [{ Name: "tag", Value: params.tag.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256) }],
@@ -255,4 +279,32 @@ export async function sesSendEmail(
     console.error("[ses] SendEmail error:", error);
     return { success: false, errorCode: -1, message: `SES unreachable: ${messageOf(error)}` };
   }
+}
+
+/**
+ * One signed AWS call (SES v2 JSON, SES v1 / SNS query APIs). Used by the setup
+ * and carry-over scripts; never throws on a non-2xx (the caller reads `status`).
+ */
+export async function awsRequest(
+  creds: SesCredentials,
+  req: { service: "ses" | "sns"; method: string; path: string; body?: string; contentType?: string }
+): Promise<{ status: number; text: string }> {
+  const host = req.service === "sns" ? `sns.${creds.region}.amazonaws.com` : `email.${creds.region}.amazonaws.com`;
+  const body = req.body ?? "";
+  const headers = signAwsRequest({
+    method: req.method,
+    host,
+    path: req.path,
+    body,
+    service: req.service,
+    creds,
+    now: new Date(),
+    contentType: req.contentType,
+  });
+  const response = await fetch(`https://${host}${req.path}`, {
+    method: req.method,
+    headers,
+    body: req.method === "GET" || req.method === "DELETE" ? undefined : body,
+  });
+  return { status: response.status, text: await response.text() };
 }

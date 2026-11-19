@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   amzDate,
+  canonicalUri,
   buildSesSendBody,
   encodeDisplayName,
   addressDomain,
@@ -37,6 +38,13 @@ describe("signAwsRequest (SigV4)", () => {
     );
     expect(signAwsRequest(args).authorization).toBe(a.authorization);
     expect(signAwsRequest({ ...args, body: "{\"x\":1}" }).authorization).not.toBe(a.authorization);
+  });
+});
+
+describe("canonicalUri", () => {
+  it("double-encodes an encoded segment, leaves a plain path alone", () => {
+    expect(canonicalUri("/v2/email/outbound-emails")).toBe("/v2/email/outbound-emails");
+    expect(canonicalUri("/v2/email/suppression/addresses/a%2Bb%40x.com")).toBe("/v2/email/suppression/addresses/a%252Bb%2540x.com");
   });
 });
 
@@ -88,6 +96,7 @@ describe("buildSesSendBody — same message as the Postmark send", () => {
         },
       },
       EmailTags: [{ Name: "tag", Value: "agent_signup_code" }],
+      ConfigurationSetName: "distribute-product-mail-events",
     });
   });
   it("adds no cc/bcc/reply-to/headers/tag the caller did not give (no recipient of our own)", () => {
@@ -96,6 +105,8 @@ describe("buildSesSendBody — same message as the Postmark send", () => {
       FromEmailAddress: "a@distribute.you",
       Destination: { ToAddresses: ["x@y.com"] },
       Content: { Simple: { Subject: { Data: "s", Charset: "UTF-8" }, Body: { Text: { Data: "t", Charset: "UTF-8" } } } },
+      // Every SES send publishes its bounces/complaints (ses-events.ts).
+      ConfigurationSetName: "distribute-product-mail-events",
     });
   });
 });
