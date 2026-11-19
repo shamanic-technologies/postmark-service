@@ -14,6 +14,7 @@ import { openSendLedger } from "../lib/send-ledger";
 import { resolveOutcomeSubject } from "../lib/outcome-declaration";
 import { scheduleLedgerSettlement } from "../lib/ledger-settlement";
 import { sendSupportFor } from "../lib/send-support";
+import { chooseSendTransport, costNameFor, deliverViaSes, SesDeliveryResult, SendTransport } from "../lib/send-transport";
 
 const router = Router();
 
@@ -68,13 +69,17 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
     //    a platform-paid send costs the org nothing, so there is nothing to
     //    authorize — and authorizing it is what let a billing notification
     //    re-enter the charge path it was reporting on (2026-08-29).
+    // 3b. Provider: our own product mail (platform key, From @distribute.you) leaves
+    //     through SES; anything else stays on Postmark (send-transport.ts).
+    const transport = chooseSendTransport({ keySource: decryptedKey.keySource, from: fromAddress });
+
     const payer = resolvePayer({ payer: body.payer, tag: body.tag });
     if (decryptedKey.keySource === "platform" && payer === "org") {
       const auth = await authorizeCredits({
         orgId,
         userId,
         runId: parentRunId,
-        items: [{ costName: "postmark-email-send", quantity: 1 }],
+        items: [{ costName: costNameFor(transport), quantity: 1 }],
         trackingHeaders,
       });
       if (!auth.sufficient) {
@@ -142,7 +147,8 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
         caller,
       };
 
-      const result = await sendEmail(sendParams);
+      const result: SesDeliveryResult =
+        transport === "ses" ? await deliverViaSes(sendParams, caller) : await sendEmail(sendParams);
       const outcomeSubject = resolveOutcomeSubject({ outcomeSubject: body.outcomeSubject, leadId: body.leadId });
 
       // 7. Record in database
@@ -154,7 +160,9 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           fromEmail: fromAddress,
           subject: body.subject,
           tag: body.tag,
-          messageStream,
+          messageStream: transport === "ses" ? null : messageStream,
+          provider: transport,
+          providerMessageId: result.providerMessageId ?? null,
           errorCode: result.errorCode,
           message: result.message,
           submittedAt: result.submittedAt,
@@ -196,6 +204,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           messageId: result.messageId,
           submittedAt: result.submittedAt,
           sendingId: sending.id,
+          ...(transport === "ses" && { provider: "ses", providerMessageId: result.providerMessageId }),
         });
       } else {
         res.status(400).json({
@@ -214,6 +223,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           userId,
           status: result.success ? "completed" : "failed",
           costSource: result.success ? decryptedKey.keySource : null,
+          provider: transport,
           error: result.success ? null : result.message ?? null,
           trackingHeaders,
         },
@@ -285,6 +295,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
   // makes exactly the key-service calls it made before the option existed.
   let transactionalStream: string | undefined;
   let defaultFrom: string;
+  const transports: SendTransport[] = [];
   try {
     const batchCaller = { method: "POST" as const, path: "/send/batch" };
     const decryptedKey = await getOrgKey(orgId, userId, "postmark", batchCaller, trackingHeaders);
@@ -298,15 +309,23 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     // Credit authorization for the batch (platform keys only). Only the org-paid
     // emails are authorized; platform-paid ones cost the org nothing, so a batch
     // made entirely of them skips the gate.
-    const billableCount = emails.filter(
-      (e) => resolvePayer({ payer: e.payer, tag: e.tag }) === "org"
-    ).length;
-    if (keySource === "platform" && billableCount > 0) {
+    // Provider per email (send-transport.ts), decided before any send so a bad
+    // kill-switch value refuses the whole batch up front.
+    for (const e of emails) {
+      transports.push(chooseSendTransport({ keySource, from: e.from ?? defaultFrom }));
+    }
+    const billable = new Map<string, number>();
+    emails.forEach((e, i) => {
+      if (resolvePayer({ payer: e.payer, tag: e.tag }) !== "org") return;
+      const name = costNameFor(transports[i]);
+      billable.set(name, (billable.get(name) ?? 0) + 1);
+    });
+    if (keySource === "platform" && billable.size > 0) {
       const auth = await authorizeCredits({
         orgId,
         userId,
         runId: parentRunId,
-        items: [{ costName: "postmark-email-send", quantity: billableCount }],
+        items: [...billable].map(([costName, quantity]) => ({ costName, quantity })),
         trackingHeaders,
       });
       if (!auth.sufficient) {
@@ -323,7 +342,8 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     });
   }
 
-  for (const email of emails) {
+  for (const [index, email] of emails.entries()) {
+    const transport = transports[index];
     try {
       // Per-email tracking: body takes priority for campaignId/featureSlug/workflowSlug, brandIds from header only
       const emailCampaignId = email.campaignId ?? headerCampaignId;
@@ -393,7 +413,8 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
           caller: batchCaller,
         };
 
-        const result = await sendEmail(sendParams);
+        const result: SesDeliveryResult =
+          transport === "ses" ? await deliverViaSes(sendParams, batchCaller) : await sendEmail(sendParams);
         const outcomeSubject = resolveOutcomeSubject({ outcomeSubject: email.outcomeSubject, leadId: email.leadId });
 
         // 3. Record in database
@@ -405,7 +426,9 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             fromEmail: fromAddress,
             subject: email.subject,
             tag: email.tag,
-            messageStream,
+            messageStream: transport === "ses" ? null : messageStream,
+            provider: transport,
+            providerMessageId: result.providerMessageId ?? null,
             errorCode: result.errorCode,
             message: result.message,
             submittedAt: result.submittedAt,
@@ -444,6 +467,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             userId,
             status: result.success ? "completed" : "failed",
             costSource: result.success ? keySource : null,
+            provider: transport,
             error: result.success ? null : result.message ?? null,
             trackingHeaders,
           },
@@ -464,6 +488,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
           success: result.success,
           messageId: result.messageId,
           sendingId: sending.id,
+          ...(transport === "ses" && { provider: "ses", providerMessageId: result.providerMessageId }),
           errorCode: result.errorCode,
           message: result.message,
         });

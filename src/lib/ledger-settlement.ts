@@ -6,6 +6,7 @@ import { RunsHttpError } from "./runs-client";
 import { attachSendLedger } from "./send-ledger";
 import { catchUpOwedDeclarations, declareSendOutcome, OwedDeclaration } from "./outcome-declaration";
 import type { Payer } from "./payer";
+import { costNameFor, type SendTransport } from "./send-transport";
 
 /**
  * The run ledger of a send, settled AFTER the send answered its caller
@@ -40,6 +41,8 @@ export interface OwedLedger {
   userId: string | null;
   status: LedgerStatus;
   costSource: "platform" | "org" | null;
+  /** Which provider carried the send: picks the cost name (send-transport.ts). Absent = postmark. */
+  provider?: SendTransport;
   /** Postmark's refusal, carried onto a failed run. */
   error: string | null;
   trackingHeaders: Record<string, string>;
@@ -89,7 +92,11 @@ export async function settleSendLedger(owed: OwedLedger): Promise<boolean> {
     });
     if (owed.status === "completed") {
       if (!owed.costSource) throw new Error("completed send has no ledger_cost_source");
-      await ledger.addSendCost(owed.costSource, sendCostIdempotencyKey(owed.sendingId));
+      await ledger.addSendCost(
+        owed.costSource,
+        sendCostIdempotencyKey(owed.sendingId),
+        costNameFor(owed.provider ?? "postmark")
+      );
       await ledger.complete();
     } else {
       await ledger.fail(owed.error ?? undefined);
@@ -191,6 +198,7 @@ export async function catchUpOwedLedgers(now: number = Date.now()): Promise<numb
         userId: r.userId,
         status: r.ledgerStatus as LedgerStatus,
         costSource: r.ledgerCostSource as "platform" | "org" | null,
+        provider: r.provider as SendTransport,
         error: r.message,
         trackingHeaders: trackingHeadersOf(r),
       });
