@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   amzDate,
+  SES_MARKETING,
   canonicalUri,
   buildSesSendBody,
   encodeDisplayName,
@@ -129,6 +130,18 @@ describe("buildSesSendBody — the gateway's unsubscribe footer keeps working", 
     const b = buildSesSendBody({ from: "hello@distribute.you", to: "x@y.com", subject: "Code", htmlBody: "<p>123</p>" }) as any;
     expect(b.ListManagementOptions).toBeUndefined();
     expect(b.Content.Simple.Body.Html.Data).toBe("<p>123</p>");
+  });
+});
+
+describe("buildSesSendBody — marketing account", () => {
+  it("names the newsletter's own configuration set and contact list", () => {
+    const b = buildSesSendBody(
+      { from: "kevin@news.distribute.you", to: "x@y.com", subject: "News", htmlBody: '<a href="{{{pm:unsubscribe}}}">Unsubscribe</a>' },
+      SES_MARKETING
+    ) as any;
+    expect(b.ConfigurationSetName).toBe("distribute-newsletter-events");
+    expect(b.ListManagementOptions).toEqual({ ContactListName: "distribute-newsletter" });
+    expect(b.Content.Simple.Body.Html.Data).toContain("{{amazonSESUnsubscribeUrl}}");
   });
 });
 

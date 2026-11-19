@@ -9,7 +9,8 @@ import {
   postmarkSubscriptionChanges,
 } from "../db/schema";
 import { upsertSilver } from "./silver";
-import { SES_EVENTS_TOPIC_ARN } from "./ses-client";
+import { SES_ACCOUNTS } from "./ses-client";
+import { getPlatformKey } from "./key-client";
 
 /**
  * SES bounces, complaints, deliveries and list unsubscribes, recorded like
@@ -80,8 +81,11 @@ async function fetchCert(url: string): Promise<string> {
 }
 
 /** Throws with the reason when the message is not a genuine SNS message of OUR topic. */
-export async function verifySnsMessage(m: SnsMessage, expectedTopicArn = SES_EVENTS_TOPIC_ARN): Promise<void> {
-  if (m.TopicArn !== expectedTopicArn) throw new Error(`topic ${m.TopicArn} is not ours`);
+export async function verifySnsMessage(
+  m: SnsMessage,
+  ourTopicArns: string[] = SES_ACCOUNTS.map((a) => a.topicArn)
+): Promise<void> {
+  if (!ourTopicArns.includes(m.TopicArn)) throw new Error(`topic ${m.TopicArn} is not ours`);
   if (!isAwsSnsUrl(m.SigningCertURL, ".pem")) throw new Error(`signing cert URL ${m.SigningCertURL} is not an AWS SNS URL`);
   const algorithm = m.SignatureVersion === "1" ? "RSA-SHA1" : m.SignatureVersion === "2" ? "RSA-SHA256" : null;
   if (!algorithm) throw new Error(`unknown SignatureVersion ${m.SignatureVersion}`);
@@ -138,7 +142,7 @@ export async function recordSesEvent(raw: string): Promise<SesEventOutcome> {
   if (!sesMessageId) throw new Error(`SES event ${type} carries no mail.messageId`);
 
   const [sending] = await db
-    .select({ messageId: postmarkSendings.messageId, tag: postmarkSendings.tag })
+    .select({ messageId: postmarkSendings.messageId, tag: postmarkSendings.tag, provider: postmarkSendings.provider })
     .from(postmarkSendings)
     .where(eq(postmarkSendings.providerMessageId, sesMessageId))
     .limit(1);
@@ -176,6 +180,9 @@ export async function recordSesEvent(raw: string): Promise<SesEventOutcome> {
           .onConflictDoNothing();
       }
       await upsertSilver(messageId);
+      if (sending.provider === "ses-marketing" && b.bounceType === "Permanent") {
+        await mirrorOptOutToPostmark(b.bouncedRecipients.map((r) => r.emailAddress));
+      }
       return "recorded";
     }
     case "Complaint": {
@@ -194,6 +201,9 @@ export async function recordSesEvent(raw: string): Promise<SesEventOutcome> {
           subject: event.mail.commonHeaders?.subject ?? null,
         })
         .onConflictDoNothing();
+      if (sending.provider === "ses-marketing") {
+        await mirrorOptOutToPostmark(c.complainedRecipients.map((r) => r.emailAddress));
+      }
       return "recorded";
     }
     case "Delivery": {
@@ -231,10 +241,43 @@ export async function recordSesEvent(raw: string): Promise<SesEventOutcome> {
         })
         .onConflictDoNothing();
       await upsertSilver(messageId);
+      if (sending.provider === "ses-marketing" && (s.newTopicPreferences?.unsubscribeAll ?? true)) {
+        await mirrorOptOutToPostmark(event.mail.destination ?? []);
+      }
       return "recorded";
     }
     default:
       console.warn(`[ses-events] event type ${type} not recorded (message ${sesMessageId})`);
       return "ignored";
   }
+}
+
+// ─── Newsletter opt-outs → Postmark's broadcast suppression list ─────────────
+
+/**
+ * transactional-email-service reads the newsletter's opt-out state from ONE place,
+ * Postmark's broadcast-stream suppression list, before every slice it sends (its
+ * suppression.ts). So an unsubscribe, hard bounce or complaint on an SES-sent
+ * newsletter is written there too (a ManualSuppression), and the next send skips
+ * the person whichever provider carries it. Fails loud: the SNS delivery answers
+ * 500 and SNS retries (the bronze rows are idempotent).
+ */
+export async function mirrorOptOutToPostmark(emails: string[]): Promise<void> {
+  const list = emails.map((e) => e.trim()).filter(Boolean);
+  if (list.length === 0) return;
+  const caller = { method: "POST", path: "/webhooks/ses" };
+  const token = await getPlatformKey("postmark", caller);
+  const stream = await getPlatformKey("postmark-broadcast-stream", caller);
+  const r = await fetch(`https://api.postmarkapp.com/message-streams/${encodeURIComponent(stream)}/suppressions`, {
+    method: "POST",
+    headers: { "X-Postmark-Server-Token": token, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ Suppressions: list.map((EmailAddress) => ({ EmailAddress })) }),
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`Postmark suppression write ${r.status}: ${text.slice(0, 300)}`);
+  const failed = ((JSON.parse(text) as { Suppressions?: { EmailAddress: string; Status: string; Message?: string }[] }).Suppressions ?? []).filter(
+    (x) => x.Status !== "Suppressed"
+  );
+  if (failed.length > 0) throw new Error(`Postmark refused to suppress ${JSON.stringify(failed).slice(0, 300)}`);
+  console.log(`[ses-events] newsletter opt-out mirrored to Postmark broadcast suppression: ${list.length} address(es)`);
 }

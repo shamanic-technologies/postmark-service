@@ -14,7 +14,7 @@ import { openSendLedger } from "../lib/send-ledger";
 import { resolveOutcomeSubject } from "../lib/outcome-declaration";
 import { scheduleLedgerSettlement } from "../lib/ledger-settlement";
 import { sendSupportFor } from "../lib/send-support";
-import { chooseSendTransport, costNameFor, deliverViaSes, SesDeliveryResult, SendTransport } from "../lib/send-transport";
+import { resolveSendTransport, costNameFor, deliverViaSes, SesDeliveryResult, SendTransport } from "../lib/send-transport";
 
 const router = Router();
 
@@ -71,7 +71,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
     //    re-enter the charge path it was reporting on (2026-08-29).
     // 3b. Provider: our own product mail (platform key, From @distribute.you) leaves
     //     through SES; anything else stays on Postmark (send-transport.ts).
-    const transport = chooseSendTransport({ keySource: decryptedKey.keySource, from: fromAddress });
+    const transport = await resolveSendTransport({ keySource: decryptedKey.keySource, from: fromAddress });
 
     const payer = resolvePayer({ payer: body.payer, tag: body.tag });
     if (decryptedKey.keySource === "platform" && payer === "org") {
@@ -148,7 +148,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
       };
 
       const result: SesDeliveryResult =
-        transport === "ses" ? await deliverViaSes(sendParams, caller) : await sendEmail(sendParams);
+        transport !== "postmark" ? await deliverViaSes(sendParams, caller, transport) : await sendEmail(sendParams);
       const outcomeSubject = resolveOutcomeSubject({ outcomeSubject: body.outcomeSubject, leadId: body.leadId });
 
       // 7. Record in database
@@ -160,7 +160,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           fromEmail: fromAddress,
           subject: body.subject,
           tag: body.tag,
-          messageStream: transport === "ses" ? null : messageStream,
+          messageStream: transport !== "postmark" ? null : messageStream,
           provider: transport,
           providerMessageId: result.providerMessageId ?? null,
           errorCode: result.errorCode,
@@ -204,7 +204,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           messageId: result.messageId,
           submittedAt: result.submittedAt,
           sendingId: sending.id,
-          ...(transport === "ses" && { provider: "ses", providerMessageId: result.providerMessageId }),
+          ...(transport !== "postmark" && { provider: transport, providerMessageId: result.providerMessageId }),
         });
       } else {
         res.status(400).json({
@@ -312,7 +312,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     // Provider per email (send-transport.ts), decided before any send so a bad
     // kill-switch value refuses the whole batch up front.
     for (const e of emails) {
-      transports.push(chooseSendTransport({ keySource, from: e.from ?? defaultFrom }));
+      transports.push(await resolveSendTransport({ keySource, from: e.from ?? defaultFrom }));
     }
     const billable = new Map<string, number>();
     emails.forEach((e, i) => {
@@ -414,7 +414,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
         };
 
         const result: SesDeliveryResult =
-          transport === "ses" ? await deliverViaSes(sendParams, batchCaller) : await sendEmail(sendParams);
+          transport !== "postmark" ? await deliverViaSes(sendParams, batchCaller, transport) : await sendEmail(sendParams);
         const outcomeSubject = resolveOutcomeSubject({ outcomeSubject: email.outcomeSubject, leadId: email.leadId });
 
         // 3. Record in database
@@ -426,7 +426,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             fromEmail: fromAddress,
             subject: email.subject,
             tag: email.tag,
-            messageStream: transport === "ses" ? null : messageStream,
+            messageStream: transport !== "postmark" ? null : messageStream,
             provider: transport,
             providerMessageId: result.providerMessageId ?? null,
             errorCode: result.errorCode,
@@ -488,7 +488,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
           success: result.success,
           messageId: result.messageId,
           sendingId: sending.id,
-          ...(transport === "ses" && { provider: "ses", providerMessageId: result.providerMessageId }),
+          ...(transport !== "postmark" && { provider: transport, providerMessageId: result.providerMessageId }),
           errorCode: result.errorCode,
           message: result.message,
         });

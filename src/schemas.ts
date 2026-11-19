@@ -165,9 +165,9 @@ export const SendEmailResponseSchema = z
     messageId: z.string().optional(),
     submittedAt: z.string().optional().openapi({ format: "date-time" }),
     sendingId: z.string().optional(),
-    provider: z.literal("ses").optional().openapi({
+    provider: z.enum(["ses", "ses-marketing"]).optional().openapi({
       description:
-        "Present only when Amazon SES carried the send (our own product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119). Absent = Postmark.",
+        "Present only when Amazon SES carried the send. `ses` = the transactional SES account (our product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119); `ses-marketing` = the marketing SES account (the newsletter, From @news.distribute.you; SES-NEWSLETTER-1119). Absent = Postmark.",
     }),
     providerMessageId: z.string().optional().openapi({
       description:
@@ -219,9 +219,9 @@ export const PlatformSendResponseSchema = z
     submittedAt: z.string().optional().openapi({ format: "date-time" }),
     sendingId: z.string(),
     runId: z.string().openapi({ description: "The org-less platform run the send cost is declared on" }),
-    provider: z.literal("ses").optional().openapi({
+    provider: z.enum(["ses", "ses-marketing"]).optional().openapi({
       description:
-        "Present only when Amazon SES carried the send (our own product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119). Absent = Postmark.",
+        "Present only when Amazon SES carried the send. `ses` = the transactional SES account (our product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119); `ses-marketing` = the marketing SES account (the newsletter, From @news.distribute.you; SES-NEWSLETTER-1119). Absent = Postmark.",
     }),
     providerMessageId: z.string().optional().openapi({
       description:
@@ -294,9 +294,9 @@ const BatchResultItemSchema = z.object({
   success: z.boolean(),
   messageId: z.string().optional(),
   sendingId: z.string().optional(),
-    provider: z.literal("ses").optional().openapi({
+    provider: z.enum(["ses", "ses-marketing"]).optional().openapi({
       description:
-        "Present only when Amazon SES carried the send (our own product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119). Absent = Postmark.",
+        "Present only when Amazon SES carried the send. `ses` = the transactional SES account (our product mail: platform key, From @distribute.you; SES-PLATFORM-SENDS-1119); `ses-marketing` = the marketing SES account (the newsletter, From @news.distribute.you; SES-NEWSLETTER-1119). Absent = Postmark.",
     }),
     providerMessageId: z.string().optional().openapi({
       description:
