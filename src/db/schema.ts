@@ -75,6 +75,13 @@ export const postmarkSendings = pgTable(
     // SES's own MessageId (Message-ID header <id@email.amazonses.com>). For an SES
     // send message_id is OUR minted uuid; NULL for Postmark (message_id is its id).
     providerMessageId: text("provider_message_id"),
+    // SES-BCC-1127 (migration 0023): the OTHER SES messages a send was split into
+    // (blind copy, extra To/Cc). Their events are recognised and not recorded: the
+    // silver row is the person the send is about. NULL = one message.
+    providerCopyMessageIds: text("provider_copy_message_ids").array(),
+    // Every address the send named (To + Cc + Bcc): the units its run's cost
+    // declares, since both providers bill per recipient. NULL = 1 (before 0023).
+    recipientCount: integer("recipient_count"),
     metadata: jsonb("metadata"), // Additional context
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -89,6 +96,7 @@ export const postmarkSendings = pgTable(
     index("idx_sendings_ledger_pending")
       .on(table.createdAt)
       .where(sql`${table.ledgerStatus} IS NOT NULL AND ${table.ledgerSettledAt} IS NULL AND ${table.ledgerSettleError} IS NULL`),
+    index("idx_sendings_provider_copy_message_ids").using("gin", table.providerCopyMessageIds),
     index("idx_sendings_org").on(table.orgId),
     index("idx_sendings_run").on(table.runId),
     index("idx_sendings_parent_run").on(table.parentRunId),

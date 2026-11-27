@@ -35,7 +35,9 @@ export interface SendLedger {
     costSource: "platform" | "org",
     idempotencyKey?: string,
     /** `postmark-email-send` | `ses-email-send` (send-transport.ts `costNameFor`). */
-    costName?: string
+    costName?: string,
+    /** Billed units = every address the send named (To + Cc + Bcc). Absent = 1. */
+    quantity?: number
   ): Promise<void>;
   complete(): Promise<void>;
   fail(error?: string): Promise<void>;
@@ -103,10 +105,10 @@ export function attachSendLedger(params: AttachSendLedgerParams): SendLedger {
   if (!orgId) throw new Error(`org-paid send run ${runId} has no org_id`);
   return {
     runId,
-    addSendCost: async (costSource, idempotencyKey, costName = "postmark-email-send") => {
+    addSendCost: async (costSource, idempotencyKey, costName = "postmark-email-send", quantity = 1) => {
       await addCosts(
         runId,
-        [{ costName, quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
+        [{ costName, quantity, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
         orgId,
         userId ?? "",
         trackingHeaders
@@ -142,10 +144,10 @@ export async function openPlatformSendLedger(
 function platformLedger(runId: string, trackingHeaders: Record<string, string>): SendLedger {
   return {
     runId,
-    addSendCost: async (costSource, idempotencyKey, costName = "postmark-email-send") => {
+    addSendCost: async (costSource, idempotencyKey, costName = "postmark-email-send", quantity = 1) => {
       await addPlatformCosts(
         runId,
-        [{ costName, quantity: 1, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
+        [{ costName, quantity, costSource, ...(idempotencyKey ? { idempotencyKey } : {}) }],
         trackingHeaders
       );
     },

@@ -250,6 +250,8 @@ export interface SesSendResult {
   success: boolean;
   /** SES's own id; the delivered Message-ID header is `<id@email.amazonses.com>`. */
   sesMessageId?: string;
+  /** The other SES messages of a split send (SES-BCC-1127), in send order. */
+  copyMessageIds?: string[];
   submittedAt?: Date;
   errorCode?: number;
   message?: string;
@@ -290,16 +292,91 @@ export function buildSesSendBody(params: SesSendParams, account: SesAccount = SE
   };
 }
 
-/** Send one message through SES. Never throws: a refusal is a failed result. */
+/**
+ * Every address a send names, To + Cc + Bcc (SES bills each one, and so does
+ * Postmark: the ledger declares this many units).
+ */
+export function countRecipients(params: Pick<SesSendParams, "to" | "cc" | "bcc">): number {
+  return splitAddressList(params.to).length + splitAddressList(params.cc).length + splitAddressList(params.bcc).length;
+}
+
+/**
+ * The SES messages one send becomes (SES-BCC-1127). SES refuses
+ * `ListManagementOptions` on a message with more than one recipient (400 « There
+ * must be one Recipient when ListManagementOptions is set »): prod 2026-11-20..27,
+ * 17 customer mails blind-copied to the agency inbox failed. So a send that carries
+ * an unsubscribe link AND names several addresses becomes:
+ *   - one message per To / Cc address, each with list management (every visible
+ *     recipient keeps its own one-click unsubscribe, on its own contact);
+ *   - ONE message to all Bcc addresses together, without list management and with
+ *     the unsubscribe link emptied (a blind copy is our record of what the person
+ *     read, never a subscriber of its own);
+ *   - the FIRST To address last: it is the send's primary message, so a 2xx means
+ *     the person the send is about got it.
+ * Anything else (no unsubscribe link, or one recipient) = one message, unchanged.
+ * Trade-off: each visible recipient sees only its own address in To/Cc.
+ */
+export function planSesMessages(params: SesSendParams, account: SesAccount = SES_TRANSACTIONAL): Record<string, unknown>[] {
+  const single = buildSesSendBody(params, account);
+  if (!single.ListManagementOptions || countRecipients(params) <= 1) return [single];
+  const [primary, ...otherTo] = splitAddressList(params.to);
+  const cc = splitAddressList(params.cc);
+  const bcc = splitAddressList(params.bcc);
+  const base = { ...params, to: "", cc: undefined, bcc: undefined };
+  const withDestination = (body: Record<string, unknown>, destination: Record<string, string[]>) => ({
+    ...body,
+    Destination: destination,
+  });
+  const listed = buildSesSendBody({ ...base, to: primary }, account);
+  const messages: Record<string, unknown>[] = [];
+  if (bcc.length > 0) {
+    const strip = (b: string | undefined) => (b === undefined ? undefined : b.replace(POSTMARK_UNSUBSCRIBE_TAG, ""));
+    const copy = buildSesSendBody({ ...base, to: primary, htmlBody: strip(params.htmlBody), textBody: strip(params.textBody) }, account);
+    messages.push(withDestination(copy, { BccAddresses: bcc }));
+  }
+  for (const a of otherTo) messages.push(withDestination(listed, { ToAddresses: [a] }));
+  for (const a of cc) messages.push(withDestination(listed, { CcAddresses: [a] }));
+  messages.push(listed);
+  return messages;
+}
+
+/**
+ * Send one message through SES (several SES calls when `planSesMessages` splits
+ * it). Never throws: a refusal is a failed result. Calls run in order and stop at
+ * the first refusal; the primary message goes last, so a failed send never reached
+ * the person it is about. `sesMessageId` = the primary's id (events key on it);
+ * `copyMessageIds` = the others' (their events are recognised, not recorded).
+ */
 export async function sesSendEmail(
   creds: SesCredentials,
   params: SesSendParams,
   account: SesAccount = SES_TRANSACTIONAL,
   now: Date = new Date()
 ): Promise<SesSendResult> {
+  const messages = planSesMessages(params, account);
+  const ids: string[] = [];
+  for (const message of messages) {
+    const result = await postSesMessage(creds, message, now);
+    if (!result.success) {
+      const partial = ids.length > 0 ? ` (after ${ids.length} of ${messages.length} copies went out: ${ids.join(", ")})` : "";
+      return { ...result, message: `${result.message}${partial}` };
+    }
+    ids.push(result.sesMessageId!);
+  }
+  return {
+    success: true,
+    sesMessageId: ids[ids.length - 1],
+    copyMessageIds: ids.slice(0, -1),
+    submittedAt: new Date(),
+    errorCode: 0,
+    message: "OK",
+  };
+}
+
+async function postSesMessage(creds: SesCredentials, message: Record<string, unknown>, now: Date): Promise<SesSendResult> {
   const host = `email.${creds.region}.amazonaws.com`;
   const path = "/v2/email/outbound-emails";
-  const body = JSON.stringify(buildSesSendBody(params, account));
+  const body = JSON.stringify(message);
   try {
     const headers = signAwsRequest({ method: "POST", host, path, body, service: "ses", creds, now });
     const response = await fetch(`https://${host}${path}`, { method: "POST", headers, body });
@@ -312,7 +389,7 @@ export async function sesSendEmail(
     if (!parsed.MessageId) {
       return { success: false, errorCode: -1, message: `SES answered without a MessageId: ${text.slice(0, 200)}` };
     }
-    return { success: true, sesMessageId: parsed.MessageId, submittedAt: new Date(), errorCode: 0, message: "OK" };
+    return { success: true, sesMessageId: parsed.MessageId, errorCode: 0, message: "OK" };
   } catch (error) {
     console.error("[ses] SendEmail error:", error);
     return { success: false, errorCode: -1, message: `SES unreachable: ${messageOf(error)}` };

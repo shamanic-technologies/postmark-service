@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { generateKeyPairSync, createSign } from "node:crypto";
 
-const selected: { rows: unknown[] } = { rows: [{ messageId: "11111111-1111-4111-8111-111111111111", tag: "welcome" }] };
+const selected: { rows: unknown[]; queue?: unknown[][] } = { rows: [{ messageId: "11111111-1111-4111-8111-111111111111", tag: "welcome" }] };
 const inserted: { table: unknown; values: Record<string, unknown> }[] = [];
 vi.mock("../../src/db", () => ({
   db: {
-    select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => selected.rows }) }) })),
+    select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => (selected.queue?.length ? selected.queue.shift() : selected.rows) }) }) })),
     insert: vi.fn((table: unknown) => ({
       values: (values: Record<string, unknown>) => {
         inserted.push({ table, values });
@@ -126,6 +126,16 @@ describe("recordSesEvent → the same bronze tables as Postmark", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await recordSesEvent(JSON.stringify(sesBounce))).toBe("unknown_message");
     expect(inserted).toHaveLength(0);
+  });
+
+  it("an event for the blind copy of a split send (SES-BCC-1127) is recognised and records nothing", async () => {
+    selected.queue = [[], [{ messageId: "11111111-1111-4111-8111-111111111111" }]];
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const delivery = { eventType: "Delivery", mail: { messageId: "0100-copy-1", destination: ["kevin@distribute.you"] }, delivery: { timestamp: "2026-11-27T12:00:00.000Z", recipients: ["kevin@distribute.you"] } };
+    expect(await recordSesEvent(JSON.stringify(delivery))).toBe("ignored");
+    expect(inserted).toHaveLength(0);
+    expect(log.mock.calls.flat().join(" ")).toMatch(/copy 0100-copy-1 \(to=kevin@distribute.you\)/);
+    selected.queue = undefined;
   });
 
   it("bounce ids: negative (never a Postmark id), stable per feedback + recipient", () => {

@@ -43,6 +43,8 @@ export interface OwedLedger {
   costSource: "platform" | "org" | null;
   /** Which provider carried the send: picks the cost name (send-transport.ts). Absent = postmark. */
   provider?: SendTransport;
+  /** Billed units: every address the send named (SES-BCC-1127). Absent/NULL = 1 (rows before 0023). */
+  recipientCount?: number | null;
   /** Postmark's refusal, carried onto a failed run. */
   error: string | null;
   trackingHeaders: Record<string, string>;
@@ -95,7 +97,8 @@ export async function settleSendLedger(owed: OwedLedger): Promise<boolean> {
       await ledger.addSendCost(
         owed.costSource,
         sendCostIdempotencyKey(owed.sendingId),
-        costNameFor(owed.provider ?? "postmark")
+        costNameFor(owed.provider ?? "postmark"),
+        owed.recipientCount ?? 1
       );
       await ledger.complete();
     } else {
@@ -199,6 +202,7 @@ export async function catchUpOwedLedgers(now: number = Date.now()): Promise<numb
         status: r.ledgerStatus as LedgerStatus,
         costSource: r.ledgerCostSource as "platform" | "org" | null,
         provider: r.provider as SendTransport,
+        recipientCount: r.recipientCount,
         error: r.message,
         trackingHeaders: trackingHeadersOf(r),
       });

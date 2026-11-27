@@ -112,6 +112,8 @@ export function costNameFor(transport: SendTransport): string {
 export interface SesDeliveryResult extends SendEmailResult {
   /** SES's own MessageId (success only). `messageId` is OUR uuid for the row. */
   providerMessageId?: string;
+  /** The other SES messages of a split send (SES-BCC-1127): blind copy, extra To/Cc. */
+  providerCopyMessageIds?: string[];
 }
 
 /**
@@ -135,6 +137,7 @@ export async function deliverViaSes(
     success: true,
     messageId: randomUUID(),
     providerMessageId: result.sesMessageId,
+    ...(result.copyMessageIds && result.copyMessageIds.length > 0 && { providerCopyMessageIds: result.copyMessageIds }),
     submittedAt: result.submittedAt,
     errorCode: 0,
     message: result.message,

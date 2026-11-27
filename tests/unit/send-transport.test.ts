@@ -170,12 +170,14 @@ describe("routes — product mail leaves through SES", () => {
       messageId: res.body.messageId,
       messageStream: null,
       payer: "platform",
+      // To + Bcc: both providers bill per recipient (SES-BCC-1127).
+      recipientCount: 2,
     });
 
     await flush();
     expect(addPlatformCosts).toHaveBeenCalledWith(
       "platform-run-1",
-      [{ costName: "ses-email-send", quantity: 1, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" }],
+      [{ costName: "ses-email-send", quantity: 2, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" }],
       expect.any(Object)
     );
   });
@@ -183,10 +185,10 @@ describe("routes — product mail leaves through SES", () => {
   it("/orgs/send org-paid product mail authorizes ses-email-send", async () => {
     const res = await request(app).post("/orgs/send").set(getAuthHeaders()).send({ ...msg, payer: "org", tag: "goal_launched" });
     expect(res.status).toBe(200);
-    expect(vi.mocked(authorizeCredits).mock.calls[0][0].items).toEqual([{ costName: "ses-email-send", quantity: 1 }]);
+    expect(vi.mocked(authorizeCredits).mock.calls[0][0].items).toEqual([{ costName: "ses-email-send", quantity: 2 }]);
     await flush();
     expect(vi.mocked(addCosts).mock.calls[0][1]).toEqual([
-      { costName: "ses-email-send", quantity: 1, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" },
+      { costName: "ses-email-send", quantity: 2, costSource: "platform", idempotencyKey: "postmark-email-send:sending-1" },
     ]);
   });
 
@@ -204,7 +206,7 @@ describe("routes — product mail leaves through SES", () => {
     expect(vi.mocked(getPlatformKey).mock.calls.map((c) => c[0])).toContain("aws-ses-marketing");
     expect(vi.mocked(getPlatformKey).mock.calls.map((c) => c[0])).not.toContain("aws-ses-transactional");
     expect(insertValues.mock.calls[0][0]).toMatchObject({ provider: "ses-marketing", messageStream: null });
-    expect(vi.mocked(authorizeCredits).mock.calls[0][0].items).toEqual([{ costName: "ses-email-send", quantity: 1 }]);
+    expect(vi.mocked(authorizeCredits).mock.calls[0][0].items).toEqual([{ costName: "ses-email-send", quantity: 2 }]);
   });
 
   it("/orgs/send newsletter over today's ramp cap stays on Postmark broadcast (planned split)", async () => {
