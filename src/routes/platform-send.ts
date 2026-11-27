@@ -9,6 +9,7 @@ import { upsertSilver } from "../lib/silver";
 import { openPlatformSendLedger } from "../lib/send-ledger";
 import { scheduleLedgerSettlement } from "../lib/ledger-settlement";
 import { SEND_SUPPORT } from "../lib/send-support";
+import { countRecipients } from "../lib/ses-client";
 import { resolveSendTransport, deliverViaSes, SesDeliveryResult } from "../lib/send-transport";
 
 const router = Router();
@@ -107,6 +108,8 @@ router.post("/platform-send", async (req: Request, res: Response) => {
           messageStream: transport !== "postmark" ? null : messageStream,
           provider: transport,
           providerMessageId: result.providerMessageId ?? null,
+          providerCopyMessageIds: result.providerCopyMessageIds ?? null,
+          recipientCount: countRecipients(body),
           errorCode: result.errorCode,
           message: result.message,
           submittedAt: result.submittedAt,
@@ -135,6 +138,7 @@ router.post("/platform-send", async (req: Request, res: Response) => {
           status: sent ? "completed" : "failed",
           costSource: sent ? "platform" : null,
           provider: transport,
+          recipientCount: countRecipients(body),
           error: sent ? null : result.message ?? null,
           trackingHeaders: {},
         },

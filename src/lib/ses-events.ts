@@ -1,5 +1,5 @@
 import { createHash, createVerify } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   postmarkSendings,
@@ -147,6 +147,19 @@ export async function recordSesEvent(raw: string): Promise<SesEventOutcome> {
     .where(eq(postmarkSendings.providerMessageId, sesMessageId))
     .limit(1);
   if (!sending?.messageId) {
+    // A copy of a split send (SES-BCC-1127): the blind copy / extra recipient is
+    // ours, but the send's silver row is the person it is about, so its events are
+    // never written there (a copy's delivery is not theirs, nor its bounce).
+    const [copyOf] = await db
+      .select({ messageId: postmarkSendings.messageId })
+      .from(postmarkSendings)
+      .where(sql`${sesMessageId} = ANY(${postmarkSendings.providerCopyMessageIds})`)
+      .limit(1);
+    if (copyOf?.messageId) {
+      const to = event.mail?.destination?.join(",") ?? "";
+      console.log(`[ses-events] ${type} for copy ${sesMessageId} (to=${to}) of send ${copyOf.messageId} — not recorded`);
+      return "ignored";
+    }
     console.error(`[ses-events] ${type} for SES message ${sesMessageId} matches no send of ours — not recorded`);
     return "unknown_message";
   }

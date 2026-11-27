@@ -14,6 +14,7 @@ import { openSendLedger } from "../lib/send-ledger";
 import { resolveOutcomeSubject } from "../lib/outcome-declaration";
 import { scheduleLedgerSettlement } from "../lib/ledger-settlement";
 import { sendSupportFor } from "../lib/send-support";
+import { countRecipients } from "../lib/ses-client";
 import { resolveSendTransport, costNameFor, deliverViaSes, SesDeliveryResult, SendTransport } from "../lib/send-transport";
 
 const router = Router();
@@ -79,7 +80,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
         orgId,
         userId,
         runId: parentRunId,
-        items: [{ costName: costNameFor(transport), quantity: 1 }],
+        items: [{ costName: costNameFor(transport), quantity: countRecipients(body) }],
         trackingHeaders,
       });
       if (!auth.sufficient) {
@@ -163,6 +164,8 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           messageStream: transport !== "postmark" ? null : messageStream,
           provider: transport,
           providerMessageId: result.providerMessageId ?? null,
+          providerCopyMessageIds: result.providerCopyMessageIds ?? null,
+          recipientCount: countRecipients(body),
           errorCode: result.errorCode,
           message: result.message,
           submittedAt: result.submittedAt,
@@ -224,6 +227,7 @@ router.post("/send", async (req: Request & { orgContext?: import("../middleware/
           status: result.success ? "completed" : "failed",
           costSource: result.success ? decryptedKey.keySource : null,
           provider: transport,
+          recipientCount: countRecipients(body),
           error: result.success ? null : result.message ?? null,
           trackingHeaders,
         },
@@ -318,7 +322,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
     emails.forEach((e, i) => {
       if (resolvePayer({ payer: e.payer, tag: e.tag }) !== "org") return;
       const name = costNameFor(transports[i]);
-      billable.set(name, (billable.get(name) ?? 0) + 1);
+      billable.set(name, (billable.get(name) ?? 0) + countRecipients(e));
     });
     if (keySource === "platform" && billable.size > 0) {
       const auth = await authorizeCredits({
@@ -429,6 +433,8 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             messageStream: transport !== "postmark" ? null : messageStream,
             provider: transport,
             providerMessageId: result.providerMessageId ?? null,
+            providerCopyMessageIds: result.providerCopyMessageIds ?? null,
+            recipientCount: countRecipients(email),
             errorCode: result.errorCode,
             message: result.message,
             submittedAt: result.submittedAt,
@@ -468,6 +474,7 @@ router.post("/send/batch", async (req: Request & { orgContext?: import("../middl
             status: result.success ? "completed" : "failed",
             costSource: result.success ? keySource : null,
             provider: transport,
+            recipientCount: countRecipients(email),
             error: result.success ? null : result.message ?? null,
             trackingHeaders,
           },
